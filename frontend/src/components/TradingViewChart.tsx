@@ -79,10 +79,10 @@ export default function TradingViewChart({
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
 
-    // Fetch and load candles data
     const loadData = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/history/${ticker}?timeframe=${encodeURIComponent(timeframe)}`);
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+        const res = await fetch(`${apiBaseUrl}/api/history/${ticker}?timeframe=${encodeURIComponent(timeframe)}`);
         if (res.ok) {
           const data = await res.json();
           candleSeries.setData(data);
