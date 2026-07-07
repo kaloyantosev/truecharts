@@ -48,6 +48,8 @@ interface SectorInfo {
 
 const POPULAR_TICKERS = ["SPY", "QQQ", "AAPL", "SMCI", "NVDA", "TSLA", "MSFT", "AMD", "AMZN", "GOOGL"];
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
 export default function Home() {
   const [ticker, setTicker] = useState("SPY");
   const [timeframe, setTimeframe] = useState("1d");
@@ -64,7 +66,7 @@ export default function Home() {
   const fetchBacktest = async (symbol: string, strategy: string) => {
     setBacktestLoading(true);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/backtest`, {
+      const res = await fetch(`${API_URL}/api/backtest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker: symbol, strategy }),
@@ -84,7 +86,7 @@ export default function Home() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/analyze/${symbol}?timeframe=${encodeURIComponent(tf)}`);
+      const res = await fetch(`${API_URL}/api/analyze/${symbol}?timeframe=${encodeURIComponent(tf)}`);
       if (!res.ok) throw new Error("Ticker not supported or API offline");
       const result = await res.json();
       setData(result);
@@ -99,7 +101,7 @@ export default function Home() {
 
   const fetchSectors = async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/macro/rotation`);
+      const res = await fetch(`${API_URL}/api/macro/rotation`);
       if (res.ok) {
         const result = await res.json();
         setSectors(result);
