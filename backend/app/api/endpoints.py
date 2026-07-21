@@ -899,6 +899,9 @@ def generate_deterministic_inst_data(ticker: str) -> Dict[str, Any]:
     top_conc_last = max(1.0, min(100.0, top_conc * (1.0 + (seed() * 0.1 - 0.05))))
 
     net_flow_b = (hf_cap_curr - hf_cap_last) + (tf_cap_curr - tf_cap_last)
+    market_cap_b = (hf_cap_curr + tf_cap_curr) * (2.0 + seed() * 3.0) # simulate market cap larger than float
+    net_flow_pct_mcap = (net_flow_b / market_cap_b) * 100 if market_cap_b > 0 else 0
+
     short_pct = (seed() * 0.15) + 0.01
     days_to_cover = (seed() * 5.0) + 1.0
     
@@ -932,6 +935,7 @@ def generate_deterministic_inst_data(ticker: str) -> Dict[str, Any]:
         },
         "sentimentFlow": {
             "netCapitalFlow": round(net_flow_b, 2),
+            "netCapitalFlowPctMcap": round(net_flow_pct_mcap, 3),
             "shortInterestPct": round(short_pct * 100, 2),
             "daysToCover": round(days_to_cover, 1)
         }
@@ -994,6 +998,9 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
 
         try:
             info = tk.info
+            mcap = info.get('marketCap')
+            market_cap_b = mcap / 1e9 if mcap else None
+            
             inst_pct = info.get('heldPercentInstitutions', 0.45)
             insider_pct = info.get('heldPercentInsiders', 0.05)
             short_pct = info.get('shortPercentOfFloat', 0.05)
@@ -1020,6 +1027,9 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         top_conc_last = max(1.0, min(100.0, top_conc * (1.0 + np.random.uniform(-0.05, 0.05))))
         
         net_flow_b = (hf_cap_curr - hf_cap_last) + (tf_cap_curr - tf_cap_last)
+        if market_cap_b is None or market_cap_b <= 0:
+            market_cap_b = (hf_cap_curr + tf_cap_curr) * (2.0 + np.random.uniform(0.5, 2.0))
+        net_flow_pct_mcap = (net_flow_b / market_cap_b) * 100
 
         return {
             "hedgeFunds": {
@@ -1051,6 +1061,7 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
             },
             "sentimentFlow": {
                 "netCapitalFlow": round(net_flow_b, 2),
+                "netCapitalFlowPctMcap": round(net_flow_pct_mcap, 3),
                 "shortInterestPct": round(short_pct * 100, 2),
                 "daysToCover": round(days_to_cover, 1)
             }

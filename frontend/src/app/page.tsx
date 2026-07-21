@@ -57,6 +57,7 @@ interface InstData {
   };
   sentimentFlow?: {
     netCapitalFlow: number;
+    netCapitalFlowPctMcap: number;
     shortInterestPct: number;
     daysToCover: number;
   };
@@ -444,9 +445,16 @@ export default function Home() {
                           -${Math.abs(instData.sentimentFlow.netCapitalFlow).toFixed(1)}B
                         </span>
                       )}
-                      <span className="text-[10px] text-neutral-500 font-mono uppercase px-2 py-0.5 rounded border border-neutral-800 bg-neutral-900">
-                        {instData.sentimentFlow.netCapitalFlow >= 0 ? "Net Inflow" : "Net Outflow"}
-                      </span>
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-[10px] text-neutral-500 font-mono uppercase px-2 py-0.5 rounded border border-neutral-800 bg-neutral-900 w-fit">
+                          {instData.sentimentFlow.netCapitalFlow >= 0 ? "Net Inflow" : "Net Outflow"}
+                        </span>
+                        {instData.sentimentFlow.netCapitalFlowPctMcap !== undefined && (
+                          <span className={`text-[10px] font-mono font-bold flex items-center ${instData.sentimentFlow.netCapitalFlowPctMcap >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                            {instData.sentimentFlow.netCapitalFlowPctMcap >= 0 ? "▲" : "▼"}{Math.abs(instData.sentimentFlow.netCapitalFlowPctMcap)}% of Market Cap
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
