@@ -26,6 +26,53 @@ interface AnalyticsData {
   iv_regime: string;
 }
 
+interface MacroItem {
+  name: string;
+  class: string;
+  score: number;
+  reason: string;
+}
+
+interface MacroForecastData {
+  bullish: MacroItem[];
+  bearish: MacroItem[];
+}
+
+interface InstData {
+  hedgeFunds: {
+    lastQ: number;
+    currentQ: number;
+    pctCount: string;
+    capitalLastQ: string;
+    capitalCurrentQ: string;
+    pctCap: string;
+  };
+  totalFunds: {
+    lastQ: number;
+    currentQ: number;
+    pctCount: string;
+    capitalLastQ: string;
+    capitalCurrentQ: string;
+    pctCap: string;
+  };
+  sentimentFlow?: {
+    netCapitalFlow: number;
+    shortInterestPct: number;
+    daysToCover: number;
+  };
+  ownership?: {
+    institutionsPct: number;
+    institutionsPctLast: number;
+    institutionsPctChange: number;
+    insiderPct: number;
+    insiderPctLast: number;
+    insiderPctChange: number;
+    topHolderConcentration: number;
+    topHolderConcentrationLast: number;
+    topHolderConcentrationChange: number;
+  };
+}
+
 interface SectorInfo {
   etf: string;
   name: string;
@@ -40,9 +87,9 @@ export default function Home() {
   const [timeframe, setTimeframe] = useState("1d");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<AnalyticsData | null>(null);
-  const [instData, setInstData] = useState<any>(null);
+  const [instData, setInstData] = useState<InstData | null>(null);
   const [sectors, setSectors] = useState<SectorInfo[]>([]);
-  const [macroForecast, setMacroForecast] = useState<any>(null);
+  const [macroForecast, setMacroForecast] = useState<MacroForecastData | null>(null);
   const [error, setError] = useState("");
   const [watchlist, setWatchlist] = useState<string[]>([]);
 
@@ -65,8 +112,12 @@ export default function Home() {
         console.error("Failed to fetch institutional data", e);
       }
       
-    } catch (err: any) {
-      setError(err.message || "Failed to load data");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message || "Failed to load data");
+      } else {
+        setError("Failed to load data");
+      }
     } finally {
       setLoading(false);
     }
@@ -259,7 +310,7 @@ export default function Home() {
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
                       Bullish
                     </span>
-                    {macroForecast.bullish.map((item: any, i: number) => (
+                    {macroForecast.bullish.map((item: MacroItem, i: number) => (
                       <div key={i} className="bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded flex flex-col gap-1 hover:bg-emerald-950/40 transition-colors">
                         <span className="text-xs font-bold text-emerald-400 font-mono tracking-tight">{item.name}</span>
                         <span className="text-[10px] text-emerald-200/50 leading-tight">{item.reason}</span>
@@ -271,7 +322,7 @@ export default function Home() {
                       <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
                       Bearish
                     </span>
-                    {macroForecast.bearish.map((item: any, i: number) => (
+                    {macroForecast.bearish.map((item: MacroItem, i: number) => (
                       <div key={i} className="bg-rose-950/20 border border-rose-900/30 p-2.5 rounded flex flex-col gap-1 hover:bg-rose-950/40 transition-colors">
                         <span className="text-xs font-bold text-rose-400 font-mono tracking-tight">{item.name}</span>
                         <span className="text-[10px] text-rose-200/50 leading-tight">{item.reason}</span>
