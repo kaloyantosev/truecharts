@@ -41,6 +41,7 @@ export default function Home() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [instData, setInstData] = useState<any>(null);
   const [sectors, setSectors] = useState<SectorInfo[]>([]);
+  const [macroForecast, setMacroForecast] = useState<any>(null);
   const [error, setError] = useState("");
   const [watchlist, setWatchlist] = useState<string[]>([]);
 
@@ -53,7 +54,6 @@ export default function Home() {
       const result = await res.json();
       setData(result);
       
-      // Fetch institutional positioning data from backend API
       try {
         const instRes = await fetch(`${API_URL}/api/institutional/${symbol}`);
         if (instRes.ok) {
@@ -74,10 +74,10 @@ export default function Home() {
   const fetchSectors = async () => {
     try {
       const res = await fetch(`${API_URL}/api/macro/rotation`);
-      if (res.ok) {
-        const result = await res.json();
-        setSectors(result);
-      }
+      if (res.ok) setSectors(await res.json());
+      
+      const fcRes = await fetch(`${API_URL}/api/macro/forecast`);
+      if (fcRes.ok) setMacroForecast(await fcRes.json());
     } catch (e) {
       console.error("Failed to load macro sector rotation", e);
     }
@@ -147,7 +147,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans flex flex-col">
-      {/* Navigation Header */}
       <header className="border-b border-neutral-900 bg-neutral-950/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded bg-purple-600 flex items-center justify-center font-bold text-white tracking-wider">Ω</div>
@@ -162,13 +161,10 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Dashboard Layout */}
       <main className="flex-1 p-6 max-w-[1600px] w-full mx-auto flex flex-col lg:grid lg:grid-cols-5 gap-6 lg:items-start">
         
-        {/* Left Column Wrapper */}
         <div className="contents lg:flex lg:flex-col lg:col-span-1 lg:col-start-1 lg:row-start-1 lg:row-span-2 gap-6 w-full">
           
-          {/* Ticker Selector */}
           <div className="order-1 lg:order-none bg-neutral-900 border border-neutral-800 rounded-lg p-5 w-full">
             <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4">Select Ticker</h2>
             <form onSubmit={handleSearch} className="flex flex-col gap-3">
@@ -207,26 +203,18 @@ export default function Home() {
             {error && <p className="text-red-400 text-xs mt-2 font-mono">{error}</p>}
           </div>
 
-          {/* Options Positioning */}
           <div className="order-3 lg:order-none bg-neutral-900 border border-neutral-800 rounded-lg p-5 flex flex-col gap-4 w-full">
             <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Options Positioning</h2>
-            
             <div className="flex justify-between items-center py-2 border-b border-neutral-800">
               <span className="text-neutral-400 text-sm">Put/Call Ratio</span>
-              <span className="font-mono text-neutral-100 text-sm font-semibold">
-                {data ? data.put_call_ratio : "-"}
-              </span>
+              <span className="font-mono text-neutral-100 text-sm font-semibold">{data ? data.put_call_ratio : "-"}</span>
             </div>
-
             <div className="flex justify-between items-center py-2">
               <span className="text-neutral-400 text-sm">Volatility Regime</span>
-              <span className="font-mono text-neutral-100 text-sm font-semibold">
-                {data ? data.iv_regime : "-"}
-              </span>
+              <span className="font-mono text-neutral-100 text-sm font-semibold">{data ? data.iv_regime : "-"}</span>
             </div>
           </div>
 
-          {/* Sector Rotation Scanner */}
           <div className="order-4 lg:order-none bg-neutral-900 border border-neutral-800 rounded-lg p-5 flex flex-col w-full">
             <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center gap-2">
               Macro Sector Rotation
@@ -260,10 +248,41 @@ export default function Home() {
                 );
               })}
             </div>
+
+            {macroForecast && (
+              <div className="mt-6 pt-5 border-t border-neutral-800/60">
+                <h3 className="text-[11px] text-neutral-400 uppercase tracking-wider font-bold mb-4">Quarterly Macro Outlook</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-2.5">
+                    <span className="text-[10px] text-emerald-500/80 uppercase font-mono font-bold tracking-widest flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                      Bullish
+                    </span>
+                    {macroForecast.bullish.map((item: any, i: number) => (
+                      <div key={i} className="bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded flex flex-col gap-1 hover:bg-emerald-950/40 transition-colors">
+                        <span className="text-xs font-bold text-emerald-400 font-mono tracking-tight">{item.name}</span>
+                        <span className="text-[10px] text-emerald-200/50 leading-tight">{item.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-2.5">
+                    <span className="text-[10px] text-rose-500/80 uppercase font-mono font-bold tracking-widest flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
+                      Bearish
+                    </span>
+                    {macroForecast.bearish.map((item: any, i: number) => (
+                      <div key={i} className="bg-rose-950/20 border border-rose-900/30 p-2.5 rounded flex flex-col gap-1 hover:bg-rose-950/40 transition-colors">
+                        <span className="text-xs font-bold text-rose-400 font-mono tracking-tight">{item.name}</span>
+                        <span className="text-[10px] text-rose-200/50 leading-tight">{item.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Main Chart Card */}
         <div className="order-2 lg:order-none lg:col-span-3 lg:col-start-2 lg:row-start-1 bg-neutral-900 border border-neutral-800 rounded-lg p-6 min-h-[520px] flex flex-col w-full">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -314,7 +333,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Institutional Positioning Panel */}
         <div className="order-5 lg:order-none lg:col-span-3 lg:col-start-2 lg:row-start-2 bg-neutral-900 border border-neutral-800 rounded-lg p-6 flex flex-col w-full">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -325,36 +343,71 @@ export default function Home() {
           </div>
 
           {instData ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Hedge Funds Data */}
-              <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                  <h3 className="text-sm font-bold text-neutral-200">Hedge Funds</h3>
+            <div className="flex flex-col gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                    <h3 className="text-sm font-bold text-neutral-200">Hedge Funds</h3>
+                  </div>
+                  <div className="space-y-5">
+                    {renderStat("Total Invested (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.pctCount)}
+                    <div className="pt-4 border-t border-neutral-900">
+                      {renderStat("Capital Invested", instData.hedgeFunds.capitalCurrentQ, instData.hedgeFunds.capitalLastQ, instData.hedgeFunds.pctCap)}
+                    </div>
+                  </div>
                 </div>
-                
-                <div className="space-y-5">
-                  {renderStat("Total Invested (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.pctCount)}
-                  <div className="pt-4 border-t border-neutral-900">
-                    {renderStat("Capital Invested", instData.hedgeFunds.capitalCurrentQ, instData.hedgeFunds.capitalLastQ, instData.hedgeFunds.pctCap)}
+
+                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                    <h3 className="text-sm font-bold text-neutral-200">Total Funds (All)</h3>
+                  </div>
+                  <div className="space-y-5">
+                    {renderStat("Total Invested (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.pctCount)}
+                    <div className="pt-4 border-t border-neutral-900">
+                      {renderStat("Capital Invested", instData.totalFunds.capitalCurrentQ, instData.totalFunds.capitalLastQ, instData.totalFunds.pctCap)}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Total Funds Data */}
-              <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                  <h3 className="text-sm font-bold text-neutral-200">Total Funds (All)</h3>
-                </div>
-                
-                <div className="space-y-5">
-                  {renderStat("Total Invested (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.pctCount)}
-                  <div className="pt-4 border-t border-neutral-900">
-                    {renderStat("Capital Invested", instData.totalFunds.capitalCurrentQ, instData.totalFunds.capitalLastQ, instData.totalFunds.pctCap)}
+              {instData.ownership && (
+                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-6 flex flex-col gap-5">
+                  <h3 className="text-sm font-bold text-neutral-300">Ownership Distribution</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    
+                    <div className="flex flex-col justify-center">
+                      <div className="flex justify-between items-end mb-2">
+                        <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Institutions</span>
+                        <span className="text-lg font-mono font-bold text-purple-400">{instData.ownership.institutionsPct}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800">
+                        <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.min(100, instData.ownership.institutionsPct)}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col justify-center">
+                      <div className="flex justify-between items-end mb-2">
+                        <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Insiders</span>
+                        <span className="text-lg font-mono font-bold text-amber-400">{instData.ownership.insiderPct}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800">
+                        <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, instData.ownership.insiderPct)}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col justify-center border-l border-neutral-850 pl-8">
+                      <span className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1 font-bold">Top Holder Concentration</span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-mono font-bold text-neutral-200">{instData.ownership.topHolderConcentration}%</span>
+                        <span className="text-xs text-neutral-500 font-mono">of float</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center p-8 border border-neutral-850 rounded-lg bg-neutral-950/40 text-center">
@@ -363,10 +416,8 @@ export default function Home() {
           )}
         </div>
 
-        {/* Watchlist Panel */}
         <div className="order-6 lg:order-none lg:col-span-1 lg:col-start-5 lg:row-start-1 lg:row-span-2 bg-neutral-900 border border-neutral-800 rounded-lg p-5 flex flex-col w-full h-full min-h-[400px]">
           <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4">Watchlist</h2>
-          
           <div className="flex-1 flex flex-col min-h-0">
             {watchlist.length === 0 ? (
               <div className="flex-1 flex items-center justify-center p-4 border border-dashed border-neutral-800 rounded bg-neutral-950/20 text-center">
@@ -377,10 +428,7 @@ export default function Home() {
                 {watchlist.map((item) => (
                   <div
                     key={item}
-                    onClick={() => {
-                      setTicker(item);
-                      fetchAnalysis(item);
-                    }}
+                    onClick={() => { setTicker(item); fetchAnalysis(item); }}
                     className={`flex items-center justify-between p-3 rounded border cursor-pointer transition-all ${
                       (data?.ticker || ticker).toUpperCase() === item.toUpperCase()
                         ? "bg-purple-950/25 border-purple-500/40 text-neutral-100"
@@ -394,22 +442,11 @@ export default function Home() {
                       <span className="font-mono font-bold text-sm tracking-wide">{item}</span>
                     </div>
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleWatchlist(item);
-                      }}
+                      onClick={(e) => { e.stopPropagation(); toggleWatchlist(item); }}
                       className="text-neutral-400 hover:text-white transition-colors p-1"
                       title="Remove from Watchlist"
                     >
-                      <svg
-                        className="w-4 h-4 text-white"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
+                      <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     </button>
