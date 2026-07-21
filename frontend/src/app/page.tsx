@@ -15,6 +15,7 @@ interface Level {
 
 interface AnalyticsData {
   ticker: string;
+  name?: string;
   spot: number;
   max_pain: number;
   supports: Level[];
@@ -311,7 +312,7 @@ export default function Home() {
                   </svg>
                 </button>
               </div>
-              <p className="text-sm text-neutral-500">Option metrics overlay & technical zones</p>
+              <p className="text-sm text-neutral-500">{data?.name || "Option metrics overlay & technical zones"}</p>
             </div>
           </div>
 
@@ -381,7 +382,14 @@ export default function Home() {
                     <div className="flex flex-col justify-center">
                       <div className="flex justify-between items-end mb-2">
                         <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Institutions</span>
-                        <span className="text-lg font-mono font-bold text-purple-400">{instData.ownership.institutionsPct}%</span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-lg font-mono font-bold text-purple-400">{instData.ownership.institutionsPct}%</span>
+                          {instData.ownership.institutionsPctChange !== undefined && (
+                            <span className={`text-[10px] font-mono font-bold flex items-center ${instData.ownership.institutionsPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                              {instData.ownership.institutionsPctChange >= 0 ? "▲" : "▼"}{Math.abs(instData.ownership.institutionsPctChange)}%
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800">
                         <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.min(100, instData.ownership.institutionsPct)}%` }}></div>
@@ -391,7 +399,14 @@ export default function Home() {
                     <div className="flex flex-col justify-center">
                       <div className="flex justify-between items-end mb-2">
                         <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Insiders</span>
-                        <span className="text-lg font-mono font-bold text-amber-400">{instData.ownership.insiderPct}%</span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-lg font-mono font-bold text-amber-400">{instData.ownership.insiderPct}%</span>
+                          {instData.ownership.insiderPctChange !== undefined && (
+                            <span className={`text-[10px] font-mono font-bold flex items-center ${instData.ownership.insiderPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                              {instData.ownership.insiderPctChange >= 0 ? "▲" : "▼"}{Math.abs(instData.ownership.insiderPctChange)}%
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800">
                         <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, instData.ownership.insiderPct)}%` }}></div>
@@ -400,9 +415,16 @@ export default function Home() {
 
                     <div className="flex flex-col justify-center border-l border-neutral-850 pl-8">
                       <span className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1 font-bold">Top Holder Concentration</span>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-mono font-bold text-neutral-200">{instData.ownership.topHolderConcentration}%</span>
-                        <span className="text-xs text-neutral-500 font-mono">of float</span>
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-2xl font-mono font-bold text-neutral-200">{instData.ownership.topHolderConcentration}%</span>
+                          <span className="text-xs text-neutral-500 font-mono">of float</span>
+                        </div>
+                        {instData.ownership.topHolderConcentrationChange !== undefined && (
+                            <span className={`text-[10px] font-mono font-bold flex items-center ${instData.ownership.topHolderConcentrationChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                              {instData.ownership.topHolderConcentrationChange >= 0 ? "▲" : "▼"}{Math.abs(instData.ownership.topHolderConcentrationChange)}% vs last Q
+                            </span>
+                        )}
                       </div>
                     </div>
                   </div>
