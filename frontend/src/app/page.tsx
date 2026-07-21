@@ -284,64 +284,69 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="order-2 lg:order-none lg:col-span-3 lg:col-start-2 lg:row-start-1 bg-neutral-900 border border-neutral-800 rounded-lg p-6 min-h-[520px] flex flex-col w-full">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-2xl font-bold text-white tracking-tight">{data?.ticker || ticker}</h1>
-                <button
-                  onClick={() => toggleWatchlist(data?.ticker || ticker)}
-                  className="p-1 transition-colors"
-                  title={watchlist.includes((data?.ticker || ticker).toUpperCase()) ? "Remove from watchlist" : "Add to watchlist"}
-                >
-                  <svg
-                    className={`w-5 h-5 transition-all ${
-                      watchlist.includes((data?.ticker || ticker).toUpperCase())
-                        ? "text-neutral-100"
-                        : "text-neutral-600 hover:text-neutral-300"
-                    }`}
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+        {/* Middle Column Wrapper */}
+        <div className="order-2 lg:order-none lg:col-span-3 lg:col-start-2 lg:row-start-1 lg:row-span-2 flex flex-col gap-6 w-full h-full min-h-0">
+          
+          {/* Main Chart Card */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 flex-1 flex flex-col w-full min-h-[520px]">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <h1 className="text-2xl font-bold text-white tracking-tight">{data?.ticker || ticker}</h1>
+                  <button
+                    onClick={() => toggleWatchlist(data?.ticker || ticker)}
+                    className="p-1 transition-colors"
+                    title={watchlist.includes((data?.ticker || ticker).toUpperCase()) ? "Remove from watchlist" : "Add to watchlist"}
                   >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                </button>
+                    <svg
+                      className={`w-5 h-5 transition-all ${
+                        watchlist.includes((data?.ticker || ticker).toUpperCase())
+                          ? "text-neutral-100"
+                          : "text-neutral-600 hover:text-neutral-300"
+                      }`}
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </button>
+                </div>
+                <p className="text-sm text-neutral-500">{data?.name || "Option metrics overlay & technical zones"}</p>
               </div>
-              <p className="text-sm text-neutral-500">{data?.name || "Option metrics overlay & technical zones"}</p>
+            </div>
+
+            <div className="flex-1 min-h-[440px] flex flex-col">
+              {data ? (
+                <TradingViewChart
+                  ticker={data.ticker}
+                  spot={data.spot}
+                  maxPain={data.max_pain}
+                  supports={data.supports}
+                  resistances={data.resistances}
+                  timeframe={timeframe}
+                />
+              ) : (
+                <div className="flex-1 w-full bg-neutral-950 rounded flex items-center justify-center border border-neutral-850">
+                  <span className="text-sm text-neutral-500 font-mono">Select a ticker to load the interactive chart</span>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="flex-1 min-h-[440px]">
-            {data ? (
-              <TradingViewChart
-                ticker={data.ticker}
-                spot={data.spot}
-                maxPain={data.max_pain}
-                supports={data.supports}
-                resistances={data.resistances}
-                timeframe={timeframe}
-              />
-            ) : (
-              <div className="w-full h-[320px] bg-neutral-950 rounded flex items-center justify-center border border-neutral-850">
-                <span className="text-sm text-neutral-500 font-mono">Select a ticker to load the interactive chart</span>
+          {/* Institutional Positioning Panel */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 flex flex-col w-full shrink-0">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Institutional Positioning</h2>
+                <p className="text-xs text-neutral-500 mt-0.5">Hedge Fund & Mutual Fund flows based on 13F public filings</p>
               </div>
-            )}
-          </div>
-        </div>
-
-        <div className="order-5 lg:order-none lg:col-span-3 lg:col-start-2 lg:row-start-2 bg-neutral-900 border border-neutral-800 rounded-lg p-6 flex flex-col w-full">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Institutional Positioning</h2>
-              <p className="text-xs text-neutral-500 mt-0.5">Hedge Fund & Mutual Fund flows based on 13F public filings</p>
+              <span className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 rounded font-mono">LIVE API (yFinance)</span>
             </div>
-            <span className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 rounded font-mono">LIVE API (yFinance)</span>
-          </div>
 
           {instData ? (
             <div className="flex flex-col gap-6">
@@ -383,9 +388,9 @@ export default function Home() {
                       <div className="flex justify-between items-end mb-2">
                         <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Institutions</span>
                         <div className="flex items-baseline gap-2">
-                          <span className="text-lg font-mono font-bold text-purple-400">{instData.ownership.institutionsPct}%</span>
+                          <span className="text-xl font-mono font-bold text-purple-400">{instData.ownership.institutionsPct}%</span>
                           {instData.ownership.institutionsPctChange !== undefined && (
-                            <span className={`text-[10px] font-mono font-bold flex items-center ${instData.ownership.institutionsPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                            <span className={`text-xs font-mono font-bold flex items-center ${instData.ownership.institutionsPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                               {instData.ownership.institutionsPctChange >= 0 ? "▲" : "▼"}{Math.abs(instData.ownership.institutionsPctChange)}%
                             </span>
                           )}
@@ -400,9 +405,9 @@ export default function Home() {
                       <div className="flex justify-between items-end mb-2">
                         <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Insiders</span>
                         <div className="flex items-baseline gap-2">
-                          <span className="text-lg font-mono font-bold text-amber-400">{instData.ownership.insiderPct}%</span>
+                          <span className="text-xl font-mono font-bold text-amber-400">{instData.ownership.insiderPct}%</span>
                           {instData.ownership.insiderPctChange !== undefined && (
-                            <span className={`text-[10px] font-mono font-bold flex items-center ${instData.ownership.insiderPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                            <span className={`text-xs font-mono font-bold flex items-center ${instData.ownership.insiderPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                               {instData.ownership.insiderPctChange >= 0 ? "▲" : "▼"}{Math.abs(instData.ownership.insiderPctChange)}%
                             </span>
                           )}
@@ -417,11 +422,11 @@ export default function Home() {
                       <span className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1 font-bold">Top Holder Concentration</span>
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-baseline gap-2">
-                          <span className="text-2xl font-mono font-bold text-neutral-200">{instData.ownership.topHolderConcentration}%</span>
-                          <span className="text-xs text-neutral-500 font-mono">of float</span>
+                          <span className="text-3xl font-mono font-bold text-neutral-200">{instData.ownership.topHolderConcentration}%</span>
+                          <span className="text-sm text-neutral-500 font-mono">of float</span>
                         </div>
                         {instData.ownership.topHolderConcentrationChange !== undefined && (
-                            <span className={`text-[10px] font-mono font-bold flex items-center ${instData.ownership.topHolderConcentrationChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                            <span className={`text-xs font-mono font-bold flex items-center ${instData.ownership.topHolderConcentrationChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                               {instData.ownership.topHolderConcentrationChange >= 0 ? "▲" : "▼"}{Math.abs(instData.ownership.topHolderConcentrationChange)}% vs last Q
                             </span>
                         )}
