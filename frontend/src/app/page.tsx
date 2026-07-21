@@ -378,6 +378,44 @@ export default function Home() {
                 </div>
               </div>
 
+              {instData.sentimentFlow && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Net Capital Flow */}
+                  <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col justify-center gap-3">
+                    <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Quarterly Net Capital Flow</h3>
+                    <div className="flex items-center gap-4">
+                      {instData.sentimentFlow.netCapitalFlow >= 0 ? (
+                        <span className="text-3xl font-mono font-bold text-emerald-400">
+                          +${instData.sentimentFlow.netCapitalFlow.toFixed(1)}B
+                        </span>
+                      ) : (
+                        <span className="text-3xl font-mono font-bold text-rose-400">
+                          -${Math.abs(instData.sentimentFlow.netCapitalFlow).toFixed(1)}B
+                        </span>
+                      )}
+                      <span className="text-[10px] text-neutral-500 font-mono uppercase px-2 py-0.5 rounded border border-neutral-800 bg-neutral-900">
+                        {instData.sentimentFlow.netCapitalFlow >= 0 ? "Net Inflow" : "Net Outflow"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Short Interest */}
+                  <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col justify-center gap-3">
+                    <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Short Interest</h3>
+                    <div className="flex items-center gap-8">
+                      <div className="flex flex-col">
+                        <span className="text-3xl font-mono font-bold text-neutral-200">{instData.sentimentFlow.shortInterestPct}%</span>
+                        <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">of float shorted</span>
+                      </div>
+                      <div className="flex flex-col border-l border-neutral-800 pl-8">
+                        <span className="text-3xl font-mono font-bold text-neutral-200">{instData.sentimentFlow.daysToCover}</span>
+                        <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">days to cover</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {instData.ownership && (
                 <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-6 flex flex-col gap-5">
                   <h3 className="text-sm font-bold text-neutral-300">Ownership Distribution</h3>

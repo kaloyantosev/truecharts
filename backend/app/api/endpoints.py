@@ -520,7 +520,7 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
     
     try:
         tk_info = yf.Ticker(ticker).info
-        asset_name = tk_info.get('shortName', tk_info.get('longName', ticker))
+        asset_name = tk_info.get('longName') or tk_info.get('shortName') or ticker
     except:
         asset_name = ticker
     
@@ -897,6 +897,10 @@ def generate_deterministic_inst_data(ticker: str) -> Dict[str, Any]:
     inst_pct_last = max(0.01, min(1.0, inst_pct * (1.0 + (seed() * 0.1 - 0.05))))
     insider_pct_last = max(0.01, min(1.0, insider_pct * (1.0 + (seed() * 0.1 - 0.05))))
     top_conc_last = max(1.0, min(100.0, top_conc * (1.0 + (seed() * 0.1 - 0.05))))
+
+    net_flow_b = (hf_cap_curr - hf_cap_last) + (tf_cap_curr - tf_cap_last)
+    short_pct = (seed() * 0.15) + 0.01
+    days_to_cover = (seed() * 5.0) + 1.0
     
     return {
         "hedgeFunds": {
@@ -925,6 +929,11 @@ def generate_deterministic_inst_data(ticker: str) -> Dict[str, Any]:
             "topHolderConcentration": round(top_conc, 2),
             "topHolderConcentrationLast": round(top_conc_last, 2),
             "topHolderConcentrationChange": round(((top_conc - top_conc_last) / top_conc_last) * 100, 2)
+        },
+        "sentimentFlow": {
+            "netCapitalFlow": round(net_flow_b, 2),
+            "shortInterestPct": round(short_pct * 100, 2),
+            "daysToCover": round(days_to_cover, 1)
         }
     }
 
@@ -987,11 +996,18 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
             info = tk.info
             inst_pct = info.get('heldPercentInstitutions', 0.45)
             insider_pct = info.get('heldPercentInsiders', 0.05)
+            short_pct = info.get('shortPercentOfFloat', 0.05)
+            days_to_cover = info.get('shortRatio', 2.5)
+            
             if inst_pct is None: inst_pct = 0.45
             if insider_pct is None: insider_pct = 0.05
+            if short_pct is None: short_pct = 0.05
+            if days_to_cover is None: days_to_cover = 2.5
         except:
             inst_pct = 0.45
             insider_pct = 0.05
+            short_pct = 0.05
+            days_to_cover = 2.5
             
         top_conc = 15.0
         if inst is not None and not inst.empty and 'Shares' in inst.columns:
@@ -1002,6 +1018,8 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         inst_pct_last = max(0.01, min(1.0, inst_pct * (1.0 + np.random.uniform(-0.05, 0.05))))
         insider_pct_last = max(0.01, min(1.0, insider_pct * (1.0 + np.random.uniform(-0.05, 0.05))))
         top_conc_last = max(1.0, min(100.0, top_conc * (1.0 + np.random.uniform(-0.05, 0.05))))
+        
+        net_flow_b = (hf_cap_curr - hf_cap_last) + (tf_cap_curr - tf_cap_last)
 
         return {
             "hedgeFunds": {
@@ -1030,6 +1048,11 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
                 "topHolderConcentration": round(top_conc, 2),
                 "topHolderConcentrationLast": round(top_conc_last, 2),
                 "topHolderConcentrationChange": round(((top_conc - top_conc_last) / top_conc_last) * 100, 2)
+            },
+            "sentimentFlow": {
+                "netCapitalFlow": round(net_flow_b, 2),
+                "shortInterestPct": round(short_pct * 100, 2),
+                "daysToCover": round(days_to_cover, 1)
             }
         }
     except Exception as e:
