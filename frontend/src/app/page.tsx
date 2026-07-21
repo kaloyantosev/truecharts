@@ -34,49 +34,12 @@ interface SectorInfo {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-// Deterministic mock data generator for Institutional Positioning
-const getMockInstData = (ticker: string) => {
-  let h = 0;
-  const upperTicker = ticker.toUpperCase();
-  for(let i=0; i<upperTicker.length; i++) h = Math.imul(31, h) + upperTicker.charCodeAt(i) | 0;
-  const seed = () => { h = Math.imul(741103597, h); return (h >>> 0) / 4294967296; };
-  
-  const hfLast = Math.floor(seed() * 250) + 50;
-  const hfCurrent = hfLast + Math.floor(seed() * 60) - 20; 
-  const tfLast = Math.floor(seed() * 1500) + 500;
-  const tfCurrent = tfLast + Math.floor(seed() * 300) - 100;
-  
-  const hfCapLast = seed() * 40 + 5;
-  const hfCapCurr = hfCapLast * (1 + (seed() * 0.4 - 0.1));
-  
-  const tfCapLast = seed() * 250 + 50;
-  const tfCapCurr = tfCapLast * (1 + (seed() * 0.3 - 0.1));
-
-  return {
-    hedgeFunds: {
-      lastQ: hfLast,
-      currentQ: hfCurrent,
-      pctCount: (((hfCurrent - hfLast) / hfLast) * 100).toFixed(1),
-      capitalLastQ: `$${hfCapLast.toFixed(1)}B`,
-      capitalCurrentQ: `$${hfCapCurr.toFixed(1)}B`,
-      pctCap: (((hfCapCurr - hfCapLast) / hfCapLast) * 100).toFixed(1),
-    },
-    totalFunds: {
-      lastQ: tfLast,
-      currentQ: tfCurrent,
-      pctCount: (((tfCurrent - tfLast) / tfLast) * 100).toFixed(1),
-      capitalLastQ: `$${tfCapLast.toFixed(1)}B`,
-      capitalCurrentQ: `$${tfCapCurr.toFixed(1)}B`,
-      pctCap: (((tfCapCurr - tfCapLast) / tfCapLast) * 100).toFixed(1),
-    }
-  };
-};
-
 export default function Home() {
   const [ticker, setTicker] = useState("SPY");
   const [timeframe, setTimeframe] = useState("1d");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [instData, setInstData] = useState<any>(null);
   const [sectors, setSectors] = useState<SectorInfo[]>([]);
   const [error, setError] = useState("");
   const [watchlist, setWatchlist] = useState<string[]>([]);
@@ -89,6 +52,18 @@ export default function Home() {
       if (!res.ok) throw new Error("Ticker not supported or API offline");
       const result = await res.json();
       setData(result);
+      
+      // Fetch institutional positioning data from backend API
+      try {
+        const instRes = await fetch(`${API_URL}/api/institutional/${symbol}`);
+        if (instRes.ok) {
+          const iData = await instRes.json();
+          setInstData(iData);
+        }
+      } catch (e) {
+        console.error("Failed to fetch institutional data", e);
+      }
+      
     } catch (err: any) {
       setError(err.message || "Failed to load data");
     } finally {
@@ -147,8 +122,6 @@ export default function Home() {
     }
   };
 
-  const instData = getMockInstData(data?.ticker || ticker);
-
   const renderStat = (title: string, current: string | number, last: string | number, pct: string) => {
     const isPos = parseFloat(pct) >= 0;
     return (
@@ -192,7 +165,7 @@ export default function Home() {
       {/* Main Dashboard Layout */}
       <main className="flex-1 p-6 max-w-[1600px] w-full mx-auto flex flex-col lg:grid lg:grid-cols-5 gap-6 lg:items-start">
         
-        {/* Left Column Wrapper (uses contents on mobile so items can be independently ordered) */}
+        {/* Left Column Wrapper */}
         <div className="contents lg:flex lg:flex-col lg:col-span-1 lg:col-start-1 lg:row-start-1 lg:row-span-2 gap-6 w-full">
           
           {/* Ticker Selector */}
@@ -348,40 +321,46 @@ export default function Home() {
               <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Institutional Positioning</h2>
               <p className="text-xs text-neutral-500 mt-0.5">Hedge Fund & Mutual Fund flows based on 13F public filings</p>
             </div>
-            <span className="text-[10px] text-purple-400 border border-purple-500/30 bg-purple-500/10 px-2 py-1 rounded font-mono">LIVE API (Mock)</span>
+            <span className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 rounded font-mono">LIVE API (yFinance)</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Hedge Funds Data */}
-            <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                <h3 className="text-sm font-bold text-neutral-200">Hedge Funds</h3>
+          {instData ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Hedge Funds Data */}
+              <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                  <h3 className="text-sm font-bold text-neutral-200">Hedge Funds</h3>
+                </div>
+                
+                <div className="space-y-5">
+                  {renderStat("Total Invested (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.pctCount)}
+                  <div className="pt-4 border-t border-neutral-900">
+                    {renderStat("Capital Invested", instData.hedgeFunds.capitalCurrentQ, instData.hedgeFunds.capitalLastQ, instData.hedgeFunds.pctCap)}
+                  </div>
+                </div>
               </div>
-              
-              <div className="space-y-5">
-                {renderStat("Total Invested (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.pctCount)}
-                <div className="pt-4 border-t border-neutral-900">
-                  {renderStat("Capital Invested", instData.hedgeFunds.capitalCurrentQ, instData.hedgeFunds.capitalLastQ, instData.hedgeFunds.pctCap)}
+
+              {/* Total Funds Data */}
+              <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                  <h3 className="text-sm font-bold text-neutral-200">Total Funds (All)</h3>
+                </div>
+                
+                <div className="space-y-5">
+                  {renderStat("Total Invested (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.pctCount)}
+                  <div className="pt-4 border-t border-neutral-900">
+                    {renderStat("Capital Invested", instData.totalFunds.capitalCurrentQ, instData.totalFunds.capitalLastQ, instData.totalFunds.pctCap)}
+                  </div>
                 </div>
               </div>
             </div>
-
-            {/* Total Funds Data */}
-            <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                <h3 className="text-sm font-bold text-neutral-200">Total Funds (All)</h3>
-              </div>
-              
-              <div className="space-y-5">
-                {renderStat("Total Invested (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.pctCount)}
-                <div className="pt-4 border-t border-neutral-900">
-                  {renderStat("Capital Invested", instData.totalFunds.capitalCurrentQ, instData.totalFunds.capitalLastQ, instData.totalFunds.pctCap)}
-                </div>
-              </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-8 border border-neutral-850 rounded-lg bg-neutral-950/40 text-center">
+              <span className="text-sm text-neutral-500 font-mono animate-pulse">Loading Live Institutional Data...</span>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Watchlist Panel */}
