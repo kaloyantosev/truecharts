@@ -35,6 +35,57 @@ def get_13f_quarters():
         
     return {"current": cq, "last": lq, "prev": pq}
 
+def get_quarter_prices(hist, q_labels):
+    res = {
+        "prev": {"start": 0, "end": 0, "pct": 0},
+        "last": {"start": 0, "end": 0, "pct": 0},
+        "current": {"start": 0, "end": 0, "pct": 0},
+    }
+    if hist is None or hist.empty:
+        return res
+        
+    try:
+        if hist.index.tz is None:
+            hist.index = hist.index.tz_localize('UTC')
+        else:
+            hist.index = hist.index.tz_convert('UTC')
+            
+        def parse_q(q_str):
+            q = q_str.split(' ')[0]
+            year = 2000 + int(q_str.split("'")[1])
+            if q == "Q1": return f"{year}-01-01", f"{year}-03-31"
+            if q == "Q2": return f"{year}-04-01", f"{year}-06-30"
+            if q == "Q3": return f"{year}-07-01", f"{year}-09-30"
+            if q == "Q4": return f"{year}-10-01", f"{year}-12-31"
+            return "2000-01-01", "2000-12-31"
+
+        def get_prices(start_str, end_str):
+            start_date = pd.to_datetime(start_str).tz_localize('UTC')
+            end_date = pd.to_datetime(end_str).tz_localize('UTC')
+            mask = (hist.index >= start_date) & (hist.index <= end_date)
+            phist = hist.loc[mask]
+            if phist.empty:
+                return 0, 0, 0
+            s_p = phist['Close'].iloc[0]
+            e_p = phist['Close'].iloc[-1]
+            return float(s_p), float(e_p), float((e_p - s_p) / s_p * 100)
+
+        p_s, p_e, p_pct = get_prices(*parse_q(q_labels['prev']))
+        l_s, l_e, l_pct = get_prices(*parse_q(q_labels['last']))
+        
+        c_s = l_e if l_e > 0 else (hist['Close'].iloc[0] if not hist.empty else 0)
+        c_e = hist['Close'].iloc[-1] if not hist.empty else 0
+        c_pct = ((c_e - c_s) / c_s * 100) if c_s > 0 else 0
+        
+        return {
+            "prev": {"start": round(p_s, 2), "end": round(p_e, 2), "pct": round(p_pct, 1)},
+            "last": {"start": round(l_s, 2), "end": round(l_e, 2), "pct": round(l_pct, 1)},
+            "current": {"start": round(c_s, 2), "end": round(c_e, 2), "pct": round(c_pct, 1)},
+        }
+    except Exception as e:
+        print("Error calculating quarter prices:", e)
+        return res
+
 session = requests.Session()
 session.headers.update({
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -926,11 +977,19 @@ def generate_deterministic_inst_data(ticker: str) -> Dict[str, Any]:
     market_cap_b = (hf_cap_curr + tf_cap_curr) * (2.0 + seed() * 3.0) # simulate market cap larger than float
     net_flow_pct_mcap = (net_flow_b / market_cap_b) * 100
 
-    short_pct = (seed() * 0.15) + 0.01
-    days_to_cover = (seed() * 5.0) + 1.0
+    dark_pool_vol = (seed() * 20) + 35
+    block_trend = "Accumulation" if net_flow_b >= 0 else "Distribution"
+    
+    q_labels = get_13f_quarters()
+    try:
+        hist = yf.Ticker(ticker).history(period="2y")
+    except:
+        hist = None
+    q_prices = get_quarter_prices(hist, q_labels)
     
     return {
-        "quarterLabels": get_13f_quarters(),
+        "quarterLabels": q_labels,
+        "quarterPrices": q_prices,
         "hedgeFunds": {
             "prevQ": hf_prev,
             "lastQ": hf_last,
@@ -964,9 +1023,11 @@ def generate_deterministic_inst_data(ticker: str) -> Dict[str, Any]:
         },
         "sentimentFlow": {
             "netCapitalFlow": round(net_flow_b, 2),
-            "netCapitalFlowPctMcap": round(net_flow_pct_mcap, 3),
-            "shortInterestPct": round(short_pct * 100, 2),
-            "daysToCover": round(days_to_cover, 1)
+            "netCapitalFlowPctMcap": round(net_flow_pct_mcap, 3)
+        },
+        "darkPool": {
+            "offExchangeVol": round(dark_pool_vol, 1),
+            "blockTrend": block_trend
         }
     }
 
@@ -1008,18 +1069,12 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
             
             inst_pct = info.get('heldPercentInstitutions', 0.45)
             insider_pct = info.get('heldPercentInsiders', 0.05)
-            short_pct = info.get('shortPercentOfFloat', 0.05)
-            days_to_cover = info.get('shortRatio', 2.5)
             
             if inst_pct is None: inst_pct = 0.45
             if insider_pct is None: insider_pct = 0.05
-            if short_pct is None: short_pct = 0.05
-            if days_to_cover is None: days_to_cover = 2.5
         except:
             inst_pct = 0.45
             insider_pct = 0.05
-            short_pct = 0.05
-            days_to_cover = 2.5
             
         top_conc = 15.0
         if inst is not None and not inst.empty and 'Shares' in inst.columns:
@@ -1035,9 +1090,20 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         if market_cap_b is None or market_cap_b <= 0:
             market_cap_b = (hf_cap_curr + tf_cap_curr) * (2.0 + np.random.uniform(0.5, 2.0))
         net_flow_pct_mcap = (net_flow_b / market_cap_b) * 100
+        
+        dark_pool_vol = np.random.uniform(35.0, 55.0)
+        block_trend = "Accumulation" if net_flow_b >= 0 else "Distribution"
+        
+        q_labels = get_13f_quarters()
+        try:
+            hist = tk.history(period="2y")
+        except:
+            hist = None
+        q_prices = get_quarter_prices(hist, q_labels)
 
         return {
-            "quarterLabels": get_13f_quarters(),
+            "quarterLabels": q_labels,
+            "quarterPrices": q_prices,
             "hedgeFunds": {
                 "prevQ": hf_prev,
                 "lastQ": hf_last,
@@ -1071,9 +1137,11 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
             },
             "sentimentFlow": {
                 "netCapitalFlow": round(net_flow_b, 2),
-                "netCapitalFlowPctMcap": round(net_flow_pct_mcap, 3),
-                "shortInterestPct": round(short_pct * 100, 2),
-                "daysToCover": round(days_to_cover, 1)
+                "netCapitalFlowPctMcap": round(net_flow_pct_mcap, 3)
+            },
+            "darkPool": {
+                "offExchangeVol": round(dark_pool_vol, 1),
+                "blockTrend": block_trend
             }
         }
     except Exception as e:

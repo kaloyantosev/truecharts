@@ -38,11 +38,26 @@ interface MacroForecastData {
   bearish: MacroItem[];
 }
 
+interface QuarterPrice {
+  start: number;
+  end: number;
+  pct: number;
+}
+
 interface InstData {
   quarterLabels: {
     current: string;
     last: string;
     prev: string;
+  };
+  quarterPrices: {
+    prev: QuarterPrice;
+    last: QuarterPrice;
+    current: QuarterPrice;
+  };
+  darkPool?: {
+    offExchangeVol: number;
+    blockTrend: string;
   };
   hedgeFunds: {
     prevQ: number;
@@ -67,8 +82,6 @@ interface InstData {
   sentimentFlow?: {
     netCapitalFlow: number;
     netCapitalFlowPctMcap: number;
-    shortInterestPct: number;
-    daysToCover: number;
   };
   ownership?: {
     institutionsPct: number;
@@ -184,7 +197,7 @@ export default function Home() {
     }
   };
 
-  const renderStat = (title: string, current: string | number, last: string | number, prev: string | number, pct: string, labels: {current: string, last: string, prev: string}) => {
+  const renderStat = (title: string, current: string | number, last: string | number, prev: string | number, pct: string, labels: {current: string, last: string, prev: string}, prices?: {prev: QuarterPrice, last: QuarterPrice, current: QuarterPrice}) => {
     const isPos = parseFloat(pct) >= 0;
     return (
       <div>
@@ -199,11 +212,27 @@ export default function Home() {
           <div className="flex flex-col border-r border-neutral-800 pr-5 opacity-40">
             <span className="text-[9px] text-neutral-500 font-mono uppercase tracking-widest">{labels.prev}</span>
             <span className="text-sm font-mono font-bold text-neutral-400 mt-0.5">{prev}</span>
+            {prices && prices.prev.end > 0 && (
+              <span className="text-[9px] text-neutral-500 font-mono mt-1 pt-1 border-t border-neutral-800/50 flex flex-col">
+                <span>${prices.prev.start.toFixed(1)} - ${prices.prev.end.toFixed(1)}</span>
+                <span className={prices.prev.pct >= 0 ? "text-emerald-500/70" : "text-rose-500/70"}>
+                  {prices.prev.pct >= 0 ? "+" : ""}{prices.prev.pct.toFixed(1)}%
+                </span>
+              </span>
+            )}
           </div>
           {/* Last Q */}
           <div className="flex flex-col border-r border-neutral-800 pr-5 opacity-70">
             <span className="text-[9px] text-neutral-500 font-mono uppercase tracking-widest">{labels.last}</span>
             <span className="text-base font-mono font-bold text-neutral-300 mt-0.5">{last}</span>
+            {prices && prices.last.end > 0 && (
+              <span className="text-[9px] text-neutral-500 font-mono mt-1 pt-1 border-t border-neutral-800/50 flex flex-col">
+                <span>${prices.last.start.toFixed(1)} - ${prices.last.end.toFixed(1)}</span>
+                <span className={prices.last.pct >= 0 ? "text-emerald-500/70" : "text-rose-500/70"}>
+                  {prices.last.pct >= 0 ? "+" : ""}{prices.last.pct.toFixed(1)}%
+                </span>
+              </span>
+            )}
           </div>
           {/* Current Q */}
           <div className="flex flex-col">
@@ -212,6 +241,14 @@ export default function Home() {
               {labels.current}
             </span>
             <span className="text-2xl font-mono font-bold text-white leading-none mt-1">{current}</span>
+            {prices && prices.current.end > 0 && (
+              <span className="text-[10px] text-neutral-400 font-mono mt-1.5 pt-1.5 border-t border-neutral-800 flex flex-col">
+                <span>${prices.current.start.toFixed(1)} - ${prices.current.end.toFixed(1)} (Live)</span>
+                <span className={prices.current.pct >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                  {prices.current.pct >= 0 ? "▲ " : "▼ "}{Math.abs(prices.current.pct).toFixed(1)}% vs end last Q
+                </span>
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -429,7 +466,7 @@ export default function Home() {
                     <h3 className="text-sm font-bold text-neutral-200">Hedge Funds</h3>
                   </div>
                   <div className="space-y-6">
-                    {renderStat("Total Invested (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.prevQ, instData.hedgeFunds.pctCount, instData.quarterLabels)}
+                    {renderStat("Total Invested (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.prevQ, instData.hedgeFunds.pctCount, instData.quarterLabels, instData.quarterPrices)}
                     <div className="pt-5 border-t border-neutral-900">
                       {renderStat("Capital Invested", instData.hedgeFunds.capitalCurrentQ, instData.hedgeFunds.capitalLastQ, instData.hedgeFunds.capitalPrevQ, instData.hedgeFunds.pctCap, instData.quarterLabels)}
                     </div>
@@ -442,7 +479,7 @@ export default function Home() {
                     <h3 className="text-sm font-bold text-neutral-200">Total Funds (All)</h3>
                   </div>
                   <div className="space-y-6">
-                    {renderStat("Total Invested (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.prevQ, instData.totalFunds.pctCount, instData.quarterLabels)}
+                    {renderStat("Total Invested (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.prevQ, instData.totalFunds.pctCount, instData.quarterLabels, instData.quarterPrices)}
                     <div className="pt-5 border-t border-neutral-900">
                       {renderStat("Capital Invested", instData.totalFunds.capitalCurrentQ, instData.totalFunds.capitalLastQ, instData.totalFunds.capitalPrevQ, instData.totalFunds.pctCap, instData.quarterLabels)}
                     </div>
@@ -478,20 +515,22 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Short Interest */}
-                  <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col justify-center gap-3">
-                    <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Short Interest</h3>
-                    <div className="flex items-center gap-8">
-                      <div className="flex flex-col">
-                        <span className="text-3xl font-mono font-bold text-neutral-200">{instData.sentimentFlow.shortInterestPct}%</span>
-                        <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">of float shorted</span>
-                      </div>
-                      <div className="flex flex-col border-l border-neutral-800 pl-8">
-                        <span className="text-3xl font-mono font-bold text-neutral-200">{instData.sentimentFlow.daysToCover}</span>
-                        <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">days to cover</span>
+                  {/* Dark Pool Activity */}
+                  {instData.darkPool && (
+                    <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col justify-center gap-3">
+                      <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Dark Pool & Block Trades</h3>
+                      <div className="flex items-center gap-8">
+                        <div className="flex flex-col">
+                          <span className="text-3xl font-mono font-bold text-neutral-200">{instData.darkPool.offExchangeVol}%</span>
+                          <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">off-exchange vol</span>
+                        </div>
+                        <div className="flex flex-col border-l border-neutral-800 pl-8">
+                          <span className={`text-xl font-mono font-bold ${instData.darkPool.blockTrend === 'Accumulation' ? 'text-emerald-400' : 'text-rose-400'}`}>{instData.darkPool.blockTrend}</span>
+                          <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">block trade flow</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
 
