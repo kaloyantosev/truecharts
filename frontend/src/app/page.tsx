@@ -231,7 +231,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans flex flex-col" style={{ zoom: "0.8" }}>
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans flex flex-col">
       <header className="border-b border-neutral-900 bg-neutral-950/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded bg-purple-600 flex items-center justify-center font-bold text-white tracking-wider">Ω</div>
@@ -246,7 +246,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="flex-1 p-6 max-w-[1600px] w-full mx-auto flex flex-col lg:grid lg:grid-cols-5 gap-6 lg:items-start">
+      <main className="flex-1 p-6 max-w-[125rem] w-full mx-auto flex flex-col lg:grid lg:grid-cols-5 gap-6 lg:items-start">
         
         <div className="contents lg:flex lg:flex-col lg:col-span-1 lg:col-start-1 lg:row-start-1 lg:row-span-2 gap-6 w-full">
           
