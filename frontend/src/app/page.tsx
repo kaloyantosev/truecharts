@@ -205,14 +205,15 @@ export default function Home() {
         <div className="flex items-center gap-6">
           <div className="flex flex-col pr-6 border-r border-neutral-800 opacity-50">
             <span className="text-sm font-mono font-bold text-neutral-500">{prev}</span>
-            <span className="text-[10px] text-neutral-600 font-mono uppercase mt-1">Prev ({labels.prev})</span>
+            <span className="text-[10px] text-neutral-600 font-mono uppercase mt-1">[{labels.prev}]</span>
           </div>
           <div className="flex flex-col pr-6 border-r border-neutral-800 opacity-80">
             <span className="text-lg font-mono font-bold text-neutral-400">{last}</span>
-            <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">Last ({labels.last})</span>
+            <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">[{labels.last}]</span>
           </div>
           <div className="flex flex-col">
             <span className="text-2xl font-mono font-bold text-white">{current}</span>
+            <span className="text-[10px] text-neutral-400 font-mono uppercase mt-1">[{labels.current}]</span>
             {pct && (
               <span className={`text-xs font-mono font-bold flex items-center mt-1 ${parseFloat(pct) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                 {parseFloat(pct) >= 0 ? "▲" : "▼"} {Math.abs(parseFloat(pct))}% Q/Q
@@ -225,7 +226,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans flex flex-col">
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans flex flex-col" style={{ zoom: "0.8" }}>
       <header className="border-b border-neutral-900 bg-neutral-950/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded bg-purple-600 flex items-center justify-center font-bold text-white tracking-wider">Ω</div>
@@ -473,68 +474,69 @@ export default function Home() {
               )}
 
               {instData.ownership && (
-                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-6 flex flex-col gap-6">
-                  <div className="flex justify-between items-center">
+                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-6 grid grid-cols-1 xl:grid-cols-3 gap-8 items-center">
+                  
+                  <div className="xl:col-span-2 flex flex-col gap-6">
                     <h3 className="text-sm font-bold text-neutral-300">Ownership Distribution (Float)</h3>
-                  </div>
 
-                  {/* 100% Segmented Bar */}
-                  <div className="w-full h-3 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800 flex">
-                    <div className="h-full bg-purple-500" style={{ width: `${Math.min(100, instData.ownership.institutionsPct)}%` }}></div>
-                    <div className="h-full bg-amber-500" style={{ width: `${Math.min(100 - instData.ownership.institutionsPct, instData.ownership.insiderPct)}%` }}></div>
-                    <div className="h-full bg-neutral-700" style={{ width: `${Math.max(0, 100 - instData.ownership.institutionsPct - instData.ownership.insiderPct)}%` }}></div>
-                  </div>
-
-                  {/* Legend & Stats */}
-                  <div className="grid grid-cols-3 gap-4 border-b border-neutral-850 pb-6">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                        <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Institutions</span>
-                      </div>
-                      <div className="flex items-baseline gap-2 mt-1">
-                        <span className="text-xl font-mono font-bold text-purple-400">{instData.ownership.institutionsPct.toFixed(1)}%</span>
-                        {instData.ownership.institutionsPctChange !== undefined && (
-                          <span className={`text-xs font-mono font-bold flex items-center ${instData.ownership.institutionsPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                            {instData.ownership.institutionsPctChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.institutionsPctChange).toFixed(1)}%
-                          </span>
-                        )}
-                      </div>
+                    {/* 100% Segmented Bar */}
+                    <div className="w-full h-3 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800 flex">
+                      <div className="h-full bg-purple-500" style={{ width: `${Math.min(100, instData.ownership.institutionsPct)}%` }}></div>
+                      <div className="h-full bg-amber-500" style={{ width: `${Math.min(100 - instData.ownership.institutionsPct, instData.ownership.insiderPct)}%` }}></div>
+                      <div className="h-full bg-neutral-700" style={{ width: `${Math.max(0, 100 - instData.ownership.institutionsPct - instData.ownership.insiderPct)}%` }}></div>
                     </div>
 
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                        <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Insiders</span>
+                    {/* Legend & Stats */}
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                          <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Institutions</span>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="text-xl font-mono font-bold text-purple-400">{instData.ownership.institutionsPct.toFixed(1)}%</span>
+                          {instData.ownership.institutionsPctChange !== undefined && (
+                            <span className={`text-xs font-mono font-bold flex items-center ${instData.ownership.institutionsPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                              {instData.ownership.institutionsPctChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.institutionsPctChange).toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-baseline gap-2 mt-1">
-                        <span className="text-xl font-mono font-bold text-amber-400">{instData.ownership.insiderPct.toFixed(1)}%</span>
-                        {instData.ownership.insiderPctChange !== undefined && (
-                          <span className={`text-xs font-mono font-bold flex items-center ${instData.ownership.insiderPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                            {instData.ownership.insiderPctChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.insiderPctChange).toFixed(1)}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
 
-                    <div className="flex flex-col gap-1 border-l border-neutral-800 pl-6">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-neutral-700"></div>
-                        <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Public Float</span>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                          <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Insiders</span>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="text-xl font-mono font-bold text-amber-400">{instData.ownership.insiderPct.toFixed(1)}%</span>
+                          {instData.ownership.insiderPctChange !== undefined && (
+                            <span className={`text-xs font-mono font-bold flex items-center ${instData.ownership.insiderPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                              {instData.ownership.insiderPctChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.insiderPctChange).toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-baseline gap-2 mt-1">
-                        <span className="text-xl font-mono font-bold text-neutral-400">
-                          {Math.max(0, 100 - instData.ownership.institutionsPct - instData.ownership.insiderPct).toFixed(1)}%
-                        </span>
+
+                      <div className="flex flex-col gap-1 border-l border-neutral-800 pl-6">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-neutral-700"></div>
+                          <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Public Float</span>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="text-xl font-mono font-bold text-neutral-400">
+                            {Math.max(0, 100 - instData.ownership.institutionsPct - instData.ownership.insiderPct).toFixed(1)}%
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Advanced Institutional Metrics */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                  <div className="xl:col-span-1 grid grid-cols-2 gap-4 border-t xl:border-t-0 xl:border-l border-neutral-850 pt-6 xl:pt-0 xl:pl-8">
                     
                     {/* Whale Concentration */}
-                    <div className="flex flex-col border-r border-neutral-850 pr-6">
+                    <div className="flex flex-col border-r border-neutral-850 pr-4">
                       <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Whale Concentration</span>
                       <div className="flex items-end gap-3 mb-1">
                         <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.topHolderConcentration.toFixed(1)}%</span>
