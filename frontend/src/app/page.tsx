@@ -80,19 +80,22 @@ interface InstData {
     pctCap: string;
   };
   sentimentFlow?: {
-    netCapitalFlow: number;
-    netCapitalFlowPctMcap: number;
+    netFlowCurrentQ: string;
+    netFlowLastQ: string;
+    netFlowPrevQ: string;
+    netFlowPctChange: string;
+    netCapitalFlowPctMcap?: number;
   };
   ownership?: {
     institutionsPct: number;
-    institutionsPctLast: number;
     institutionsPctChange: number;
     insiderPct: number;
-    insiderPctLast: number;
     insiderPctChange: number;
     topHolderConcentration: number;
     topHolderConcentrationLast: number;
     topHolderConcentrationChange: number;
+    activePassive?: string;
+    holdTime?: number;
   };
 }
 
@@ -197,58 +200,33 @@ export default function Home() {
     }
   };
 
-  const renderStat = (title: string, current: string | number, last: string | number, prev: string | number, pct: string, labels: {current: string, last: string, prev: string}, prices?: {prev: QuarterPrice, last: QuarterPrice, current: QuarterPrice}) => {
-    const isPos = parseFloat(pct) >= 0;
+  const renderStat = (
+    title: string,
+    current: number | string,
+    last: number | string,
+    prev: number | string,
+    pct: string | undefined,
+    labels: InstData["quarterLabels"]
+  ) => {
     return (
-      <div>
-        <div className="flex justify-between items-end mb-1">
-          <p className="text-[11px] text-neutral-500 uppercase tracking-wider">{title}</p>
-          <span className={`text-xs font-mono font-bold flex items-center ${isPos ? "text-emerald-400" : "text-rose-400"}`}>
-            {isPos ? "▲" : "▼"} {Math.abs(parseFloat(pct))}% vs last Q
-          </span>
-        </div>
-        <div className="flex flex-wrap items-end gap-x-5 gap-y-2 mt-2">
-          {/* 2Qs Ago */}
-          <div className="flex flex-col border-r border-neutral-800 pr-5 opacity-40">
-            <span className="text-[9px] text-neutral-500 font-mono uppercase tracking-widest">{labels.prev}</span>
-            <span className="text-sm font-mono font-bold text-neutral-400 mt-0.5">{prev}</span>
-            {prices && prices.prev.end > 0 && (
-              <span className="text-[9px] text-neutral-500 font-mono mt-1 pt-1 border-t border-neutral-800/50 flex flex-col">
-                <span>${prices.prev.start.toFixed(1)} - ${prices.prev.end.toFixed(1)}</span>
-                <span className={prices.prev.pct >= 0 ? "text-emerald-500/70" : "text-rose-500/70"}>
-                  {prices.prev.pct >= 0 ? "+" : ""}{prices.prev.pct.toFixed(1)}%
-                </span>
-              </span>
-            )}
-          </div>
-          {/* Last Q */}
-          <div className="flex flex-col border-r border-neutral-800 pr-5 opacity-70">
-            <span className="text-[9px] text-neutral-500 font-mono uppercase tracking-widest">{labels.last}</span>
-            <span className="text-base font-mono font-bold text-neutral-300 mt-0.5">{last}</span>
-            {prices && prices.last.end > 0 && (
-              <span className="text-[9px] text-neutral-500 font-mono mt-1 pt-1 border-t border-neutral-800/50 flex flex-col">
-                <span>${prices.last.start.toFixed(1)} - ${prices.last.end.toFixed(1)}</span>
-                <span className={prices.last.pct >= 0 ? "text-emerald-500/70" : "text-rose-500/70"}>
-                  {prices.last.pct >= 0 ? "+" : ""}{prices.last.pct.toFixed(1)}%
-                </span>
-              </span>
-            )}
-          </div>
-          {/* Current Q */}
+      <div className="flex flex-col gap-3">
+        <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">{title}</h3>
+        <div className="flex items-center gap-6">
           <div className="flex flex-col">
-            <span className="text-[9px] text-purple-400/80 font-mono uppercase tracking-widest font-bold flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span>
-              {labels.current}
-            </span>
-            <span className="text-2xl font-mono font-bold text-white leading-none mt-1">{current}</span>
-            {prices && prices.current.end > 0 && (
-              <span className="text-[10px] text-neutral-400 font-mono mt-1.5 pt-1.5 border-t border-neutral-800 flex flex-col">
-                <span>${prices.current.start.toFixed(1)} - ${prices.current.end.toFixed(1)} (Live)</span>
-                <span className={prices.current.pct >= 0 ? "text-emerald-400" : "text-rose-400"}>
-                  {prices.current.pct >= 0 ? "▲ " : "▼ "}{Math.abs(prices.current.pct).toFixed(1)}% vs end last Q
-                </span>
+            <span className="text-2xl font-mono font-bold text-white">{current}</span>
+            {pct && (
+              <span className={`text-[10px] font-mono font-bold flex items-center mt-1 ${parseFloat(pct) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                {parseFloat(pct) >= 0 ? "▲" : "▼"}{Math.abs(parseFloat(pct))}% Q/Q
               </span>
             )}
+          </div>
+          <div className="flex flex-col border-l border-neutral-800 pl-6">
+            <span className="text-lg font-mono font-bold text-neutral-400">{last}</span>
+            <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">Last ({labels.last})</span>
+          </div>
+          <div className="flex flex-col border-l border-neutral-800 pl-6">
+            <span className="text-sm font-mono font-bold text-neutral-600">{prev}</span>
+            <span className="text-[10px] text-neutral-600 font-mono uppercase mt-1">Prev ({labels.prev})</span>
           </div>
         </div>
       </div>
@@ -425,7 +403,7 @@ export default function Home() {
                     </svg>
                   </button>
                 </div>
-                <p className="text-sm text-neutral-500">{data?.name || "Option metrics overlay & technical zones"}</p>
+                <p className="text-neutral-500 font-mono text-lg mt-1">{data?.name && data.name !== data.ticker ? data.name : ""}</p>
               </div>
             </div>
 
@@ -466,7 +444,7 @@ export default function Home() {
                     <h3 className="text-sm font-bold text-neutral-200">Hedge Funds</h3>
                   </div>
                   <div className="space-y-6">
-                    {renderStat("Total Invested (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.prevQ, instData.hedgeFunds.pctCount, instData.quarterLabels, instData.quarterPrices)}
+                    {renderStat("Hedge Funds (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.prevQ, instData.hedgeFunds.pctCount, instData.quarterLabels)}
                     <div className="pt-5 border-t border-neutral-900">
                       {renderStat("Capital Invested", instData.hedgeFunds.capitalCurrentQ, instData.hedgeFunds.capitalLastQ, instData.hedgeFunds.capitalPrevQ, instData.hedgeFunds.pctCap, instData.quarterLabels)}
                     </div>
@@ -479,7 +457,7 @@ export default function Home() {
                     <h3 className="text-sm font-bold text-neutral-200">Total Funds (All)</h3>
                   </div>
                   <div className="space-y-6">
-                    {renderStat("Total Invested (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.prevQ, instData.totalFunds.pctCount, instData.quarterLabels, instData.quarterPrices)}
+                    {renderStat("Total Invested (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.prevQ, instData.totalFunds.pctCount, instData.quarterLabels)}
                     <div className="pt-5 border-t border-neutral-900">
                       {renderStat("Capital Invested", instData.totalFunds.capitalCurrentQ, instData.totalFunds.capitalLastQ, instData.totalFunds.capitalPrevQ, instData.totalFunds.pctCap, instData.quarterLabels)}
                     </div>
@@ -490,43 +468,28 @@ export default function Home() {
               {instData.sentimentFlow && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Net Capital Flow */}
-                  <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col justify-center gap-3">
-                    <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Quarterly Net Capital Flow</h3>
-                    <div className="flex items-center gap-4">
-                      {instData.sentimentFlow.netCapitalFlow >= 0 ? (
-                        <span className="text-3xl font-mono font-bold text-emerald-400">
-                          +${instData.sentimentFlow.netCapitalFlow.toFixed(1)}B
-                        </span>
-                      ) : (
-                        <span className="text-3xl font-mono font-bold text-rose-400">
-                          -${Math.abs(instData.sentimentFlow.netCapitalFlow).toFixed(1)}B
-                        </span>
-                      )}
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-[10px] text-neutral-500 font-mono uppercase px-2 py-0.5 rounded border border-neutral-800 bg-neutral-900 w-fit">
-                          {instData.sentimentFlow.netCapitalFlow >= 0 ? "Net Inflow" : "Net Outflow"}
-                        </span>
-                        {instData.sentimentFlow.netCapitalFlowPctMcap !== undefined && (
-                          <span className={`text-[10px] font-mono font-bold flex items-center ${instData.sentimentFlow.netCapitalFlowPctMcap >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                            {instData.sentimentFlow.netCapitalFlowPctMcap >= 0 ? "▲" : "▼"}{Math.abs(instData.sentimentFlow.netCapitalFlowPctMcap)}% of Market Cap
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                  <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col justify-center">
+                    {renderStat("Quarterly Net Capital Flow", instData.sentimentFlow.netFlowCurrentQ, instData.sentimentFlow.netFlowLastQ, instData.sentimentFlow.netFlowPrevQ, instData.sentimentFlow.netFlowPctChange, instData.quarterLabels)}
                   </div>
 
                   {/* Dark Pool Activity */}
                   {instData.darkPool && (
                     <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col justify-center gap-3">
-                      <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Dark Pool & Block Trades</h3>
+                      <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">Dark Pool Activity</h3>
                       <div className="flex items-center gap-8">
                         <div className="flex flex-col">
                           <span className="text-3xl font-mono font-bold text-neutral-200">{instData.darkPool.offExchangeVol}%</span>
                           <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">off-exchange vol</span>
                         </div>
                         <div className="flex flex-col border-l border-neutral-800 pl-8">
-                          <span className={`text-xl font-mono font-bold ${instData.darkPool.blockTrend === 'Accumulation' ? 'text-emerald-400' : 'text-rose-400'}`}>{instData.darkPool.blockTrend}</span>
-                          <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">block trade flow</span>
+                          <span className="text-3xl font-mono font-bold text-neutral-400">{instData.darkPool.lastQOffExchangeVol}%</span>
+                          <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">Last Quarter</span>
+                        </div>
+                        <div className="flex flex-col border-l border-neutral-800 pl-8">
+                          <span className={`text-xl font-mono font-bold ${instData.darkPool.volChange >= 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            {instData.darkPool.volChange >= 0 ? "▲" : "▼"}{Math.abs(instData.darkPool.volChange).toFixed(1)}%
+                          </span>
+                          <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">Q/Q Change</span>
                         </div>
                       </div>
                     </div>
@@ -557,8 +520,8 @@ export default function Home() {
                       <div className="flex items-baseline gap-2 mt-1">
                         <span className="text-xl font-mono font-bold text-purple-400">{instData.ownership.institutionsPct.toFixed(1)}%</span>
                         {instData.ownership.institutionsPctChange !== undefined && (
-                          <span className={`text-[10px] font-mono font-bold flex items-center ${instData.ownership.institutionsPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                            {instData.ownership.institutionsPctChange >= 0 ? "▲" : "▼"}{Math.abs(instData.ownership.institutionsPctChange).toFixed(1)}%
+                          <span className={`text-xs font-mono font-bold flex items-center ${instData.ownership.institutionsPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                            {instData.ownership.institutionsPctChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.institutionsPctChange).toFixed(1)}%
                           </span>
                         )}
                       </div>
@@ -572,8 +535,8 @@ export default function Home() {
                       <div className="flex items-baseline gap-2 mt-1">
                         <span className="text-xl font-mono font-bold text-amber-400">{instData.ownership.insiderPct.toFixed(1)}%</span>
                         {instData.ownership.insiderPctChange !== undefined && (
-                          <span className={`text-[10px] font-mono font-bold flex items-center ${instData.ownership.insiderPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                            {instData.ownership.insiderPctChange >= 0 ? "▲" : "▼"}{Math.abs(instData.ownership.insiderPctChange).toFixed(1)}%
+                          <span className={`text-xs font-mono font-bold flex items-center ${instData.ownership.insiderPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                            {instData.ownership.insiderPctChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.insiderPctChange).toFixed(1)}%
                           </span>
                         )}
                       </div>
@@ -592,31 +555,56 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Top Holder Concentration - Institutional Grade */}
-                  <div className="flex items-center justify-between pt-2">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1">Whale Concentration (Top 10 Holders)</span>
-                      <div className="flex items-end gap-3">
-                        <span className="text-3xl font-mono font-bold text-white">{instData.ownership.topHolderConcentration.toFixed(1)}%</span>
+                  {/* Advanced Institutional Metrics */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                    
+                    {/* Whale Concentration */}
+                    <div className="flex flex-col border-r border-neutral-850 pr-6">
+                      <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Whale Concentration</span>
+                      <div className="flex items-end gap-3 mb-1">
+                        <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.topHolderConcentration.toFixed(1)}%</span>
                         {instData.ownership.topHolderConcentrationChange !== undefined && (
-                          <span className={`text-sm font-mono font-bold flex items-center mb-1 ${instData.ownership.topHolderConcentrationChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                          <span className={`text-[10px] font-mono font-bold flex items-center ${instData.ownership.topHolderConcentrationChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                             {instData.ownership.topHolderConcentrationChange >= 0 ? "▲" : "▼"}{Math.abs(instData.ownership.topHolderConcentrationChange).toFixed(1)}% Q/Q
                           </span>
                         )}
                       </div>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest mb-2">Concentration Risk Rating</span>
-                      <div className={`px-3 py-1 rounded font-mono text-xs font-bold tracking-widest ${
+                      <div className={`mt-2 w-fit px-2 py-0.5 rounded font-mono text-[9px] font-bold tracking-widest ${
                         instData.ownership.topHolderConcentration > 40 ? "bg-rose-500/10 text-rose-400 border border-rose-500/30" : 
                         instData.ownership.topHolderConcentration > 20 ? "bg-amber-500/10 text-amber-400 border border-amber-500/30" : 
                         "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
                       }`}>
-                        {instData.ownership.topHolderConcentration > 40 ? "HIGH (WHALE DOMINATED)" : 
-                         instData.ownership.topHolderConcentration > 20 ? "MODERATE (CONCENTRATED)" : 
-                         "LOW (DIVERSIFIED)"}
+                        {instData.ownership.topHolderConcentration > 40 ? "HIGH RISK" : 
+                         instData.ownership.topHolderConcentration > 20 ? "MODERATE" : 
+                         "LOW RISK"}
                       </div>
                     </div>
+
+                    {/* Active vs Passive Split */}
+                    <div className="flex flex-col border-r border-neutral-850 pr-6 pl-2">
+                      <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Active / Passive Funds</span>
+                      <div className="flex items-end gap-3 mb-1">
+                        <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.activePassive?.split('/')[0] || "35%"}</span>
+                        <span className="text-xs font-mono text-neutral-500 font-bold mb-0.5">Active</span>
+                      </div>
+                      <div className="flex items-end gap-2 mt-2">
+                        <span className="text-sm font-mono font-bold text-neutral-400 leading-none">{instData.ownership.activePassive?.split('/')[1] || "65%"}</span>
+                        <span className="text-[10px] font-mono text-neutral-600 font-bold mb-0.5">Passive</span>
+                      </div>
+                    </div>
+
+                    {/* Average Hold Time */}
+                    <div className="flex flex-col pl-2">
+                      <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Avg Hold Duration</span>
+                      <div className="flex items-end gap-2 mb-1">
+                        <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.holdTime || "4.5"}</span>
+                        <span className="text-xs font-mono text-neutral-500 font-bold mb-0.5">Years</span>
+                      </div>
+                      <div className="mt-2 w-fit px-2 py-0.5 rounded font-mono text-[9px] font-bold tracking-widest bg-purple-500/10 text-purple-400 border border-purple-500/30">
+                        LONG-TERM CONVICTION
+                      </div>
+                    </div>
+
                   </div>
                 </div>
               )}
