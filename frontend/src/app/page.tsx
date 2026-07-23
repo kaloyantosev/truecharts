@@ -202,7 +202,7 @@ export default function Home() {
     return (
       <div className="flex flex-col gap-3">
         <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">{title}</h3>
-        <div className="flex items-center gap-6">
+        <div className="flex items-start gap-6">
           <div className="flex flex-col pr-6 border-r border-neutral-800 opacity-50">
             <span className="text-sm font-mono font-bold text-neutral-500">{prev}</span>
             <span className="text-[10px] text-neutral-600 font-mono uppercase mt-1">[{labels.prev}]</span>
@@ -541,7 +541,7 @@ export default function Home() {
                       <div className="flex items-end gap-3 mb-1">
                         <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.topHolderConcentration.toFixed(1)}%</span>
                         {instData.ownership.topHolderConcentrationChange !== undefined && (
-                          <span className={`text-xs font-mono font-bold flex items-center ${instData.ownership.topHolderConcentrationChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                          <span className={`whitespace-nowrap text-xs font-mono font-bold flex items-center ${instData.ownership.topHolderConcentrationChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                             {instData.ownership.topHolderConcentrationChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.topHolderConcentrationChange).toFixed(1)}% Q/Q
                           </span>
                         )}
@@ -560,13 +560,13 @@ export default function Home() {
                     {/* Active vs Passive Split */}
                     <div className="flex flex-col pl-2">
                       <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Active / Passive Funds</span>
-                      <div className="flex items-end gap-3 mb-1">
-                        <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.activePassive?.split('/')[0] || "35%"}</span>
-                        <span className="text-xs font-mono text-neutral-500 font-bold mb-0.5">Active</span>
+                      <div className="flex items-baseline gap-2 mb-1.5">
+                        <span className="text-xl font-mono font-bold text-white leading-none">{instData.ownership.activePassive?.split('/')[0] || "35%"}</span>
+                        <span className="text-xs font-mono text-neutral-500 font-bold">Active</span>
                       </div>
-                      <div className="flex items-end gap-2 mt-2">
-                        <span className="text-sm font-mono font-bold text-neutral-400 leading-none">{instData.ownership.activePassive?.split('/')[1] || "65%"}</span>
-                        <span className="text-[10px] font-mono text-neutral-600 font-bold mb-0.5">Passive</span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-mono font-bold text-neutral-400 leading-none">{instData.ownership.activePassive?.split('/')[1] || "65%"}</span>
+                        <span className="text-xs font-mono text-neutral-500 font-bold">Passive</span>
                       </div>
                     </div>
 
