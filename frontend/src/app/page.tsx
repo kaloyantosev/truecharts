@@ -202,17 +202,17 @@ export default function Home() {
     return (
       <div className="flex flex-col gap-3">
         <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">{title}</h3>
-        <div className="flex items-start gap-6">
+        <div className="grid grid-cols-3 w-full">
           <div className="flex flex-col pr-6 border-r border-neutral-800 opacity-50">
-            <span className="text-sm font-mono font-bold text-neutral-500">{prev}</span>
+            <span className="text-2xl font-mono font-bold text-neutral-500 leading-none">{prev}</span>
             <span className="text-[10px] text-neutral-600 font-mono uppercase mt-1">[{labels.prev}]</span>
           </div>
-          <div className="flex flex-col pr-6 border-r border-neutral-800 opacity-80">
-            <span className="text-lg font-mono font-bold text-neutral-400">{last}</span>
+          <div className="flex flex-col px-6 border-r border-neutral-800 opacity-80">
+            <span className="text-2xl font-mono font-bold text-neutral-400 leading-none">{last}</span>
             <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">[{labels.last}]</span>
           </div>
-          <div className="flex flex-col">
-            <span className="text-2xl font-mono font-bold text-white">{current}</span>
+          <div className="flex flex-col pl-6">
+            <span className="text-2xl font-mono font-bold text-white leading-none">{current}</span>
             <span className="text-[10px] text-neutral-400 font-mono uppercase mt-1">[{labels.current}]</span>
             {pct && (
               <span className={`text-xs font-mono font-bold flex items-center mt-1 ${parseFloat(pct) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
@@ -474,9 +474,9 @@ export default function Home() {
               )}
 
               {instData.ownership && (
-                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-6 grid grid-cols-1 xl:grid-cols-3 gap-8 items-center">
+                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-6 grid grid-cols-1 xl:grid-cols-5 gap-8 items-center">
                   
-                  <div className="xl:col-span-2 flex flex-col gap-6">
+                  <div className="xl:col-span-3 flex flex-col gap-6">
                     <h3 className="text-sm font-bold text-neutral-300">Ownership Distribution (Float)</h3>
 
                     {/* 100% Segmented Bar */}
@@ -533,27 +533,18 @@ export default function Home() {
                   </div>
 
                   {/* Advanced Institutional Metrics */}
-                  <div className="xl:col-span-1 grid grid-cols-2 gap-4 border-t xl:border-t-0 xl:border-l border-neutral-850 pt-6 xl:pt-0 xl:pl-8">
+                  <div className="xl:col-span-2 grid grid-cols-2 gap-4 border-t xl:border-t-0 xl:border-l border-neutral-850 pt-6 xl:pt-0 xl:pl-8">
                     
                     {/* Whale Concentration */}
                     <div className="flex flex-col border-r border-neutral-850 pr-4">
                       <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Whale Concentration</span>
-                      <div className="flex items-end gap-3 mb-1">
+                      <div className="flex items-end gap-3">
                         <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.topHolderConcentration.toFixed(1)}%</span>
                         {instData.ownership.topHolderConcentrationChange !== undefined && (
                           <span className={`whitespace-nowrap text-xs font-mono font-bold flex items-center ${instData.ownership.topHolderConcentrationChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                             {instData.ownership.topHolderConcentrationChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.topHolderConcentrationChange).toFixed(1)}% Q/Q
                           </span>
                         )}
-                      </div>
-                      <div className={`mt-2 w-fit px-2 py-0.5 rounded font-mono text-[9px] font-bold tracking-widest ${
-                        instData.ownership.topHolderConcentration > 40 ? "bg-rose-500/10 text-rose-400 border border-rose-500/30" : 
-                        instData.ownership.topHolderConcentration > 20 ? "bg-amber-500/10 text-amber-400 border border-amber-500/30" : 
-                        "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                      }`}>
-                        {instData.ownership.topHolderConcentration > 40 ? "HIGH RISK" : 
-                         instData.ownership.topHolderConcentration > 20 ? "MODERATE" : 
-                         "LOW RISK"}
                       </div>
                     </div>
 
