@@ -76,6 +76,7 @@ interface InstData {
     netFlowPrevQ: string;
     netFlowPctChange: string;
     netCapitalFlowPctMcap?: number;
+    netCapitalFlowLastPctMcap?: number;
   };
   ownership?: {
     institutionsPct: number;
@@ -197,7 +198,9 @@ export default function Home() {
     last: number | string,
     prev: number | string,
     pct: string | undefined,
-    labels: InstData["quarterLabels"]
+    labels: InstData["quarterLabels"],
+    currentSubDetail?: React.ReactNode,
+    lastSubDetail?: React.ReactNode
   ) => {
     return (
       <div className="flex flex-col gap-3">
@@ -210,10 +213,12 @@ export default function Home() {
           <div className="flex flex-col px-6 border-r border-neutral-800 opacity-80">
             <span className="text-2xl font-mono font-bold text-neutral-400 leading-none">{last}</span>
             <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">[{labels.last}]</span>
+            {lastSubDetail && <div className="mt-0.5">{lastSubDetail}</div>}
           </div>
           <div className="flex flex-col pl-6">
             <span className="text-2xl font-mono font-bold text-white leading-none">{current}</span>
             <span className="text-[10px] text-neutral-400 font-mono uppercase mt-1">[{labels.current}]</span>
+            {currentSubDetail && <div className="mt-0.5">{currentSubDetail}</div>}
             {pct && (
               <span className={`text-xs font-mono font-bold flex items-center mt-1 ${parseFloat(pct) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                 {parseFloat(pct) >= 0 ? "▲" : "▼"} {Math.abs(parseFloat(pct))}% Q/Q
@@ -461,7 +466,16 @@ export default function Home() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Net Capital Flow */}
                   <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col justify-center">
-                    {renderStat("Quarterly Net Capital Flow", instData.sentimentFlow.netFlowCurrentQ, instData.sentimentFlow.netFlowLastQ, instData.sentimentFlow.netFlowPrevQ, instData.sentimentFlow.netFlowPctChange, instData.quarterLabels)}
+                    {renderStat(
+                      "Quarterly Net Capital Flow", 
+                      instData.sentimentFlow.netFlowCurrentQ, 
+                      instData.sentimentFlow.netFlowLastQ, 
+                      instData.sentimentFlow.netFlowPrevQ, 
+                      instData.sentimentFlow.netFlowPctChange, 
+                      instData.quarterLabels,
+                      instData.sentimentFlow.netCapitalFlowPctMcap !== undefined ? <span className="text-[10px] font-mono font-bold text-neutral-400">{instData.sentimentFlow.netCapitalFlowPctMcap}% of Market Cap</span> : undefined,
+                      instData.sentimentFlow.netCapitalFlowLastPctMcap !== undefined ? <span className="text-[10px] font-mono font-bold text-neutral-500">{instData.sentimentFlow.netCapitalFlowLastPctMcap}% of Market Cap</span> : undefined
+                    )}
                   </div>
 
                   {/* Dark Pool Activity */}
@@ -538,14 +552,12 @@ export default function Home() {
                     {/* Whale Concentration */}
                     <div className="flex flex-col border-r border-neutral-850 pr-4">
                       <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Whale Concentration</span>
-                      <div className="flex items-end gap-3">
-                        <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.topHolderConcentration.toFixed(1)}%</span>
-                        {instData.ownership.topHolderConcentrationChange !== undefined && (
-                          <span className={`whitespace-nowrap text-xs font-mono font-bold flex items-center ${instData.ownership.topHolderConcentrationChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                            {instData.ownership.topHolderConcentrationChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.topHolderConcentrationChange).toFixed(1)}% Q/Q
-                          </span>
-                        )}
-                      </div>
+                      <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.topHolderConcentration.toFixed(1)}%</span>
+                      {instData.ownership.topHolderConcentrationChange !== undefined && (
+                        <span className={`whitespace-nowrap text-xs font-mono font-bold flex items-center mt-1.5 ${instData.ownership.topHolderConcentrationChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                          {instData.ownership.topHolderConcentrationChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.topHolderConcentrationChange).toFixed(1)}% Q/Q
+                        </span>
+                      )}
                     </div>
 
                     {/* Active vs Passive Split */}
