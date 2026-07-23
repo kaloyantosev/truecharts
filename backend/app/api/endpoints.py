@@ -1027,6 +1027,7 @@ def generate_deterministic_inst_data(ticker: str) -> Dict[str, Any]:
     net_flow_pct_change = f"{((net_flow_curr - net_flow_last) / abs(net_flow_last) * 100):.1f}" if net_flow_last != 0 else "0.0"
         
     last_dp_vol = round(dark_pool_vol * 0.9, 1)
+    prev_dp_vol = round(last_dp_vol * 0.95, 1)
     dp_vol = round(dark_pool_vol, 1)
 
     return {
@@ -1070,10 +1071,10 @@ def generate_deterministic_inst_data(ticker: str) -> Dict[str, Any]:
             "netCapitalFlowPctMcap": round(net_flow_pct_mcap, 3)
         },
         "darkPool": {
-            "offExchangeVol": dp_vol,
-            "lastQOffExchangeVol": last_dp_vol,
-            "volChange": round(dp_vol - last_dp_vol, 1),
-            "blockTrend": block_trend
+            "currentQ": f"{dp_vol}%",
+            "lastQ": f"{last_dp_vol}%",
+            "prevQ": f"{prev_dp_vol}%",
+            "pctChange": f"{round(dp_vol - last_dp_vol, 1)}"
         }
     }
 
@@ -1152,6 +1153,7 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         net_flow_pct_change = f"{((net_flow_curr - net_flow_last) / abs(net_flow_last) * 100):.1f}" if net_flow_last != 0 else "0.0"
 
         last_dp_vol = round(np.random.uniform(30.0, 60.0), 1)
+        prev_dp_vol = round(np.random.uniform(30.0, 60.0), 1)
         dp_vol = round(np.random.uniform(35.0, 65.0), 1)
 
         return {
@@ -1193,10 +1195,10 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
                 "netCapitalFlowPctMcap": round(pct_mcap, 3)
             },
             "darkPool": {
-                "offExchangeVol": dp_vol,
-                "lastQOffExchangeVol": last_dp_vol,
-                "volChange": round(dp_vol - last_dp_vol, 1),
-                "blockTrend": "Accumulation" if net_flow_curr >= 0 else "Distribution"
+                "currentQ": f"{dp_vol}%",
+                "lastQ": f"{last_dp_vol}%",
+                "prevQ": f"{prev_dp_vol}%",
+                "pctChange": f"{round(dp_vol - last_dp_vol, 1)}"
             }
         }
     except Exception as e:
