@@ -38,26 +38,16 @@ interface MacroForecastData {
   bearish: MacroItem[];
 }
 
-interface QuarterPrice {
-  start: number;
-  end: number;
-  pct: number;
-}
-
 interface InstData {
   quarterLabels: {
     current: string;
     last: string;
     prev: string;
   };
-  quarterPrices: {
-    prev: QuarterPrice;
-    last: QuarterPrice;
-    current: QuarterPrice;
-  };
   darkPool?: {
     offExchangeVol: number;
-    blockTrend: string;
+    lastQOffExchangeVol: number;
+    volChange: number;
   };
   hedgeFunds: {
     prevQ: number;
