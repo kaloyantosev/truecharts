@@ -473,8 +473,8 @@ export default function Home() {
                       instData.sentimentFlow.netFlowPrevQ, 
                       instData.sentimentFlow.netFlowPctChange, 
                       instData.quarterLabels,
-                      instData.sentimentFlow.netCapitalFlowPctMcap !== undefined ? <span className="text-[10px] font-mono font-bold text-neutral-400">{instData.sentimentFlow.netCapitalFlowPctMcap}% of Market Cap</span> : undefined,
-                      instData.sentimentFlow.netCapitalFlowLastPctMcap !== undefined ? <span className="text-[10px] font-mono font-bold text-neutral-500">{instData.sentimentFlow.netCapitalFlowLastPctMcap}% of Market Cap</span> : undefined
+                      instData.sentimentFlow.netCapitalFlowPctMcap !== undefined ? <span className="text-[10px] font-mono font-bold text-neutral-400 whitespace-nowrap">{instData.sentimentFlow.netCapitalFlowPctMcap.toFixed(1)}% of M.Cap</span> : undefined,
+                      instData.sentimentFlow.netCapitalFlowLastPctMcap !== undefined ? <span className="text-[10px] font-mono font-bold text-neutral-500 whitespace-nowrap">{instData.sentimentFlow.netCapitalFlowLastPctMcap.toFixed(1)}% of M.Cap</span> : undefined
                     )}
                   </div>
 
