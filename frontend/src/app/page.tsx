@@ -39,18 +39,27 @@ interface MacroForecastData {
 }
 
 interface InstData {
+  quarterLabels: {
+    current: string;
+    last: string;
+    prev: string;
+  };
   hedgeFunds: {
+    prevQ: number;
     lastQ: number;
     currentQ: number;
     pctCount: string;
+    capitalPrevQ: string;
     capitalLastQ: string;
     capitalCurrentQ: string;
     pctCap: string;
   };
   totalFunds: {
+    prevQ: number;
     lastQ: number;
     currentQ: number;
     pctCount: string;
+    capitalPrevQ: string;
     capitalLastQ: string;
     capitalCurrentQ: string;
     pctCap: string;
@@ -175,23 +184,34 @@ export default function Home() {
     }
   };
 
-  const renderStat = (title: string, current: string | number, last: string | number, pct: string) => {
+  const renderStat = (title: string, current: string | number, last: string | number, prev: string | number, pct: string, labels: {current: string, last: string, prev: string}) => {
     const isPos = parseFloat(pct) >= 0;
     return (
       <div>
-        <p className="text-[11px] text-neutral-500 uppercase tracking-wider mb-1">{title}</p>
-        <div className="flex items-end gap-3">
-          <span className="text-2xl font-mono font-bold text-white">{current}</span>
-          <div className="flex flex-col pb-0.5">
-            <span className="text-[10px] text-neutral-400">vs {last} last Q</span>
-            <span className={`text-xs font-mono font-bold flex items-center ${isPos ? "text-emerald-400" : "text-rose-400"}`}>
-              {isPos ? (
-                <svg className="w-3 h-3 mr-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
-              ) : (
-                <svg className="w-3 h-3 mr-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"></polyline><polyline points="16 17 22 17 22 11"></polyline></svg>
-              )}
-              {isPos ? "+" : ""}{pct}%
+        <div className="flex justify-between items-end mb-1">
+          <p className="text-[11px] text-neutral-500 uppercase tracking-wider">{title}</p>
+          <span className={`text-xs font-mono font-bold flex items-center ${isPos ? "text-emerald-400" : "text-rose-400"}`}>
+            {isPos ? "▲" : "▼"} {Math.abs(parseFloat(pct))}% vs last Q
+          </span>
+        </div>
+        <div className="flex flex-wrap items-end gap-x-5 gap-y-2 mt-2">
+          {/* 2Qs Ago */}
+          <div className="flex flex-col border-r border-neutral-800 pr-5 opacity-40">
+            <span className="text-[9px] text-neutral-500 font-mono uppercase tracking-widest">{labels.prev}</span>
+            <span className="text-sm font-mono font-bold text-neutral-400 mt-0.5">{prev}</span>
+          </div>
+          {/* Last Q */}
+          <div className="flex flex-col border-r border-neutral-800 pr-5 opacity-70">
+            <span className="text-[9px] text-neutral-500 font-mono uppercase tracking-widest">{labels.last}</span>
+            <span className="text-base font-mono font-bold text-neutral-300 mt-0.5">{last}</span>
+          </div>
+          {/* Current Q */}
+          <div className="flex flex-col">
+            <span className="text-[9px] text-purple-400/80 font-mono uppercase tracking-widest font-bold flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span>
+              {labels.current}
             </span>
+            <span className="text-2xl font-mono font-bold text-white leading-none mt-1">{current}</span>
           </div>
         </div>
       </div>
@@ -408,10 +428,10 @@ export default function Home() {
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                     <h3 className="text-sm font-bold text-neutral-200">Hedge Funds</h3>
                   </div>
-                  <div className="space-y-5">
-                    {renderStat("Total Invested (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.pctCount)}
-                    <div className="pt-4 border-t border-neutral-900">
-                      {renderStat("Capital Invested", instData.hedgeFunds.capitalCurrentQ, instData.hedgeFunds.capitalLastQ, instData.hedgeFunds.pctCap)}
+                  <div className="space-y-6">
+                    {renderStat("Total Invested (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.prevQ, instData.hedgeFunds.pctCount, instData.quarterLabels)}
+                    <div className="pt-5 border-t border-neutral-900">
+                      {renderStat("Capital Invested", instData.hedgeFunds.capitalCurrentQ, instData.hedgeFunds.capitalLastQ, instData.hedgeFunds.capitalPrevQ, instData.hedgeFunds.pctCap, instData.quarterLabels)}
                     </div>
                   </div>
                 </div>
@@ -421,10 +441,10 @@ export default function Home() {
                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
                     <h3 className="text-sm font-bold text-neutral-200">Total Funds (All)</h3>
                   </div>
-                  <div className="space-y-5">
-                    {renderStat("Total Invested (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.pctCount)}
-                    <div className="pt-4 border-t border-neutral-900">
-                      {renderStat("Capital Invested", instData.totalFunds.capitalCurrentQ, instData.totalFunds.capitalLastQ, instData.totalFunds.pctCap)}
+                  <div className="space-y-6">
+                    {renderStat("Total Invested (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.prevQ, instData.totalFunds.pctCount, instData.quarterLabels)}
+                    <div className="pt-5 border-t border-neutral-900">
+                      {renderStat("Capital Invested", instData.totalFunds.capitalCurrentQ, instData.totalFunds.capitalLastQ, instData.totalFunds.capitalPrevQ, instData.totalFunds.pctCap, instData.quarterLabels)}
                     </div>
                   </div>
                 </div>
