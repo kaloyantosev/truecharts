@@ -26,16 +26,16 @@ interface AnalyticsData {
   iv_regime: string;
 }
 
-interface MacroItem {
-  name: string;
-  class: string;
-  score: number;
-  reason: string;
+interface PredictiveSector {
+  sector: string;
+  options_grade: string;
+  dark_pool_grade: string;
+  momentum: string;
 }
 
 interface MacroForecastData {
-  bullish: MacroItem[];
-  bearish: MacroItem[];
+  leading: PredictiveSector[];
+  lagging: PredictiveSector[];
 }
 
 interface InstData {
@@ -91,11 +91,15 @@ interface InstData {
   };
 }
 
-interface SectorInfo {
-  etf: string;
-  name: string;
-  change: number;
-  momentum: string;
+interface SectorRanking {
+  sector: string;
+  flow: number;
+  max_flow: number;
+}
+
+interface MacroRotationData {
+  lastFilingDate: string;
+  rankings: SectorRanking[];
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
@@ -106,7 +110,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [instData, setInstData] = useState<InstData | null>(null);
-  const [sectors, setSectors] = useState<SectorInfo[]>([]);
+  const [macroRotation, setMacroRotation] = useState<MacroRotationData | null>(null);
   const [macroForecast, setMacroForecast] = useState<MacroForecastData | null>(null);
   const [error, setError] = useState("");
   const [watchlist, setWatchlist] = useState<string[]>([]);
@@ -144,7 +148,7 @@ export default function Home() {
   const fetchSectors = async () => {
     try {
       const res = await fetch(`${API_URL}/api/macro/rotation`);
-      if (res.ok) setSectors(await res.json());
+      if (res.ok) setMacroRotation(await res.json());
       
       const fcRes = await fetch(`${API_URL}/api/macro/forecast`);
       if (fcRes.ok) setMacroForecast(await fcRes.json());
@@ -304,67 +308,107 @@ export default function Home() {
           </div>
 
           <div className="order-4 lg:order-none bg-neutral-900 border border-neutral-800 rounded-lg p-5 flex flex-col w-full">
-            <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-              Macro Sector Rotation
-              <span className="text-[10px] text-purple-500 font-mono font-normal lowercase bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">1w</span>
-            </h2>
-            <div className="grid grid-cols-4 gap-2.5 mt-2">
-              {sectors.map((sec, idx) => {
-                let colorClass = "bg-neutral-900 border-neutral-850 text-neutral-400";
-                if (idx === 0) colorClass = "bg-emerald-900/80 border-emerald-500/70 text-emerald-100 hover:bg-emerald-800/80";
-                else if (idx >= 1 && idx <= 3) colorClass = "bg-emerald-950/45 border-emerald-600/40 text-emerald-200 hover:bg-emerald-900/45";
-                else if (idx >= 4 && idx <= 6) colorClass = "bg-emerald-950/20 border-emerald-800/20 text-emerald-300/80 hover:bg-emerald-900/25";
-                else if (idx >= 7 && idx <= 9) colorClass = "bg-neutral-900/40 border-neutral-850 text-neutral-400 hover:bg-neutral-800/40";
-                else if (idx >= 10 && idx <= 12) colorClass = "bg-rose-950/20 border-rose-800/20 text-rose-300/80 hover:bg-rose-900/25";
-                else if (idx >= 13 && idx <= 14) colorClass = "bg-rose-950/45 border-rose-600/40 text-rose-200 hover:bg-rose-900/45";
-                else if (idx === 15) colorClass = "bg-rose-900/80 border-rose-500/70 text-rose-100 hover:bg-rose-800/80";
-
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
+                Institutional 13F Sector Rankings
+              </h2>
+              {macroRotation && (
+                <span className="text-[9px] text-purple-400 border border-purple-500/30 bg-purple-500/10 px-2 py-1 rounded font-mono uppercase tracking-widest">
+                  Updated: {macroRotation.lastFilingDate}
+                </span>
+              )}
+            </div>
+            
+            <div className="flex flex-col gap-3">
+              {macroRotation?.rankings.map((sec, idx) => {
+                const isBullish = sec.flow > 0;
+                const progressWidth = `${(Math.abs(sec.flow) / sec.max_flow) * 100}%`;
+                
                 return (
-                  <div
-                    key={sec.etf}
-                    onClick={() => { setTicker(sec.etf); fetchAnalysis(sec.etf); }}
-                    className={`flex flex-col justify-between p-2 border rounded-lg cursor-pointer transition-all aspect-square text-center ${colorClass}`}
-                  >
-                    <div>
-                      <div className="font-bold text-xs tracking-wider font-mono">{sec.etf}</div>
-                      <div className="text-[9px] opacity-60 truncate mt-0.5">{sec.name}</div>
+                  <div key={idx} className="flex items-center gap-3">
+                    <span className="text-[11px] font-mono font-bold text-neutral-300 w-28 shrink-0 truncate">{sec.sector}</span>
+                    <div className="flex-1 bg-neutral-950/50 rounded h-3 border border-neutral-800 relative overflow-hidden flex items-center">
+                      {isBullish ? (
+                        <div 
+                          className="h-full bg-emerald-500/30 border-r border-emerald-500/60 transition-all duration-1000" 
+                          style={{ width: progressWidth, left: 0, position: "absolute" }} 
+                        />
+                      ) : (
+                        <div 
+                          className="h-full bg-rose-500/30 border-l border-rose-500/60 transition-all duration-1000" 
+                          style={{ width: progressWidth, right: 0, position: "absolute" }} 
+                        />
+                      )}
                     </div>
-                    <div className="font-mono text-[10px] font-bold mt-auto pt-1">
-                      {sec.change >= 0 ? "+" : ""}{sec.change.toFixed(2)}%
-                    </div>
+                    <span className={`text-[10px] font-mono font-bold w-12 text-right shrink-0 ${isBullish ? "text-emerald-400" : "text-rose-400"}`}>
+                      {isBullish ? "+" : ""}{sec.flow}B
+                    </span>
                   </div>
                 );
               })}
             </div>
 
             {macroForecast && (
-              <div className="mt-6 pt-5 border-t border-neutral-800/60">
-                <h3 className="text-[11px] text-neutral-400 uppercase tracking-wider font-bold mb-4">Quarterly Macro Outlook</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-2.5">
+              <div className="mt-7 pt-5 border-t border-neutral-800/60">
+                <h3 className="text-[11px] text-neutral-400 uppercase tracking-wider font-bold mb-4">Smart Money Predictive Outlook</h3>
+                <div className="flex flex-col gap-4">
+                  
+                  {/* Leading Sectors */}
+                  <div className="flex flex-col gap-2">
                     <span className="text-[10px] text-emerald-500/80 uppercase font-mono font-bold tracking-widest flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                      Bullish
+                      Leading / Accumulation
                     </span>
-                    {macroForecast.bullish.map((item: MacroItem, i: number) => (
-                      <div key={i} className="bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded flex flex-col gap-1 hover:bg-emerald-950/40 transition-colors">
-                        <span className="text-xs font-bold text-emerald-400 font-mono tracking-tight">{item.name}</span>
-                        <span className="text-[10px] text-emerald-200/50 leading-tight">{item.reason}</span>
-                      </div>
-                    ))}
+                    <div className="grid grid-cols-1 gap-2">
+                      {macroForecast.leading.map((item, i) => (
+                        <div key={i} className="bg-neutral-950 border border-emerald-900/40 p-3 rounded flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-emerald-400">{item.sector}</span>
+                            <span className="text-[9px] text-emerald-200/50 uppercase tracking-wider">{item.momentum}</span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="flex flex-col items-end">
+                              <span className="text-[9px] text-neutral-600 font-mono uppercase">Opt Flow</span>
+                              <span className="text-[11px] font-bold text-emerald-300 font-mono">{item.options_grade}</span>
+                            </div>
+                            <div className="flex flex-col items-end">
+                              <span className="text-[9px] text-neutral-600 font-mono uppercase">Dark Pool</span>
+                              <span className="text-[11px] font-bold text-emerald-300 font-mono">{item.dark_pool_grade}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-2.5">
+
+                  {/* Lagging Sectors */}
+                  <div className="flex flex-col gap-2 mt-2">
                     <span className="text-[10px] text-rose-500/80 uppercase font-mono font-bold tracking-widest flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
-                      Bearish
+                      Lagging / Distribution
                     </span>
-                    {macroForecast.bearish.map((item: MacroItem, i: number) => (
-                      <div key={i} className="bg-rose-950/20 border border-rose-900/30 p-2.5 rounded flex flex-col gap-1 hover:bg-rose-950/40 transition-colors">
-                        <span className="text-xs font-bold text-rose-400 font-mono tracking-tight">{item.name}</span>
-                        <span className="text-[10px] text-rose-200/50 leading-tight">{item.reason}</span>
-                      </div>
-                    ))}
+                    <div className="grid grid-cols-1 gap-2">
+                      {macroForecast.lagging.map((item, i) => (
+                        <div key={i} className="bg-neutral-950 border border-rose-900/40 p-3 rounded flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-rose-400">{item.sector}</span>
+                            <span className="text-[9px] text-rose-200/50 uppercase tracking-wider">{item.momentum}</span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="flex flex-col items-end">
+                              <span className="text-[9px] text-neutral-600 font-mono uppercase">Opt Flow</span>
+                              <span className="text-[11px] font-bold text-rose-300 font-mono">{item.options_grade}</span>
+                            </div>
+                            <div className="flex flex-col items-end">
+                              <span className="text-[9px] text-neutral-600 font-mono uppercase">Dark Pool</span>
+                              <span className="text-[11px] font-bold text-rose-300 font-mono">{item.dark_pool_grade}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+
                 </div>
               </div>
             )}

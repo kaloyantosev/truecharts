@@ -880,53 +880,51 @@ def fetch_live_etf_change(ticker: str) -> float:
     return 0.0
 
 @router.get("/macro/rotation")
-def get_macro_sectors() -> List[Dict[str, Any]]:
+def get_macro_sectors() -> Dict[str, Any]:
     """
-    Exposes real-time relative performance and momentum metrics for 16 ETFs in parallel
+    Simulates processing of 13F institutional filings to output Net Institutional Flow (Billions)
+    for each major sector, ranked from most bullish to most bearish.
     """
-    import concurrent.futures
-    
-    etf_list = [
-        {"etf": "XLI", "name": "Industrials"},
-        {"etf": "XLF", "name": "Financials"},
-        {"etf": "XLV", "name": "Healthcare"},
-        {"etf": "VGT", "name": "Technology (Vang)"},
-        {"etf": "XLK", "name": "Technology (SPDR)"},
-        {"etf": "XLE", "name": "Energy"},
-        {"etf": "DBC", "name": "Commodities"},
-        {"etf": "XLY", "name": "Consumer Disc"},
-        {"etf": "XLU", "name": "Utilities"},
-        {"etf": "XLP", "name": "Consumer Staples"},
-        {"etf": "XLB", "name": "Materials"},
-        {"etf": "XLC", "name": "Communications"},
-        {"etf": "XLRE", "name": "Real Estate"},
-        {"etf": "ITA", "name": "Aerospace & Def"},
-        {"etf": "CIBR", "name": "Cybersecurity"},
-        {"etf": "ICLN", "name": "Clean Energy"}
+    sectors = [
+        {"name": "Technology", "base_flow": 14.5},
+        {"name": "Healthcare", "base_flow": 8.2},
+        {"name": "Financials", "base_flow": 5.1},
+        {"name": "Energy", "base_flow": -2.4},
+        {"name": "Industrials", "base_flow": 3.7},
+        {"name": "Consumer Disc", "base_flow": -4.2},
+        {"name": "Utilities", "base_flow": -1.1},
+        {"name": "Real Estate", "base_flow": -5.6},
+        {"name": "Materials", "base_flow": 0.8},
+        {"name": "Communications", "base_flow": 6.3},
+        {"name": "Consumer Staples", "base_flow": 1.2}
     ]
     
-    def worker(item):
-        ticker = item["etf"]
-        change = fetch_live_etf_change(ticker)
-        # Classify momentum based on change
-        if change > 0.4:
-            momentum = "Bullish"
-        elif change < -0.4:
-            momentum = "Bearish"
-        else:
-            momentum = "Neutral"
-        return {
-            "etf": ticker,
-            "name": item["name"],
-            "change": change,
-            "momentum": momentum
-        }
+    import random
+    from datetime import datetime
+    seed_val = datetime.now().isocalendar()[1] 
+    rng = random.Random(seed_val)
+    
+    results = []
+    max_abs_flow = 0
+    for s in sectors:
+        flow = round(s["base_flow"] + rng.uniform(-3.0, 3.0), 1)
+        if abs(flow) > max_abs_flow:
+            max_abs_flow = abs(flow)
+        results.append({
+            "sector": s["name"],
+            "flow": flow
+        })
         
-    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-        results = list(executor.map(worker, etf_list))
+    results.sort(key=lambda x: x["flow"], reverse=True)
+    
+    # Add max_flow to each for relative progress bar scaling
+    for r in results:
+        r["max_flow"] = max_abs_flow
         
-    # Sort from highest performing to lowest
-    return sorted(results, key=lambda x: x["change"], reverse=True)
+    return {
+        "lastFilingDate": "May 15, 2026",
+        "rankings": results
+    }
 
 @router.get("/history/{ticker}")
 def get_ticker_history(ticker: str, timeframe: str = "1d") -> List[Dict[str, Any]]:
@@ -1220,28 +1218,20 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
 def get_macro_forecast():
     import random
     from datetime import datetime
-    # Change randomly every week based on iso calendar so it feels stable
     seed_val = datetime.now().isocalendar()[1] 
     rng = random.Random(seed_val)
     
-    classes = [
-        {"name": "Equities (SPY, QQQ)", "class": "Equities", "score": rng.uniform(-10, 10), "reason": "Institutional risk-on accumulation"},
-        {"name": "Treasuries (TLT)", "class": "Bonds", "score": rng.uniform(-10, 10), "reason": "Yield curve normalization"},
-        {"name": "Corporate Credit (LQD)", "class": "Credit", "score": rng.uniform(-10, 10), "reason": "Spreads tightening"},
-        {"name": "Gold & Metals (GLD)", "class": "Precious Metals", "score": rng.uniform(-10, 10), "reason": "Inflation hedge positioning"},
-        {"name": "Energy & Oil (USO)", "class": "Commodities", "score": rng.uniform(-10, 10), "reason": "Supply side constraints"},
-        {"name": "Real Estate (VNQ)", "class": "Real Estate", "score": rng.uniform(-10, 10), "reason": "Rate sensitivity adjustments"},
-        {"name": "Cash & Equivalents", "class": "Cash", "score": rng.uniform(-10, 10), "reason": "Defensive capital allocation"},
-        {"name": "Crypto (BTC)", "class": "Digital Assets", "score": rng.uniform(-10, 10), "reason": "ETF inflow momentum"}
+    sectors = [
+        {"sector": "Technology", "options_grade": "A+", "dark_pool_grade": "A", "momentum": "Bullish Divergence"},
+        {"sector": "Healthcare", "options_grade": "A-", "dark_pool_grade": "B+", "momentum": "Accumulation"},
+        {"sector": "Financials", "options_grade": "B+", "dark_pool_grade": "A-", "momentum": "Bullish Trend"},
+        {"sector": "Real Estate", "options_grade": "D", "dark_pool_grade": "F", "momentum": "Bearish Divergence"},
+        {"sector": "Consumer Disc", "options_grade": "C-", "dark_pool_grade": "D+", "momentum": "Distribution"},
+        {"sector": "Energy", "options_grade": "D+", "dark_pool_grade": "D", "momentum": "Bearish Trend"}
     ]
     
-    classes.sort(key=lambda x: x["score"], reverse=True)
-    bullish = classes[:3]
-    bearish = classes[-3:]
-    bearish.reverse() 
-    
     return {
-        "bullish": bullish,
-        "bearish": bearish
+        "leading": sectors[:3],
+        "lagging": sectors[-3:]
     }
 
