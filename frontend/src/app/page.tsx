@@ -360,7 +360,7 @@ export default function Home() {
                       Leading / Accumulation
                     </span>
                     <div className="grid grid-cols-1 gap-2">
-                      {macroForecast.leading.map((item, i) => (
+                      {macroForecast.leading?.map((item, i) => (
                         <div key={i} className="bg-neutral-950 border border-emerald-900/40 p-3 rounded flex items-center justify-between">
                           <div className="flex flex-col">
                             <span className="text-xs font-bold text-emerald-400">{item.sector}</span>
@@ -388,7 +388,7 @@ export default function Home() {
                       Lagging / Distribution
                     </span>
                     <div className="grid grid-cols-1 gap-2">
-                      {macroForecast.lagging.map((item, i) => (
+                      {macroForecast.lagging?.map((item, i) => (
                         <div key={i} className="bg-neutral-950 border border-rose-900/40 p-3 rounded flex items-center justify-between">
                           <div className="flex flex-col">
                             <span className="text-xs font-bold text-rose-400">{item.sector}</span>
