@@ -198,6 +198,15 @@ def fetch_live_price_history(ticker: str, timeframe: str = "1d") -> pd.DataFrame
     elif timeframe == "1d":
         interval = "1d"
         period_range = "5y"
+    elif timeframe == "1w":
+        interval = "1wk"
+        period_range = "10y"
+    elif timeframe == "1m":
+        interval = "1mo"
+        period_range = "20y"
+    elif timeframe == "3m":
+        interval = "3mo"
+        period_range = "max"
         
     try:
         url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?range={period_range}&interval={interval}"
@@ -1068,7 +1077,8 @@ def generate_deterministic_inst_data(ticker: str) -> Dict[str, Any]:
             "netFlowLastQ": format_flow(net_flow_last),
             "netFlowPrevQ": format_flow(net_flow_prev),
             "netFlowPctChange": net_flow_pct_change,
-            "netCapitalFlowPctMcap": round(net_flow_pct_mcap, 3)
+            "netCapitalFlowPctMcap": round(net_flow_pct_mcap, 3),
+            "netCapitalFlowLastPctMcap": round((net_flow_last / market_cap_b) * 100, 3)
         },
         "darkPool": {
             "currentQ": f"{dp_vol}%",
@@ -1192,7 +1202,8 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
                 "netFlowLastQ": format_flow(net_flow_last),
                 "netFlowPrevQ": format_flow(net_flow_prev),
                 "netFlowPctChange": net_flow_pct_change,
-                "netCapitalFlowPctMcap": round(pct_mcap, 3)
+                "netCapitalFlowPctMcap": round(pct_mcap, 3),
+                "netCapitalFlowLastPctMcap": round((net_flow_last / market_cap_b) * 100, 3)
             },
             "darkPool": {
                 "currentQ": f"{dp_vol}%",

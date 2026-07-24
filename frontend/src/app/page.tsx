@@ -275,6 +275,9 @@ export default function Home() {
                   <option value="1h">1h</option>
                   <option value="4h">4h</option>
                   <option value="1d">1d</option>
+                  <option value="1w">1w</option>
+                  <option value="1m">1m</option>
+                  <option value="3m">3m</option>
                 </select>
               </div>
               <button 
