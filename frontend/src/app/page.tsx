@@ -147,10 +147,10 @@ export default function Home() {
 
   const fetchSectors = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/macro/rotation`);
+      const res = await fetch(`${API_URL}/api/macro/rotation?t=${Date.now()}`);
       if (res.ok) setMacroRotation(await res.json());
       
-      const fcRes = await fetch(`${API_URL}/api/macro/forecast`);
+      const fcRes = await fetch(`${API_URL}/api/macro/forecast?t=${Date.now()}`);
       if (fcRes.ok) setMacroForecast(await fcRes.json());
     } catch (e) {
       console.error("Failed to load macro sector rotation", e);
@@ -310,7 +310,7 @@ export default function Home() {
           <div className="order-4 lg:order-none bg-neutral-900 border border-neutral-800 rounded-lg p-5 flex flex-col w-full">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
-                Institutional 13F Sector Rankings
+                13F Sector Flows
               </h2>
               {macroRotation && (
                 <span className="text-[9px] text-purple-400 border border-purple-500/30 bg-purple-500/10 px-2 py-1 rounded font-mono uppercase tracking-widest">
@@ -350,14 +350,14 @@ export default function Home() {
 
             {macroForecast && (
               <div className="mt-7 pt-5 border-t border-neutral-800/60">
-                <h3 className="text-[11px] text-neutral-400 uppercase tracking-wider font-bold mb-4">Smart Money Predictive Outlook</h3>
+                <h3 className="text-[11px] text-neutral-400 uppercase tracking-wider font-bold mb-4">Sector Predictions</h3>
                 <div className="flex flex-col gap-4">
                   
                   {/* Leading Sectors */}
                   <div className="flex flex-col gap-2">
                     <span className="text-[10px] text-emerald-500/80 uppercase font-mono font-bold tracking-widest flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                      Leading / Accumulation
+                      Leading
                     </span>
                     <div className="grid grid-cols-1 gap-2">
                       {macroForecast.leading?.map((item, i) => (
@@ -385,7 +385,7 @@ export default function Home() {
                   <div className="flex flex-col gap-2 mt-2">
                     <span className="text-[10px] text-rose-500/80 uppercase font-mono font-bold tracking-widest flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
-                      Lagging / Distribution
+                      Lagging
                     </span>
                     <div className="grid grid-cols-1 gap-2">
                       {macroForecast.lagging?.map((item, i) => (
