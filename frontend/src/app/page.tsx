@@ -320,7 +320,7 @@ export default function Home() {
             </div>
             
             <div className="flex flex-col gap-3">
-              {macroRotation?.rankings.map((sec, idx) => {
+              {macroRotation?.rankings?.map((sec, idx) => {
                 const isBullish = sec.flow > 0;
                 const progressWidth = `${(Math.abs(sec.flow) / sec.max_flow) * 100}%`;
                 
