@@ -514,14 +514,11 @@ export default function Home() {
                 <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Institutional Positioning</h2>
                 <p className="text-xs text-neutral-500 mt-0.5">Hedge Fund & Mutual Fund flows based on 13F public filings</p>
               </div>
-              <div className="flex flex-col items-end gap-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-purple-300 border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 rounded font-mono uppercase tracking-widest font-bold shadow-sm">
-                    Next 13F Update: ~Aug 14 (Approx. 45 Days Post-Q2)
-                  </span>
-                  <span className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 rounded font-mono font-bold">LIVE API (yFinance)</span>
-                </div>
-                <span className="text-[9px] text-neutral-500 font-mono">SEC Filing Deadline: 45 Days After Quarter End</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-purple-300 border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 rounded font-mono uppercase tracking-widest font-bold shadow-sm">
+                  Next 13F Update: ~Aug 14
+                </span>
+                <span className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 rounded font-mono font-bold">LIVE API (yFinance)</span>
               </div>
             </div>
 
