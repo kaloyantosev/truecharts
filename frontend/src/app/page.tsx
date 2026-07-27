@@ -287,7 +287,15 @@ export default function Home() {
         <div className="contents lg:flex lg:flex-col lg:col-span-1 lg:col-start-1 lg:row-start-1 lg:row-span-2 gap-6 w-full">
           
           <div className="order-1 lg:order-none bg-neutral-900 border border-neutral-800 rounded-lg p-5 w-full">
-            <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4">Select Ticker</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Select Ticker</h2>
+              {loading && (
+                <span className="flex items-center gap-1.5 text-[11px] font-mono text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping" />
+                  loading...
+                </span>
+              )}
+            </div>
             <form onSubmit={handleSearch} className="flex flex-col gap-3">
               <div>
                 <label className="block text-[11px] text-neutral-500 uppercase font-bold mb-1">Symbol</label>
@@ -321,7 +329,7 @@ export default function Home() {
                 disabled={loading}
                 className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 text-white font-semibold text-sm py-2 rounded transition-colors mt-1"
               >
-                {loading ? "Analyzing..." : "Analyze Ticker"}
+                {loading ? "loading..." : "Analyze Ticker"}
               </button>
             </form>
             {error && <p className="text-red-400 text-xs mt-2 font-mono">{error}</p>}
@@ -331,19 +339,11 @@ export default function Home() {
             <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Options Positioning</h2>
             <div className="flex justify-between items-center py-2 border-b border-neutral-800">
               <span className="text-neutral-400 text-sm">Put/Call Ratio</span>
-              {loading ? (
-                <div className="h-5 w-12 bg-neutral-800 rounded animate-pulse" />
-              ) : (
-                <span className="font-mono text-neutral-100 text-sm font-semibold">{data ? data.put_call_ratio : "-"}</span>
-              )}
+              <span className="font-mono text-neutral-100 text-sm font-semibold">{data ? data.put_call_ratio : "-"}</span>
             </div>
             <div className="flex justify-between items-center py-2">
               <span className="text-neutral-400 text-sm">Volatility Regime</span>
-              {loading ? (
-                <div className="h-5 w-24 bg-neutral-800 rounded animate-pulse" />
-              ) : (
-                <span className="font-mono text-neutral-100 text-sm font-semibold">{data ? data.iv_regime : "-"}</span>
-              )}
+              <span className="font-mono text-neutral-100 text-sm font-semibold">{data ? data.iv_regime : "-"}</span>
             </div>
           </div>
 
@@ -507,27 +507,7 @@ export default function Home() {
             </div>
 
             <div className="flex-1 min-h-[440px] flex flex-col relative">
-              {loading ? (
-                <div className="flex-1 w-full bg-neutral-950/90 rounded-lg flex flex-col items-center justify-center border border-purple-500/30 relative overflow-hidden backdrop-blur-md min-h-[440px]">
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/10 to-transparent animate-pulse" />
-                  <div className="relative flex flex-col items-center gap-5 z-10">
-                    <div className="relative flex items-center justify-center">
-                      <div className="w-14 h-14 rounded-full border-2 border-purple-500/20 border-t-purple-500 animate-spin" />
-                      <div className="w-8 h-8 rounded-full bg-purple-500/20 animate-pulse absolute" />
-                      <span className="text-[12px] font-mono font-bold text-purple-400 absolute animate-pulse">Ω</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1.5 text-center px-4">
-                      <span className="text-sm font-mono font-bold text-neutral-100 tracking-wider uppercase animate-pulse">
-                        Synchronizing Interactive Chart...
-                      </span>
-                      <span className="text-xs text-neutral-400 font-mono">
-                        Loading live spot, gamma max pain & level concentrations for <span className="text-purple-400 font-bold">{ticker.toUpperCase()}</span>
-                      </span>
-                    </div>
-                  </div>
-                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f1f1f15_1px,transparent_1px),linear-gradient(to_bottom,#1f1f1f15_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-                </div>
-              ) : data ? (
+              {data ? (
                 <TradingViewChart
                   ticker={data.ticker}
                   spot={data.spot}
@@ -538,7 +518,7 @@ export default function Home() {
                 />
               ) : (
                 <div className="flex-1 w-full bg-neutral-950 rounded flex items-center justify-center border border-neutral-850">
-                  <span className="text-sm text-neutral-500 font-mono">Select a ticker to load the interactive chart</span>
+                  <span className="text-sm text-neutral-500 font-mono">{loading ? "loading..." : "Select a ticker to load the interactive chart"}</span>
                 </div>
               )}
             </div>
@@ -561,7 +541,7 @@ export default function Home() {
               </div>
             </div>
 
-          {instData && !loading ? (
+          {instData ? (
             <div className="flex flex-col gap-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
