@@ -107,6 +107,7 @@ interface SectorRanking {
 
 interface MacroRotationData {
   lastFilingDate: string;
+  nextUpdate?: string;
   rankings: SectorRanking[];
 }
 
