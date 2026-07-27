@@ -1087,8 +1087,9 @@ def generate_deterministic_inst_data(ticker: str, mcap_dollars: float = 10000000
     insider_pct_last = max(0.01, min(1.0, insider_pct / 1.002))
     top_conc_last = round(top_conc / 1.01, 2)
 
-    net_flow_curr = tf_cap_curr - tf_cap_last
-    net_flow_last = tf_cap_last - tf_cap_prev
+    flow_pct_val = ((inst_pct - inst_pct_last) / max(0.0001, inst_pct_last)) * 100.0
+    net_flow_curr = tf_cap_curr * (flow_pct_val / 100.0)
+    net_flow_last = net_flow_curr / (1.0 + (flow_pct_val / 100.0)) if flow_pct_val != -100.0 else net_flow_curr * 0.9
     net_flow_prev = net_flow_last / 1.015
     net_flow_pct_change = f"{((net_flow_curr - net_flow_last) / abs(net_flow_last) * 100.0):.1f}" if net_flow_last != 0 else "0.0"
     net_flow_pct_mcap = (net_flow_curr / mcap_dollars) * 100.0 if mcap_dollars > 0 else 0.0
@@ -1247,8 +1248,8 @@ def fetch_fmp_institutional_data(ticker: str, fmp_key: str) -> Optional[Dict[str
         active_pct_val = round((hf_val_curr / max(1.0, total_val_curr)) * 100.0, 1)
         passive_pct_val = round(100.0 - active_pct_val, 1)
 
-        net_flow_curr_val = hf_cap_curr_val - hf_cap_last_val
-        net_flow_last_val = hf_cap_last_val - hf_cap_prev_val
+        net_flow_curr_val = hf_cap_curr_val * (active_13f_flow_pct / 100.0)
+        net_flow_last_val = net_flow_curr_val / (1.0 + (active_13f_flow_pct / 100.0)) if active_13f_flow_pct != -100.0 else net_flow_curr_val * 0.9
         net_flow_prev_val = net_flow_last_val / 1.05
         net_flow_pct_chg_str = f"{((net_flow_curr_val - net_flow_last_val) / abs(net_flow_last_val) * 100.0):.1f}" if net_flow_last_val != 0 else "0.0"
 
