@@ -345,7 +345,7 @@ export default function Home() {
               </h2>
               {macroRotation && (
                 <span className="text-[9px] text-purple-400 border border-purple-500/30 bg-purple-500/10 px-2 py-1 rounded font-mono uppercase tracking-widest">
-                  Updated: {macroRotation.lastFilingDate}
+                  Next 13F update: {macroRotation.nextUpdate || "~Aug 14"}
                 </span>
               )}
             </div>
@@ -648,10 +648,10 @@ export default function Home() {
                   {/* Bottom: Hedge-Fund Intelligence (Fintel Analytics) */}
                   <div className="border-t border-neutral-850 pt-6">
                     <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Hedge-Fund Positioning & Short Intelligence</span>
+                      <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Hedge-Fund & Institutional Allocation Intelligence</span>
                       <span className="text-[10px] text-neutral-500 font-mono">SOURCE: FINTEL / SEC 13F / FINRA</span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                       
                       {/* Whale Concentration */}
                       <div className="bg-neutral-900/60 border border-neutral-850/80 rounded p-4 flex flex-col justify-between">
@@ -664,7 +664,7 @@ export default function Home() {
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] text-neutral-500 mt-1 font-mono">Top 5 Holder Allocation (13G/A)</span>
+                        <span className="text-[10px] text-neutral-500 mt-1 font-mono">Top 10 Holder Allocation (13F/NPORT)</span>
                       </div>
 
                       {/* Active vs Passive Split */}
@@ -682,65 +682,6 @@ export default function Home() {
                         </div>
                         <span className="text-[10px] text-neutral-500 mt-1 font-mono">13F Managers vs NPORT ETFs</span>
                       </div>
-
-                      {/* Institutional Put / Call Ratio */}
-                      {instData.ownership.putCallRatio !== undefined && (
-                        <div className="bg-neutral-900/60 border border-neutral-850/80 rounded p-4 flex flex-col justify-between">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Options Sentiment</span>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${instData.ownership.putCallRatio < 0.85 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : instData.ownership.putCallRatio > 1.15 ? "bg-rose-500/20 text-rose-300 border border-rose-500/30" : "bg-neutral-800 text-neutral-300"}`}>
-                              {instData.ownership.putCallRatio < 0.85 ? "Bullish Flow" : instData.ownership.putCallRatio > 1.15 ? "Bearish Flow" : "Neutral"}
-                            </span>
-                          </div>
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.putCallRatio.toFixed(2)}</span>
-                            <span className="text-xs font-mono text-neutral-400 font-bold">Put / Call Ratio</span>
-                          </div>
-                          <span className="text-[10px] text-neutral-500 mt-1 font-mono">Institutional 13F Options Holdings</span>
-                        </div>
-                      )}
-
-                      {/* Fund Strategy Breakdown */}
-                      {instData.ownership.longOnlyCount !== undefined && (
-                        <div className="bg-neutral-900/60 border border-neutral-850/80 rounded p-4 flex flex-col justify-between">
-                          <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2">Fund Strategies</span>
-                          <div className="flex items-baseline gap-3">
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-lg font-mono font-bold text-emerald-400">{instData.ownership.longOnlyCount}</span>
-                              <span className="text-[10px] font-mono text-neutral-500">Long</span>
-                            </div>
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-lg font-mono font-bold text-purple-400">{instData.ownership.longShortCount || 0}</span>
-                              <span className="text-[10px] font-mono text-neutral-500">L/S</span>
-                            </div>
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-lg font-mono font-bold text-rose-400">{instData.ownership.shortOnlyCount || 0}</span>
-                              <span className="text-[10px] font-mono text-neutral-500">Short</span>
-                            </div>
-                          </div>
-                          <span className="text-[10px] text-neutral-500 mt-1 font-mono">Long-Only vs Hedge L/S vs Short</span>
-                        </div>
-                      )}
-
-                      {/* Short Interest & Days to Cover */}
-                      {instData.ownership.shortFloatPct !== undefined && (
-                        <div className="bg-neutral-900/60 border border-neutral-850/80 rounded p-4 flex flex-col justify-between">
-                          <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2">Short Interest & Cover</span>
-                          <div className="flex items-baseline justify-between gap-2">
-                            <div className="flex items-baseline gap-1.5">
-                              <span className="text-2xl font-mono font-bold text-rose-400 leading-none">{instData.ownership.shortFloatPct.toFixed(1)}%</span>
-                              <span className="text-xs font-mono text-neutral-500 font-bold">Float</span>
-                            </div>
-                            {instData.ownership.daysToCover !== undefined && (
-                              <div className="flex items-baseline gap-1.5">
-                                <span className="text-2xl font-mono font-bold text-amber-400 leading-none">{instData.ownership.daysToCover.toFixed(1)}</span>
-                                <span className="text-xs font-mono text-neutral-500 font-bold">DTC</span>
-                              </div>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-neutral-500 mt-1 font-mono">NYSE / FINRA Authoritative Short Float</span>
-                        </div>
-                      )}
 
                       {/* Avg Portfolio Allocation */}
                       {instData.ownership.avgPortAlloc !== undefined && (
