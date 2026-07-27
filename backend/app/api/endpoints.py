@@ -1092,6 +1092,11 @@ def generate_deterministic_inst_data(ticker: str, mcap_dollars: float = 10000000
 @router.get("/institutional/{ticker}")
 def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
     ticker = ticker.upper()
+    import math
+
+    def is_valid_float(v):
+        return v is not None and isinstance(v, (int, float)) and not math.isnan(v) and v > 0
+
     try:
         tk = yf.Ticker(ticker)
         
@@ -1107,35 +1112,43 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         except:
             pass
 
-        # 2. Authoritative Market Cap calculation
+        # 2. Authoritative Market Cap calculation with dropna for NaN resiliency
         mcap_dollars = None
-        if edgar_shares_val and edgar_shares_val > 0:
+        if is_valid_float(edgar_shares_val):
             try:
-                hist = tk.history(period="5d")
-                if not hist.empty:
-                    mcap_dollars = float(hist["Close"].iloc[-1] * edgar_shares_val)
+                hist_closes = tk.history(period="5d")["Close"].dropna()
+                if not hist_closes.empty:
+                    mcap_dollars = float(hist_closes.iloc[-1] * edgar_shares_val)
             except:
                 pass
         
-        if not mcap_dollars or mcap_dollars <= 0:
+        if not is_valid_float(mcap_dollars):
             try:
-                mcap_dollars = tk.info.get('marketCap')
+                mc_val = tk.info.get('marketCap')
+                if is_valid_float(mc_val):
+                    mcap_dollars = float(mc_val)
             except:
                 pass
 
-        if not mcap_dollars or mcap_dollars <= 0:
-            if edgar_float_val and edgar_float_val > 0:
+        if not is_valid_float(mcap_dollars):
+            if is_valid_float(edgar_float_val):
                 mcap_dollars = float(edgar_float_val)
             else:
                 try:
                     url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=summaryProfile,defaultKeyStatistics,price"
                     res = session.get(url, timeout=2.5).json()
                     res_obj = res["quoteSummary"]["result"][0]
-                    mcap_dollars = res_obj.get("price", {}).get("marketCap", {}).get("raw")
-                    if not mcap_dollars:
-                        mcap_dollars = res_obj.get("defaultKeyStatistics", {}).get("enterpriseValue", {}).get("raw", 1000000000.0)
+                    mc_val = res_obj.get("price", {}).get("marketCap", {}).get("raw")
+                    if is_valid_float(mc_val):
+                        mcap_dollars = float(mc_val)
+                    else:
+                        ev_val = res_obj.get("defaultKeyStatistics", {}).get("enterpriseValue", {}).get("raw", 1000000000.0)
+                        mcap_dollars = float(ev_val) if is_valid_float(ev_val) else 1000000000.0
                 except:
                     mcap_dollars = 1000000000.0
+
+        if not is_valid_float(mcap_dollars):
+            mcap_dollars = 1000000000.0
 
         # 3. Authoritative Ownership percentages and institutional counts
         inst_pct = 0.45
@@ -1143,15 +1156,17 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         inst_count_real = 0
         try:
             info = tk.info
-            if info.get('heldPercentInstitutions') is not None:
-                inst_pct = float(info.get('heldPercentInstitutions'))
-            if info.get('heldPercentInsiders') is not None:
-                insider_pct = float(info.get('heldPercentInsiders'))
+            ip_val = info.get('heldPercentInstitutions')
+            if ip_val is not None and not math.isnan(float(ip_val)):
+                inst_pct = float(ip_val)
+            ins_val = info.get('heldPercentInsiders')
+            if ins_val is not None and not math.isnan(float(ins_val)):
+                insider_pct = float(ins_val)
             if hasattr(tk, 'major_holders') and tk.major_holders is not None and not tk.major_holders.empty:
                 mh = tk.major_holders
                 if 'Breakdown' in mh.columns and 'Value' in mh.columns:
                     ic_row = mh[mh['Breakdown'] == 'institutionsCount']
-                    if not ic_row.empty:
+                    if not ic_row.empty and not math.isnan(float(ic_row['Value'].values[0])):
                         inst_count_real = int(float(ic_row['Value'].values[0]))
         except:
             pass
@@ -1171,18 +1186,21 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         hold_time = 3.8
         
         if inst is not None and not inst.empty:
-            if 'pctHeld' in inst.columns:
+            if 'pctHeld' in inst.columns and not math.isnan(float(inst['pctHeld'].iloc[0])):
                 top_conc = float(inst['pctHeld'].iloc[0]) * 100.0
-            elif '% Out' in inst.columns:
+            elif '% Out' in inst.columns and not math.isnan(float(inst['% Out'].iloc[0])):
                 top_conc = float(inst['% Out'].iloc[0]) * 100.0
                 
             if 'pctChange' in inst.columns:
-                top_conc_change = float(inst['pctChange'].iloc[0]) * 100.0
+                if not math.isnan(float(inst['pctChange'].iloc[0])):
+                    top_conc_change = float(inst['pctChange'].iloc[0]) * 100.0
                 valid_changes = inst['pctChange'].dropna()
                 if not valid_changes.empty:
-                    avg_inst_change = float(valid_changes.mean())
-                    turnover = abs(avg_inst_change)
-                    hold_time = round(max(1.5, min(8.0, 3.5 / (1.0 + turnover * 2.0))), 1)
+                    mean_val = float(valid_changes.mean())
+                    if not math.isnan(mean_val):
+                        avg_inst_change = mean_val
+                        turnover = abs(avg_inst_change)
+                        hold_time = round(max(1.5, min(8.0, 3.5 / (1.0 + turnover * 2.0))), 1)
 
             # Active vs Passive classification from real holdings
             if 'Holder' in inst.columns and 'Value' in inst.columns:
@@ -1190,12 +1208,17 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
                 passive_val = 0.0
                 total_val = 0.0
                 for _, row in inst.iterrows():
-                    val = float(row.get('Value', 0) or 0)
+                    val_raw = row.get('Value', 0)
+                    try:
+                        val = float(val_raw) if val_raw is not None else 0.0
+                        if math.isnan(val): val = 0.0
+                    except:
+                        val = 0.0
                     holder_name = str(row.get('Holder', '')).lower()
                     total_val += val
                     if any(pk in holder_name for pk in passive_keywords):
                         passive_val += val
-                if total_val > 0:
+                if total_val > 0 and not math.isnan(total_val):
                     passive_pct = round((passive_val / total_val) * 100.0, 1)
                     active_pct = round(100.0 - passive_pct, 1)
 
@@ -1206,7 +1229,7 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         hf_curr = max(1, int(tf_curr * (active_pct / 100.0)))
         
         flow_factor = 1.0 + avg_inst_change
-        if flow_factor == 0: flow_factor = 1.0
+        if flow_factor == 0 or math.isnan(flow_factor): flow_factor = 1.0
         tf_last = max(1, int(tf_curr / flow_factor))
         tf_prev = max(1, int(tf_last / flow_factor))
         
@@ -1214,6 +1237,7 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         hf_prev = max(1, int(hf_last / flow_factor))
         
         total_inst_cap_curr = float(mcap_dollars * inst_pct)
+        if math.isnan(total_inst_cap_curr): total_inst_cap_curr = 0.0
         tf_cap_curr = total_inst_cap_curr
         tf_cap_last = tf_cap_curr / flow_factor
         tf_cap_prev = tf_cap_last / flow_factor
@@ -1229,12 +1253,11 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         net_flow_last_val = tf_cap_last - tf_cap_prev
         net_flow_prev_val = net_flow_last_val / flow_factor
         
-        net_flow_pct_change = f"{((net_flow_curr_val - net_flow_last_val) / abs(net_flow_last_val) * 100.0):.1f}" if net_flow_last_val != 0 else "0.0"
+        net_flow_pct_change = f"{((net_flow_curr_val - net_flow_last_val) / abs(net_flow_last_val) * 100.0):.1f}" if net_flow_last_val != 0 and not math.isnan(net_flow_last_val) else "0.0"
         
-        pct_mcap_curr = round((net_flow_curr_val / mcap_dollars) * 100.0, 3) if mcap_dollars > 0 else 0.0
-        pct_mcap_last = round((net_flow_last_val / mcap_dollars) * 100.0, 3) if mcap_dollars > 0 else 0.0
+        pct_mcap_curr = round((net_flow_curr_val / mcap_dollars) * 100.0, 3) if mcap_dollars > 0 and not math.isnan(net_flow_curr_val) else 0.0
+        pct_mcap_last = round((net_flow_last_val / mcap_dollars) * 100.0, 3) if mcap_dollars > 0 and not math.isnan(net_flow_last_val) else 0.0
         
-        import math
         dp_base = round(min(45.0, max(20.0, 22.0 + math.log10(max(10000.0, mcap_dollars)) * 1.8)), 1)
         last_dp_vol = round(dp_base * 0.98, 1)
         prev_dp_vol = round(last_dp_vol * 0.98, 1)
