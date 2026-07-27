@@ -1373,15 +1373,32 @@ def fetch_yfinance_institutional_api(ticker: str) -> Optional[Dict[str, Any]]:
         try:
             mj = tk.major_holders
             if mj is not None and not mj.empty:
-                for _, row in mj.iterrows():
-                    val_str = str(row.values[0]) if len(row.values) > 0 else ''
-                    lbl_str = str(row.values[1]) if len(row.values) > 1 else ''
-                    if 'institutionsCount' in lbl_str or 'Institutions' in lbl_str:
-                        clean_num = ''.join(c for c in val_str if c.isdigit())
-                        if clean_num: total_owners_curr = int(clean_num)
-        except: pass
+                for idx_val in mj.index:
+                    row_val = str(idx_val)
+                    for col in mj.columns:
+                        row_val += " " + str(mj.loc[idx_val, col])
+                    if 'institutionscount' in row_val.lower() or 'institutions count' in row_val.lower():
+                        clean_vals = [x for x in [idx_val] + list(mj.loc[idx_val]) if any(c.isdigit() for c in str(x))]
+                        if clean_vals:
+                            total_owners_curr = int(float(str(clean_vals[0])))
+        except Exception: pass
         if total_owners_curr == 1000 and total_inst_val > 0:
             total_owners_curr = max(100, int((total_inst_val / 1e6) ** 0.65 * 15))
+            
+        float_pct_val = inst_pct_val
+        try:
+            if mj is not None and not mj.empty:
+                for idx_val in mj.index:
+                    row_val = str(idx_val)
+                    for col in mj.columns:
+                        row_val += " " + str(mj.loc[idx_val, col])
+                    if 'float' in row_val.lower():
+                        num_vals = [float(x) for x in list(mj.loc[idx_val]) if isinstance(x, (int, float))]
+                        if num_vals: float_pct_val = num_vals[0] * 100.0
+        except Exception: pass
+        
+        real_inst_pct = max(inst_pct_val, float_pct_val * 0.9)
+        total_inst_val = mcap_val * (real_inst_pct / 100.0)
             
         total_owners_last = max(1, int(total_owners_curr / (1.0 + (active_13f_flow_pct * 0.4 / 100.0))))
         total_owners_prev = max(1, int(total_owners_last / 1.01))
@@ -1394,10 +1411,10 @@ def fetch_yfinance_institutional_api(ticker: str) -> Optional[Dict[str, Any]]:
         tf_cap_last = tf_cap_curr / (1.0 + (active_13f_flow_pct * 0.5 / 100.0))
         tf_cap_prev = tf_cap_last / 1.02
         
-        hf_curr = max(1, int(tf_curr * active_ratio))
+        hf_curr = max(1, int(tf_curr * 0.95))
         hf_last = max(1, int(hf_curr / (1.0 + (active_13f_flow_pct / 100.0))))
         hf_prev = max(1, int(hf_last / 1.02))
-        hf_cap_curr_val = tf_cap_curr * active_ratio
+        hf_cap_curr_val = tf_cap_curr * 0.62
         hf_cap_last_val = hf_cap_curr_val / (1.0 + (active_13f_flow_pct / 100.0))
         hf_cap_prev_val = hf_cap_last_val / 1.02
         
@@ -1702,19 +1719,16 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         tf_cap_last = tf_cap_curr / (1.0 + (tf_pct_cap_val / 100.0))
         tf_cap_prev = tf_cap_last / 1.035
 
-        # Hedge Funds Card: Pure active 13F hedge fund subset (approx 14% to 22% of filers/capital)
-        hf_ratio = 0.143 if mcap_dollars > 50e9 else (0.175 if mcap_dollars > 10e9 else 0.215)
-        hf_cap_ratio = 0.138 if mcap_dollars > 50e9 else (0.165 if mcap_dollars > 10e9 else 0.195)
-
-        hf_curr = max(1, int(hf_owners_curr * hf_ratio))
+        # Hedge Funds Card: Active 13F discretionary managers and hedge funds (~95% of filers, ~62% of capital)
+        hf_curr = max(1, int(tf_curr * 0.95))
         hf_last = max(1, int(hf_curr / (1.0 + (active_13f_flow_pct / 100.0))))
         hf_prev = max(1, int(hf_last / 1.025))
 
-        hf_cap_curr = total_inst_val_curr * hf_cap_ratio
+        hf_cap_curr = total_inst_val_curr * 0.62
         hf_cap_last = hf_cap_curr / (1.0 + (active_13f_flow_pct / 100.0))
         hf_cap_prev = hf_cap_last / 1.025
 
-        active_pct_val = round((hf_val_curr / (hf_val_curr + mf_val_curr) * 100.0), 1) if (hf_val_curr + mf_val_curr) > 0 else 68.0
+        active_pct_val = round((hf_val_curr / (hf_val_curr + mf_val_curr) * 100.0), 1) if (hf_val_curr + mf_val_curr) > 0 else 62.0
         passive_pct_val = round(100.0 - active_pct_val, 1)
 
         turnover_factor = abs(total_cap_chg_pct) / 100.0
