@@ -331,11 +331,19 @@ export default function Home() {
             <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Options Positioning</h2>
             <div className="flex justify-between items-center py-2 border-b border-neutral-800">
               <span className="text-neutral-400 text-sm">Put/Call Ratio</span>
-              <span className="font-mono text-neutral-100 text-sm font-semibold">{data ? data.put_call_ratio : "-"}</span>
+              {loading ? (
+                <div className="h-5 w-12 bg-neutral-800 rounded animate-pulse" />
+              ) : (
+                <span className="font-mono text-neutral-100 text-sm font-semibold">{data ? data.put_call_ratio : "-"}</span>
+              )}
             </div>
             <div className="flex justify-between items-center py-2">
               <span className="text-neutral-400 text-sm">Volatility Regime</span>
-              <span className="font-mono text-neutral-100 text-sm font-semibold">{data ? data.iv_regime : "-"}</span>
+              {loading ? (
+                <div className="h-5 w-24 bg-neutral-800 rounded animate-pulse" />
+              ) : (
+                <span className="font-mono text-neutral-100 text-sm font-semibold">{data ? data.iv_regime : "-"}</span>
+              )}
             </div>
           </div>
 
@@ -498,8 +506,28 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex-1 min-h-[440px] flex flex-col">
-              {data ? (
+            <div className="flex-1 min-h-[440px] flex flex-col relative">
+              {loading ? (
+                <div className="flex-1 w-full bg-neutral-950/90 rounded-lg flex flex-col items-center justify-center border border-purple-500/30 relative overflow-hidden backdrop-blur-md min-h-[440px]">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/10 to-transparent animate-pulse" />
+                  <div className="relative flex flex-col items-center gap-5 z-10">
+                    <div className="relative flex items-center justify-center">
+                      <div className="w-14 h-14 rounded-full border-2 border-purple-500/20 border-t-purple-500 animate-spin" />
+                      <div className="w-8 h-8 rounded-full bg-purple-500/20 animate-pulse absolute" />
+                      <span className="text-[12px] font-mono font-bold text-purple-400 absolute animate-pulse">Ω</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1.5 text-center px-4">
+                      <span className="text-sm font-mono font-bold text-neutral-100 tracking-wider uppercase animate-pulse">
+                        Synchronizing Interactive Chart...
+                      </span>
+                      <span className="text-xs text-neutral-400 font-mono">
+                        Loading live spot, gamma max pain & level concentrations for <span className="text-purple-400 font-bold">{ticker.toUpperCase()}</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f1f1f15_1px,transparent_1px),linear-gradient(to_bottom,#1f1f1f15_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+                </div>
+              ) : data ? (
                 <TradingViewChart
                   ticker={data.ticker}
                   spot={data.spot}
@@ -527,11 +555,13 @@ export default function Home() {
                 <span className="text-[10px] text-purple-300 border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 rounded font-mono uppercase tracking-widest font-bold shadow-sm">
                   Next 13F Update: ~Aug 14
                 </span>
-                <span className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 rounded font-mono font-bold">FINTEL AUTHORITATIVE 13F / NPORT</span>
+                <span className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 rounded font-mono uppercase tracking-widest font-bold shadow-sm">
+                  As of {macroRotation?.lastFilingDate || "May 15"}
+                </span>
               </div>
             </div>
 
-          {instData ? (
+          {instData && !loading ? (
             <div className="flex flex-col gap-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
@@ -706,8 +736,73 @@ export default function Home() {
               )}
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center p-8 border border-neutral-850 rounded-lg bg-neutral-950/40 text-center">
-              <span className="text-sm text-neutral-500 font-mono animate-pulse">Loading Live Institutional Data...</span>
+            <div className="flex flex-col gap-6 w-full animate-pulse">
+              {/* 4-Card Grid Skeleton */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="bg-neutral-950/80 border border-neutral-850/80 rounded-lg p-5 flex flex-col gap-6 relative overflow-hidden">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-purple-500/40 animate-ping" />
+                        <div className="h-4 w-32 bg-neutral-800/80 rounded" />
+                      </div>
+                      <div className="h-3 w-16 bg-neutral-850 rounded" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 pt-2">
+                      {[...Array(3)].map((_, j) => (
+                        <div key={j} className="flex flex-col gap-2">
+                          <div className="h-7 w-20 bg-neutral-800/90 rounded" />
+                          <div className="h-3 w-12 bg-neutral-850 rounded" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pt-5 border-t border-neutral-900 flex justify-between items-center">
+                      <div className="flex flex-col gap-2">
+                        <div className="h-3 w-24 bg-neutral-850 rounded" />
+                        <div className="h-6 w-28 bg-neutral-800/80 rounded" />
+                      </div>
+                      <div className="h-5 w-16 bg-purple-500/10 border border-purple-500/20 rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Ownership Distribution Skeleton */}
+              <div className="bg-neutral-950/80 border border-neutral-850/80 rounded-lg p-6 flex flex-col gap-8">
+                <div className="flex flex-col gap-6">
+                  <div className="h-4 w-48 bg-neutral-800/80 rounded" />
+                  <div className="w-full h-3 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800 flex">
+                    <div className="h-full w-1/3 bg-purple-500/30 animate-pulse" />
+                    <div className="h-full w-1/4 bg-amber-500/30 animate-pulse" />
+                    <div className="h-full w-5/12 bg-neutral-800/50 animate-pulse" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {[...Array(3)].map((_, k) => (
+                      <div key={k} className="flex flex-col gap-2">
+                        <div className="h-3 w-20 bg-neutral-850 rounded" />
+                        <div className="h-7 w-24 bg-neutral-800/90 rounded" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Bottom Analytics Skeleton */}
+                <div className="border-t border-neutral-850 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="h-3 w-64 bg-neutral-850 rounded" />
+                    <div className="h-3 w-32 bg-neutral-900 rounded" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    {[...Array(3)].map((_, m) => (
+                      <div key={m} className="bg-neutral-900/30 border border-neutral-850/50 rounded p-4 flex flex-col justify-between h-24">
+                        <div className="h-3 w-32 bg-neutral-800/80 rounded" />
+                        <div className="h-7 w-20 bg-neutral-750/80 rounded" />
+                        <div className="h-2 w-40 bg-neutral-850 rounded" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

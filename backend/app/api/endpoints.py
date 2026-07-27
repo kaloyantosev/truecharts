@@ -945,7 +945,7 @@ def get_macro_sectors() -> Dict[str, Any]:
                 results.sort(key=lambda x: x["flow"], reverse=True)
                 for r in results: r["max_flow"] = max_abs_flow
                 
-                out = {"nextUpdate": "~Aug 14", "lastFilingDate": "~Aug 14", "rankings": results}
+                out = {"nextUpdate": "~Aug 14", "lastFilingDate": "May 15", "rankings": results}
                 _MACRO_CACHE["rotation"] = out
                 _MACRO_CACHE["time"] = now
                 return out
@@ -954,7 +954,7 @@ def get_macro_sectors() -> Dict[str, Any]:
 
     # Authoritative Fintel baseline fallback if rate-limited
     results = [{"sector": k, "flow": v, "max_flow": 14.5} for k, v in sorted(sectors_map.items(), key=lambda x: x[1], reverse=True)]
-    out = {"nextUpdate": "~Aug 14", "lastFilingDate": "~Aug 14", "rankings": results}
+    out = {"nextUpdate": "~Aug 14", "lastFilingDate": "May 15", "rankings": results}
     _MACRO_CACHE["rotation"] = out
     _MACRO_CACHE["time"] = now
     return out
