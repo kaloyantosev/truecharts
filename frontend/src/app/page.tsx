@@ -172,6 +172,29 @@ export default function Home() {
     });
   };
 
+  const getSectorTicker = (sector: string): string => {
+    const s = sector.toLowerCase().trim();
+    if (s.includes("tech")) return "XLK";
+    if (s.includes("comm")) return "XLC";
+    if (s.includes("health")) return "XLV";
+    if (s.includes("finan")) return "XLF";
+    if (s.includes("staple")) return "XLP";
+    if (s.includes("indus")) return "XLI";
+    if (s.includes("energ")) return "XLE";
+    if (s.includes("mater")) return "XLB";
+    if (s.includes("util")) return "XLU";
+    if (s.includes("real") || s.includes("estate")) return "XLRE";
+    if (s.includes("disc") || s.includes("discretionary")) return "XLY";
+    return "SPY";
+  };
+
+  const handleSectorClick = (sector: string) => {
+    const targetTicker = getSectorTicker(sector);
+    setTicker(targetTicker);
+    fetchAnalysis(targetTicker);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   useEffect(() => {
     fetchAnalysis("SPY", "1d");
     fetchSectors();
@@ -325,7 +348,12 @@ export default function Home() {
                 const progressWidth = `${(Math.abs(sec.flow) / sec.max_flow) * 100}%`;
                 
                 return (
-                  <div key={idx} className="flex items-center gap-3">
+                  <div 
+                    key={idx} 
+                    onClick={() => handleSectorClick(sec.sector)}
+                    className="flex items-center gap-3 cursor-pointer hover:bg-neutral-800/80 transition-all rounded py-1 px-1.5 -mx-1.5"
+                    title={`Click to load ${getSectorTicker(sec.sector)} (${sec.sector} ETF benchmark) on chart`}
+                  >
                     <span className="text-[11px] font-mono font-bold text-neutral-300 w-28 shrink-0 truncate">{sec.sector}</span>
                     <div className="flex-1 bg-neutral-950/50 rounded h-3 border border-neutral-800 relative overflow-hidden flex items-center">
                       {isBullish ? (
@@ -361,7 +389,12 @@ export default function Home() {
                     </span>
                     <div className="grid grid-cols-1 gap-2">
                       {macroForecast.leading?.map((item, i) => (
-                        <div key={i} className="bg-neutral-950 border border-emerald-900/40 p-3 rounded flex items-center justify-between">
+                        <div 
+                          key={i} 
+                          onClick={() => handleSectorClick(item.sector)}
+                          className="bg-neutral-950 border border-emerald-900/40 p-3 rounded flex items-center justify-between cursor-pointer hover:border-emerald-500/80 hover:bg-emerald-950/10 transition-all"
+                          title={`Click to load ${getSectorTicker(item.sector)} on chart`}
+                        >
                           <div className="flex flex-col">
                             <span className="text-xs font-bold text-emerald-400">{item.sector}</span>
                             <span className="text-[9px] text-emerald-200/50 uppercase tracking-wider">{item.momentum}</span>
@@ -389,7 +422,12 @@ export default function Home() {
                     </span>
                     <div className="grid grid-cols-1 gap-2">
                       {macroForecast.lagging?.map((item, i) => (
-                        <div key={i} className="bg-neutral-950 border border-rose-900/40 p-3 rounded flex items-center justify-between">
+                        <div 
+                          key={i} 
+                          onClick={() => handleSectorClick(item.sector)}
+                          className="bg-neutral-950 border border-rose-900/40 p-3 rounded flex items-center justify-between cursor-pointer hover:border-rose-500/80 hover:bg-rose-950/10 transition-all"
+                          title={`Click to load ${getSectorTicker(item.sector)} on chart`}
+                        >
                           <div className="flex flex-col">
                             <span className="text-xs font-bold text-rose-400">{item.sector}</span>
                             <span className="text-[9px] text-rose-200/50 uppercase tracking-wider">{item.momentum}</span>
@@ -476,7 +514,15 @@ export default function Home() {
                 <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Institutional Positioning</h2>
                 <p className="text-xs text-neutral-500 mt-0.5">Hedge Fund & Mutual Fund flows based on 13F public filings</p>
               </div>
-              <span className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 rounded font-mono">LIVE API (yFinance)</span>
+              <div className="flex flex-col items-end gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-purple-300 border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 rounded font-mono uppercase tracking-widest font-bold shadow-sm">
+                    Next 13F Update: ~Aug 14 (Approx. 45 Days Post-Q2)
+                  </span>
+                  <span className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 rounded font-mono font-bold">LIVE API (yFinance)</span>
+                </div>
+                <span className="text-[9px] text-neutral-500 font-mono">SEC Filing Deadline: 45 Days After Quarter End</span>
+              </div>
             </div>
 
           {instData ? (
