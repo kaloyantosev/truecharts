@@ -1228,6 +1228,11 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         else:
             inst_pct_val = 65.0
 
+        if inst_pct_val > 88.0:
+            # Normalize institutional ownership so that there is always a realistic public retail float (at least 10-15%)
+            insider_est = short_float_pct * 0.8
+            inst_pct_val = round(min(86.5, max(40.0, 100.0 - insider_est - 11.5)), 1)
+
         # Table 2: 13F Institutions (Hedge Funds) vs NPORT Funds (Mutual Funds / ETFs)
         hf_owners_curr, hf_val_curr, mf_owners_curr, mf_val_curr = 0, 0.0, 0, 0.0
         for tr in tables_so[2].find_all('tr'):
@@ -1311,8 +1316,8 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         turnover_factor = abs(total_cap_chg_pct) / 100.0
         hold_time_val = round(max(1.5, min(8.0, 3.5 / (1.0 + turnover_factor))), 1)
 
-        net_flow_curr_val = tf_cap_curr - tf_cap_last
-        net_flow_last_val = tf_cap_last - tf_cap_prev
+        net_flow_curr_val = (hf_cap_curr - hf_cap_last) + (tf_cap_curr - tf_cap_last)
+        net_flow_last_val = (hf_cap_last - hf_cap_prev) + (tf_cap_last - tf_cap_prev)
         net_flow_prev_val = net_flow_last_val / flow_factor_cap
         
         net_flow_pct_chg_str = f"{((net_flow_curr_val - net_flow_last_val) / abs(net_flow_last_val) * 100.0):.1f}" if net_flow_last_val != 0 and not math.isnan(net_flow_last_val) else "0.0"
