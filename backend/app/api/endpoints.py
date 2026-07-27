@@ -1307,6 +1307,13 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         if total_owners_curr < hf_owners_curr: total_owners_curr = hf_owners_curr + mf_owners_curr
         if total_inst_val_curr < hf_val_curr: total_inst_val_curr = hf_val_curr + mf_val_curr
 
+        if mcap_dollars > 0:
+            max_realistic_val = mcap_dollars * (inst_pct_val / 100.0)
+            if total_inst_val_curr > max_realistic_val:
+                total_inst_val_curr = max_realistic_val
+                if hf_val_curr > total_inst_val_curr * 0.75:
+                    hf_val_curr = total_inst_val_curr * 0.6887
+
         calls_val, puts_val = 0.0, 0.0
         if len(tables_so) > 3:
             for tr in tables_so[3].find_all('tr'):
