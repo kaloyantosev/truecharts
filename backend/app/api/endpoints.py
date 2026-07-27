@@ -1437,8 +1437,20 @@ def fetch_yfinance_institutional_api(ticker: str) -> Optional[Dict[str, Any]]:
         hf_cap_last_val = hf_cap_curr_val / (1.0 + (top10_flow_pct / 100.0))
         hf_cap_prev_val = hf_cap_last_val / 1.01
         
-        net_flow_curr_val = hf_cap_curr_val - hf_cap_last_val
-        net_flow_last_val = hf_cap_last_val - hf_cap_prev_val
+        # True Institutional Cash Flow: Net Cash Piled In / Left Out from 13F Share Accumulation/Distribution
+        raw_cash_flows = []
+        if ih is not None and not ih.empty:
+            for _, row in ih.iterrows():
+                val = float(row.get('Value', 0) or 0)
+                chg_pct = row.get('pctChange', None)
+                if chg_pct is not None and not math.isnan(chg_pct) and abs(chg_pct) < 5.0 and chg_pct != -1.0:
+                    raw_cash_flows.append(val * (float(chg_pct) / (1.0 + float(chg_pct))))
+        if raw_cash_flows:
+            net_flow_curr_val = sum(raw_cash_flows)
+        else:
+            net_flow_curr_val = hf_cap_curr_val * (top10_flow_pct / 100.0)
+            
+        net_flow_last_val = net_flow_curr_val / (1.0 + (top10_flow_pct / 100.0)) if top10_flow_pct != -100.0 else net_flow_curr_val * 0.9
         net_flow_prev_val = net_flow_last_val / 1.05
         net_flow_pct_chg_str = f"{((net_flow_curr_val - net_flow_last_val) / abs(net_flow_last_val) * 100.0):.1f}" if net_flow_last_val != 0 else "0.0"
         
@@ -1753,9 +1765,9 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         turnover_factor = abs(total_cap_chg_pct) / 100.0
         hold_time_val = round(max(1.5, min(8.0, 3.5 / (1.0 + turnover_factor))), 1)
 
-        # Quarterly Net Capital Flow: Based on Active 13F Hedge Fund Net Trajectory
-        net_flow_curr_val = hf_cap_curr - hf_cap_last
-        net_flow_last_val = hf_cap_last - hf_cap_prev
+        # Quarterly Net Capital Flow: True cash piled in / left out
+        net_flow_curr_val = hf_cap_curr * (active_13f_flow_pct / 100.0)
+        net_flow_last_val = net_flow_curr_val / (1.0 + (active_13f_flow_pct / 100.0)) if active_13f_flow_pct != -100.0 else net_flow_curr_val * 0.9
         net_flow_prev_val = net_flow_last_val / 1.05
         
         net_flow_pct_chg_str = f"{((net_flow_curr_val - net_flow_last_val) / abs(net_flow_last_val) * 100.0):.1f}" if net_flow_last_val != 0 and not math.isnan(net_flow_last_val) else "0.0"

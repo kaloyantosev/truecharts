@@ -576,7 +576,7 @@ export default function Home() {
                   {/* Net Capital Flow */}
                   <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col justify-center">
                     {renderStat(
-                      "Quarterly Net Capital Flow", 
+                      "Net Cash Flow (Piled In / Left Out)", 
                       instData.sentimentFlow.netFlowCurrentQ, 
                       instData.sentimentFlow.netFlowLastQ, 
                       instData.sentimentFlow.netFlowPrevQ, 
