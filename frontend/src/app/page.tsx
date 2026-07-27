@@ -529,7 +529,7 @@ export default function Home() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Institutional Positioning</h2>
-                <p className="text-xs text-neutral-500 mt-0.5">Hedge Fund & Mutual Fund flows based on 13F public filings</p>
+                <p className="text-xs text-neutral-500 mt-0.5">Top 10 Institutional Holders & Total 13F allocation based on public exchange disclosures</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-purple-300 border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 rounded font-mono uppercase tracking-widest font-bold shadow-sm">
@@ -547,12 +547,12 @@ export default function Home() {
                 <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
                   <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                    <h3 className="text-sm font-bold text-neutral-200">Hedge Funds</h3>
+                    <h3 className="text-sm font-bold text-neutral-200">Top 10 13F Holders</h3>
                   </div>
                   <div className="space-y-6">
-                    {renderStat("Hedge Funds (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.prevQ, instData.hedgeFunds.pctCount, instData.quarterLabels)}
+                    {renderStat("Major Holders (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.prevQ, instData.hedgeFunds.pctCount, instData.quarterLabels)}
                     <div className="pt-5 border-t border-neutral-900">
-                      {renderStat("Capital Invested", instData.hedgeFunds.capitalCurrentQ, instData.hedgeFunds.capitalLastQ, instData.hedgeFunds.capitalPrevQ, instData.hedgeFunds.pctCap, instData.quarterLabels)}
+                      {renderStat("Top 10 Invested", instData.hedgeFunds.capitalCurrentQ, instData.hedgeFunds.capitalLastQ, instData.hedgeFunds.capitalPrevQ, instData.hedgeFunds.pctCap, instData.quarterLabels)}
                     </div>
                   </div>
                 </div>
@@ -560,12 +560,12 @@ export default function Home() {
                 <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
                   <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                    <h3 className="text-sm font-bold text-neutral-200">Total Funds (All)</h3>
+                    <h3 className="text-sm font-bold text-neutral-200">All 13F Institutions</h3>
                   </div>
                   <div className="space-y-6">
-                    {renderStat("Total Invested (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.prevQ, instData.totalFunds.pctCount, instData.quarterLabels)}
+                    {renderStat("Total Filers (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.prevQ, instData.totalFunds.pctCount, instData.quarterLabels)}
                     <div className="pt-5 border-t border-neutral-900">
-                      {renderStat("Capital Invested", instData.totalFunds.capitalCurrentQ, instData.totalFunds.capitalLastQ, instData.totalFunds.capitalPrevQ, instData.totalFunds.pctCap, instData.quarterLabels)}
+                      {renderStat("Total Invested", instData.totalFunds.capitalCurrentQ, instData.totalFunds.capitalLastQ, instData.totalFunds.capitalPrevQ, instData.totalFunds.pctCap, instData.quarterLabels)}
                     </div>
                   </div>
                 </div>
