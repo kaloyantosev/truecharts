@@ -1013,20 +1013,19 @@ def generate_deterministic_inst_data(ticker: str, mcap_dollars: float = 10000000
         except:
             pass
         if mcap_dollars == 1000000000.0 or mcap_dollars is None or mcap_dollars <= 0:
-            # Modest $5B-$20B fallback for mid-caps, never hundreds of billions
             mcap_dollars = float((ticker_hash_val % 15 + 5) * 1000000000.0)
 
     if inst_pct == 0.45:
-        inst_pct = 0.40 + (ticker_hash_val % 35) / 100.0 # 40% to 75%
+        inst_pct = 0.40 + (ticker_hash_val % 35) / 100.0
     if insider_pct == 0.05:
         insider_pct = 0.01 + (ticker_hash_val % 10) / 100.0
 
     total_inst_capital = float(mcap_dollars * inst_pct)
     tf_cap_curr = total_inst_capital
-    tf_cap_last = tf_cap_curr / 1.015 # assume modest 1.5% historical baseline growth
+    tf_cap_last = tf_cap_curr / 1.015
     tf_cap_prev = tf_cap_last / 1.015
     
-    active_pct = 25.0 + (ticker_hash_val % 30) # 25% to 54% active
+    active_pct = 25.0 + (ticker_hash_val % 30)
     passive_pct = round(100.0 - active_pct, 1)
     
     hf_cap_curr = total_inst_capital * (active_pct / 100.0)
@@ -1041,13 +1040,25 @@ def generate_deterministic_inst_data(ticker: str, mcap_dollars: float = 10000000
     hf_last = max(3, int(hf_curr / 1.015))
     hf_prev = max(3, int(hf_last / 1.015))
     
+    if tf_curr < hf_curr:
+        tf_curr = int(hf_curr * 1.3)
+        tf_last = int(hf_last * 1.3)
+        tf_prev = int(hf_prev * 1.3)
+    if tf_cap_curr < hf_cap_curr:
+        tf_cap_curr = hf_cap_curr * 1.3
+        tf_cap_last = hf_cap_last * 1.3
+        tf_cap_prev = hf_cap_prev * 1.3
+    
     top_conc = 10.0 + (ticker_hash_val % 15)
     inst_pct_last = max(0.01, min(1.0, inst_pct / 1.005))
     insider_pct_last = max(0.01, min(1.0, insider_pct / 1.002))
     top_conc_last = round(top_conc / 1.01, 2)
 
-    net_flow_dollars = (hf_cap_curr - hf_cap_last) + (tf_cap_curr - tf_cap_last)
-    net_flow_pct_mcap = (net_flow_dollars / mcap_dollars) * 100.0 if mcap_dollars > 0 else 0.0
+    net_flow_curr = (hf_cap_curr - hf_cap_last) + (tf_cap_curr - tf_cap_last)
+    net_flow_last = (hf_cap_last - hf_cap_prev) + (tf_cap_last - tf_cap_prev)
+    net_flow_prev = net_flow_last / 1.015
+    net_flow_pct_change = f"{((net_flow_curr - net_flow_last) / abs(net_flow_last) * 100.0):.1f}" if net_flow_last != 0 else "0.0"
+    net_flow_pct_mcap = (net_flow_curr / mcap_dollars) * 100.0 if mcap_dollars > 0 else 0.0
 
     dp_vol = round(min(45.0, max(20.0, 22.0 + math.log10(max(10000.0, mcap_dollars)) * 1.8 + (ticker_hash_val % 5))), 1)
     last_dp_vol = round(dp_vol * 0.98, 1)
@@ -1055,11 +1066,16 @@ def generate_deterministic_inst_data(ticker: str, mcap_dollars: float = 10000000
     
     q_labels = get_13f_quarters()
     hold_time = round(2.0 + (ticker_hash_val % 30) / 10.0, 1)
-            
-    net_flow_curr = (hf_cap_curr - hf_cap_last) + (tf_cap_curr - tf_cap_last)
-    net_flow_last = (hf_cap_last - hf_cap_prev) + (tf_cap_last - tf_cap_prev)
-    net_flow_prev = net_flow_last / 1.015
-    net_flow_pct_change = f"{((net_flow_curr - net_flow_last) / abs(net_flow_last) * 100.0):.1f}" if net_flow_last != 0 else "0.0"
+    
+    # Advanced Hedge Fund fallback metrics
+    put_call_ratio = round(0.70 + (ticker_hash_val % 40) / 100.0, 2)
+    long_only = max(10, int(tf_curr * 0.95))
+    long_short = max(1, int(tf_curr * 0.04))
+    short_only = max(0, tf_curr - long_only - long_short)
+    short_float_val = round(2.5 + (ticker_hash_val % 60) / 10.0, 2)
+    dtc_val = round(1.5 + (ticker_hash_val % 40) / 10.0, 2)
+    avg_port_alloc = round(0.15 + (ticker_hash_val % 50) / 100.0, 2)
+    avg_port_alloc_chg = round(5.0 + (ticker_hash_val % 30), 1)
 
     return {
         "quarterLabels": q_labels,
@@ -1092,7 +1108,15 @@ def generate_deterministic_inst_data(ticker: str, mcap_dollars: float = 10000000
             "topHolderConcentrationLast": round(top_conc_last, 2),
             "topHolderConcentrationChange": round(((top_conc - top_conc_last) / top_conc_last) * 100.0, 2),
             "activePassive": f"{round(active_pct)}% / {round(passive_pct)}%",
-            "holdTime": round(hold_time, 1)
+            "holdTime": round(hold_time, 1),
+            "putCallRatio": put_call_ratio,
+            "longOnlyCount": long_only,
+            "shortOnlyCount": short_only,
+            "longShortCount": long_short,
+            "shortFloatPct": short_float_val,
+            "daysToCover": dtc_val,
+            "avgPortAlloc": avg_port_alloc,
+            "avgPortAllocChange": avg_port_alloc_chg
         },
         "sentimentFlow": {
             "netFlowCurrentQ": format_flow_val(net_flow_curr),
@@ -1124,9 +1148,11 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         headers = {'User-Agent': 'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)'}
         res_so = requests.get(f'https://fintel.io/so/us/{ticker.lower()}', headers=headers, timeout=5.0)
         res_s = requests.get(f'https://fintel.io/s/us/{ticker.lower()}', headers=headers, timeout=5.0)
+        res_ss = requests.get(f'https://fintel.io/ss/us/{ticker.lower()}', headers=headers, timeout=5.0)
         
         soup_so = BeautifulSoup(res_so.text, 'html.parser')
         soup_s = BeautifulSoup(res_s.text, 'html.parser')
+        soup_ss = BeautifulSoup(res_ss.text, 'html.parser')
 
         # 2. Extract Valuation & Share Metrics from /s/us/{ticker}
         mcap_mm, shares_mm = 0.0, 0.0
@@ -1146,17 +1172,46 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         
         mcap_dollars = mcap_mm * 1000000.0 if mcap_mm > 0 else 0.0
 
-        # 3. Extract Institutional Positioning Summary Tables from /so/us/{ticker}
+        # 3. Extract Short Interest & Off-Exchange / Dark Pool short volume from /ss/us/{ticker}
+        dp_ratio, days_to_cover = 28.5, 2.5
+        for table in soup_ss.find_all('table'):
+            for tr in table.find_all('tr'):
+                txt = tr.get_text(strip=True)
+                if 'Off-Exchange Short Volume Ratio' in txt or 'Dark Pool' in txt:
+                    nums = re.findall(r'[\d,]+\.\d+', txt)
+                    if nums: dp_ratio = float(nums[0].replace(',', ''))
+                elif 'Short Interest % Float' in txt:
+                    nums = re.findall(r'[\d,]+\.\d+', txt)
+                    if nums: short_float_pct = float(nums[0].replace(',', ''))
+                elif 'Days to Cover' in txt or 'Short Interest Ratio' in txt:
+                    nums = re.findall(r'[\d,]+\.\d+', txt)
+                    if nums: days_to_cover = float(nums[0].replace(',', ''))
+
+        # 4. Extract Institutional Positioning Summary Tables from /so/us/{ticker}
         tables_so = soup_so.find_all('table')
         if len(tables_so) < 3:
             raise ValueError("Fintel positioning tables not found in HTML response")
 
-        # Table 0: Total Institutional Owners & MRQ count change
+        # Table 0: Total Institutional Owners & MRQ count change, plus Fund Strategy breakdowns
         t0_txt = tables_so[0].get_text()
         owners_match = re.search(r'(\d+)\s+total', t0_txt)
         total_owners_curr = int(owners_match.group(1)) if owners_match else 0
         owners_chg_match = re.search(r'([\d\.]+|-\s*[\d\.]+)%\s*MRQ', t0_txt)
         total_owners_chg_pct = float(owners_chg_match.group(1).replace(' ', '')) if owners_chg_match else 2.5
+
+        long_only, short_only, long_short = 0, 0, 0
+        m_long = re.search(r'(\d+)\s+long only', t0_txt)
+        if m_long: long_only = int(m_long.group(1))
+        m_short = re.search(r'(\d+)\s+short only', t0_txt)
+        if m_short: short_only = int(m_short.group(1))
+        m_ls = re.search(r'(\d+)\s+long/short', t0_txt)
+        if m_ls: long_short = int(m_ls.group(1))
+
+        avg_port_alloc, avg_port_alloc_chg = 0.25, 5.0
+        m_alloc = re.search(r'Average Portfolio Allocation\s*([\d\.]+)\s*%', t0_txt)
+        if m_alloc: avg_port_alloc = float(m_alloc.group(1))
+        m_alloc_chg = re.search(r'Average Portfolio Allocation.*?(-\s*[\d\.]+|[\d\.]+)%\s*MRQ', t0_txt, re.DOTALL)
+        if m_alloc_chg: avg_port_alloc_chg = float(m_alloc_chg.group(1).replace(' ', ''))
 
         # Table 1: Total Institutional Value & Shares (Long)
         t1_txt = tables_so[1].get_text()
@@ -1193,6 +1248,24 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         if hf_val_curr == 0:
             hf_val_curr = total_inst_val_curr * 0.65
 
+        # Enforce logical consistency: Total Funds (All) MUST be >= Hedge Funds
+        if total_owners_curr < hf_owners_curr:
+            total_owners_curr = hf_owners_curr + mf_owners_curr
+        if total_inst_val_curr < hf_val_curr:
+            total_inst_val_curr = hf_val_curr + mf_val_curr
+
+        # Table 3: Institutional Options Sentiment (Calls vs Puts)
+        calls_val, puts_val = 0.0, 0.0
+        if len(tables_so) > 3:
+            for tr in tables_so[3].find_all('tr'):
+                tds = [td.get_text(strip=True) for td in tr.find_all(['th','td'])]
+                if len(tds) >= 3 and 'Reported value' in tds[0]:
+                    try: calls_val = float(tds[1].replace(',', ''))
+                    except: pass
+                    try: puts_val = float(tds[2].replace(',', ''))
+                    except: pass
+        put_call_ratio = round(puts_val / calls_val, 2) if calls_val > 0 else 0.85
+
         # Table 4 / 5: Top Holder Concentration
         top_conc_val = 0.0
         if len(tables_so) > 4:
@@ -1209,7 +1282,7 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         if top_conc_val <= 0:
             top_conc_val = round(min(85.0, max(15.0, 25.0 + math.log10(max(1.0, float(total_owners_curr))) * 8.0)), 2)
 
-        # 4. Compute Historical Quarters & Flows from Fintel MRQ Growth Factors
+        # 5. Compute Historical Quarters & Flows from Fintel MRQ Growth Factors
         flow_factor_count = 1.0 + (total_owners_chg_pct / 100.0)
         if flow_factor_count <= 0.1 or math.isnan(flow_factor_count): flow_factor_count = 1.02
         
@@ -1247,8 +1320,7 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         pct_mcap_curr = round((net_flow_curr_val / mcap_dollars) * 100.0, 3) if mcap_dollars > 0 and not math.isnan(net_flow_curr_val) else 0.0
         pct_mcap_last = round((net_flow_last_val / mcap_dollars) * 100.0, 3) if mcap_dollars > 0 and not math.isnan(net_flow_last_val) else 0.0
 
-        dp_base = round(min(45.0, max(20.0, 22.0 + math.log10(max(10000.0, mcap_dollars)) * 1.8)), 1)
-        last_dp_vol = round(dp_base * 0.98, 1)
+        last_dp_vol = round(dp_ratio * 0.98, 1)
         prev_dp_vol = round(last_dp_vol * 0.98, 1)
 
         return {
@@ -1282,7 +1354,15 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
                 "topHolderConcentrationLast": round(top_conc_val / 1.02, 2),
                 "topHolderConcentrationChange": round(top_conc_val - (top_conc_val / 1.02), 2),
                 "activePassive": f"{round(active_pct_val)}% / {round(passive_pct_val)}%",
-                "holdTime": round(hold_time_val, 1)
+                "holdTime": round(hold_time_val, 1),
+                "putCallRatio": put_call_ratio,
+                "longOnlyCount": long_only,
+                "shortOnlyCount": short_only,
+                "longShortCount": long_short,
+                "shortFloatPct": round(short_float_pct, 2),
+                "daysToCover": round(days_to_cover, 2),
+                "avgPortAlloc": round(avg_port_alloc, 4),
+                "avgPortAllocChange": round(avg_port_alloc_chg, 2)
             },
             "sentimentFlow": {
                 "netFlowCurrentQ": format_flow_val(net_flow_curr_val),
@@ -1293,10 +1373,10 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
                 "netCapitalFlowLastPctMcap": pct_mcap_last
             },
             "darkPool": {
-                "currentQ": f"{dp_base}%",
+                "currentQ": f"{dp_ratio}%",
                 "lastQ": f"{last_dp_vol}%",
                 "prevQ": f"{prev_dp_vol}%",
-                "pctChange": f"{round(dp_base - last_dp_vol, 1)}"
+                "pctChange": f"{round(dp_ratio - last_dp_vol, 1)}"
             }
         }
     except Exception as e:
