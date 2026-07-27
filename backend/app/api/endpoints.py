@@ -1054,8 +1054,8 @@ def generate_deterministic_inst_data(ticker: str, mcap_dollars: float = 10000000
     insider_pct_last = max(0.01, min(1.0, insider_pct / 1.002))
     top_conc_last = round(top_conc / 1.01, 2)
 
-    net_flow_curr = (hf_cap_curr - hf_cap_last) + (tf_cap_curr - tf_cap_last)
-    net_flow_last = (hf_cap_last - hf_cap_prev) + (tf_cap_last - tf_cap_prev)
+    net_flow_curr = tf_cap_curr - tf_cap_last
+    net_flow_last = tf_cap_last - tf_cap_prev
     net_flow_prev = net_flow_last / 1.015
     net_flow_pct_change = f"{((net_flow_curr - net_flow_last) / abs(net_flow_last) * 100.0):.1f}" if net_flow_last != 0 else "0.0"
     net_flow_pct_mcap = (net_flow_curr / mcap_dollars) * 100.0 if mcap_dollars > 0 else 0.0
@@ -1220,6 +1220,22 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         cap_chg_match = re.search(r'([\d\.]+|-\s*[\d\.]+)%\s*MRQ', t1_txt)
         total_cap_chg_pct = float(cap_chg_match.group(1).replace(' ', '')) if cap_chg_match else 3.5
         
+        shares_curr_val = 0.0
+        m_sh = re.search(r'Institutional Shares \(Long\)\s*([\d,]+)', t1_txt, re.IGNORECASE)
+        if m_sh:
+            try: shares_curr_val = float(m_sh.group(1).replace(',', ''))
+            except: pass
+
+        shares_chg_mrq = 0.0
+        m_sh_chg = re.search(r'change of\s*([-\d\.\,]+)\s*(MM|M|B|K)?\s*shares', t1_txt, re.IGNORECASE)
+        if m_sh_chg:
+            try:
+                val_str = m_sh_chg.group(1).replace(',', '')
+                unit = (m_sh_chg.group(2) or '').upper()
+                mult = 1000000.0 if unit in ['MM', 'M'] else (1000000000.0 if unit == 'B' else (1000.0 if unit == 'K' else 1.0))
+                shares_chg_mrq = float(val_str) * mult
+            except: pass
+
         inst_pct_match = re.search(r'(?:-\s*)?([\d\.]+)%\s*\(ex', t1_txt)
         if inst_pct_match:
             inst_pct_val = abs(float(inst_pct_match.group(1).replace(' ', '')))
@@ -1287,13 +1303,10 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         if top_conc_val <= 0:
             top_conc_val = round(min(85.0, max(15.0, 25.0 + math.log10(max(1.0, float(total_owners_curr))) * 8.0)), 2)
 
-        # 5. Compute Historical Quarters & Flows from Fintel MRQ Growth Factors
+        # 5. Compute Historical Quarters & Flows from Website Share Change Info
         flow_factor_count = 1.0 + (total_owners_chg_pct / 100.0)
         if flow_factor_count <= 0.1 or math.isnan(flow_factor_count): flow_factor_count = 1.02
         
-        flow_factor_cap = 1.0 + (total_cap_chg_pct / 100.0)
-        if flow_factor_cap <= 0.1 or math.isnan(flow_factor_cap): flow_factor_cap = 1.03
-
         tf_curr = max(1, total_owners_curr)
         tf_last = max(1, int(tf_curr / flow_factor_count))
         tf_prev = max(1, int(tf_last / flow_factor_count))
@@ -1302,13 +1315,19 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         hf_last = max(1, int(hf_curr / flow_factor_count))
         hf_prev = max(1, int(hf_last / flow_factor_count))
 
-        tf_cap_curr = total_inst_val_curr
-        tf_cap_last = tf_cap_curr / flow_factor_cap
-        tf_cap_prev = tf_cap_last / flow_factor_cap
+        implied_price = (total_inst_val_curr / shares_curr_val) if shares_curr_val > 0 and total_inst_val_curr > 0 else 30.0
+        total_cash_flow_mrq = shares_chg_mrq * implied_price
+        
+        hf_share_ratio = (hf_val_curr / total_inst_val_curr) if total_inst_val_curr > 0 else 0.68
+        hf_cash_flow_mrq = total_cash_flow_mrq * hf_share_ratio
 
         hf_cap_curr = hf_val_curr
-        hf_cap_last = hf_cap_curr / flow_factor_cap
-        hf_cap_prev = hf_cap_last / flow_factor_cap
+        hf_cap_last = max(hf_cap_curr * 0.20, hf_cap_curr - hf_cash_flow_mrq)
+        hf_cap_prev = max(hf_cap_last * 0.50, hf_cap_last / 1.035)
+
+        tf_cap_curr = total_inst_val_curr
+        tf_cap_last = max(tf_cap_curr * 0.20, tf_cap_curr - total_cash_flow_mrq)
+        tf_cap_prev = max(tf_cap_last * 0.50, tf_cap_last / 1.035)
 
         active_pct_val = round((hf_val_curr / (hf_val_curr + mf_val_curr) * 100.0), 1) if (hf_val_curr + mf_val_curr) > 0 else 68.0
         passive_pct_val = round(100.0 - active_pct_val, 1)
@@ -1316,9 +1335,9 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         turnover_factor = abs(total_cap_chg_pct) / 100.0
         hold_time_val = round(max(1.5, min(8.0, 3.5 / (1.0 + turnover_factor))), 1)
 
-        net_flow_curr_val = (hf_cap_curr - hf_cap_last) + (tf_cap_curr - tf_cap_last)
-        net_flow_last_val = (hf_cap_last - hf_cap_prev) + (tf_cap_last - tf_cap_prev)
-        net_flow_prev_val = net_flow_last_val / flow_factor_cap
+        net_flow_curr_val = total_cash_flow_mrq
+        net_flow_last_val = tf_cap_last - tf_cap_prev
+        net_flow_prev_val = net_flow_last_val / 1.05
         
         net_flow_pct_chg_str = f"{((net_flow_curr_val - net_flow_last_val) / abs(net_flow_last_val) * 100.0):.1f}" if net_flow_last_val != 0 and not math.isnan(net_flow_last_val) else "0.0"
 
