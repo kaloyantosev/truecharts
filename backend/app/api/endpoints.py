@@ -1002,9 +1002,19 @@ def generate_deterministic_inst_data(ticker: str, mcap_dollars: float = 10000000
     import math
     
     ticker_hash_val = sum(ord(c) * (i + 1) for i, c in enumerate(ticker.upper()))
-    if mcap_dollars == 1000000000.0:
-        # Vary default market cap deterministically by ticker so every symbol looks distinct and realistic
-        mcap_dollars = float((ticker_hash_val % 450 + 50) * 1000000000.0)
+    if mcap_dollars == 1000000000.0 or mcap_dollars is None or mcap_dollars <= 0:
+        try:
+            tk_fast = yf.Ticker(ticker)
+            mc_val = getattr(tk_fast.fast_info, 'market_cap', None) or dict(tk_fast.fast_info).get('marketCap')
+            if not mc_val or mc_val <= 0 or math.isnan(float(mc_val)):
+                mc_val = tk_fast.info.get('marketCap') or tk_fast.info.get('totalAssets') or tk_fast.info.get('totalNetAssets')
+            if mc_val and float(mc_val) > 0 and not math.isnan(float(mc_val)):
+                mcap_dollars = float(mc_val)
+        except:
+            pass
+        if mcap_dollars == 1000000000.0 or mcap_dollars is None or mcap_dollars <= 0:
+            # Modest $5B-$20B fallback for mid-caps, never hundreds of billions
+            mcap_dollars = float((ticker_hash_val % 15 + 5) * 1000000000.0)
 
     if inst_pct == 0.45:
         inst_pct = 0.40 + (ticker_hash_val % 35) / 100.0 # 40% to 75%
@@ -1125,7 +1135,14 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
 
         # 2. Authoritative Market Cap calculation with dropna for NaN resiliency
         mcap_dollars = None
-        if is_valid_float(edgar_shares_val):
+        try:
+            mc_fast = getattr(tk.fast_info, 'market_cap', None) or dict(tk.fast_info).get('marketCap')
+            if is_valid_float(mc_fast):
+                mcap_dollars = float(mc_fast)
+        except:
+            pass
+
+        if not is_valid_float(mcap_dollars) and is_valid_float(edgar_shares_val):
             try:
                 hist_closes = tk.history(period="5d")["Close"].dropna()
                 if not hist_closes.empty:
@@ -1329,7 +1346,15 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         }
     except Exception as e:
         print(f"Failed to fetch institutional data for {ticker}: {e}")
-        return generate_deterministic_inst_data(ticker)
+        mc_fallback = 1000000000.0
+        try:
+            tk_fast = yf.Ticker(ticker)
+            val = getattr(tk_fast.fast_info, 'market_cap', None) or dict(tk_fast.fast_info).get('marketCap')
+            if val and float(val) > 0 and not math.isnan(float(val)):
+                mc_fallback = float(val)
+        except:
+            pass
+        return generate_deterministic_inst_data(ticker, mcap_dollars=mc_fallback)
 
 
 
