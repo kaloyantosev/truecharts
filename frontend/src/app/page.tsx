@@ -92,6 +92,79 @@ interface MacroRotationData {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
+
+function Top5Panel({ transactions, totalShares, quarter }: {
+  transactions: any[];
+  totalShares: number;
+  quarter: string;
+}) {
+  const top5TotalShares = transactions.reduce(
+    (acc: number, tx: any) => acc + (parseInt((tx.sharesHeld || '').replace(/,/g, '')) || 0),
+    0
+  );
+  const top5CapPct = totalShares > 0
+    ? ((top5TotalShares / totalShares) * 100).toFixed(3)
+    : '—';
+
+  return (
+    <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[9px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Top 5 Institutional Holders</h3>
+        <div className="flex items-center gap-3">
+          <span className="text-[9px] text-neutral-600 font-mono">{quarter} filing</span>
+          <span className="text-[10px] font-mono font-bold text-purple-400 border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 rounded">
+            Top 5 = {top5CapPct}% of cap
+          </span>
+        </div>
+      </div>
+      <table className="w-full text-left border-collapse">
+        <thead>
+          <tr className="text-[9px] uppercase tracking-[0.15em] text-neutral-600 border-b border-neutral-800">
+            <th className="pb-2 font-semibold">Fund</th>
+            <th className="pb-2 font-semibold text-right">Shares</th>
+            <th className="pb-2 font-semibold text-right">% Cap</th>
+            <th className="pb-2 font-semibold text-right">Chg</th>
+            <th className="pb-2 font-semibold text-right">Chg%</th>
+            <th className="pb-2 font-semibold text-right">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {transactions.map((tx: any, i: number) => {
+            const isPos = !tx.sharesChangePCT?.includes('-') && tx.sharesChangePCT !== '0%' && tx.sharesChangePCT !== 'New';
+            const isNeg = Boolean(tx.sharesChangePCT?.includes('-'));
+            const isNew = tx.sharesChangePCT === 'New';
+            const shareCount = parseInt((tx.sharesHeld || '').replace(/,/g, '')) || 0;
+            const capPct = totalShares > 0
+              ? ((shareCount / totalShares) * 100).toFixed(3)
+              : '—';
+            const color = isPos || isNew ? 'text-emerald-400' : isNeg ? 'text-rose-400' : 'text-neutral-600';
+            const bar = isPos || isNew ? 'bg-emerald-500' : isNeg ? 'bg-rose-500' : 'bg-neutral-700';
+            return (
+              <tr key={i} className="border-b border-neutral-800/40 hover:bg-white/[0.015] transition-colors group">
+                <td className="py-2.5 pr-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-0.5 h-4 rounded-full shrink-0 ${bar}`}></div>
+                    <span className="text-[10px] font-bold text-neutral-300 truncate max-w-[110px] group-hover:text-white transition-colors" title={tx.ownerName}>{tx.ownerName}</span>
+                  </div>
+                </td>
+                <td className="py-2.5 text-[10px] font-mono text-neutral-400 text-right">{tx.sharesHeld}</td>
+                <td className="py-2.5 text-[11px] font-mono text-purple-400 text-right font-black">{capPct}%</td>
+                <td className={`py-2.5 text-[10px] font-mono text-right font-bold ${color}`}>
+                  {isPos || isNew ? '+' : ''}{tx.sharesChange}
+                </td>
+                <td className={`py-2.5 text-[10px] font-mono text-right font-bold ${color}`}>
+                  {isNew ? <span className="px-1 py-0.5 bg-emerald-500/20 rounded text-[8px] uppercase">NEW</span> : tx.sharesChangePCT}
+                </td>
+                <td className="py-2.5 text-[10px] font-mono text-neutral-400 text-right">{tx.marketValue}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function Home() {
   const [ticker, setTicker] = useState("SPY");
   const [timeframe, setTimeframe] = useState("1d");
@@ -669,68 +742,13 @@ export default function Home() {
                 </div>
 
                 {/* ── TOP 5 INSTITUTIONAL TRANSACTIONS ── */}
-                {instData.holdingsTransactions && instData.holdingsTransactions.length > 0 && (() => {
-                  const top5 = instData.holdingsTransactions.slice(0, 5);
-                  const top5TotalShares = top5.reduce((acc: number, tx: any) => acc + (parseInt((tx.sharesHeld || '').replace(/,/g, '')) || 0), 0);
-                  const top5CapPct = instData.totalSharesOutstanding > 0
-                    ? ((top5TotalShares / instData.totalSharesOutstanding) * 100).toFixed(3)
-                    : '—';
-                  return (
-                    <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 flex flex-col gap-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-[9px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Top 5 Institutional Holders</h3>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[9px] text-neutral-600 font-mono">{instData.quarters?.current} filing</span>
-                          <span className="text-[10px] font-mono font-bold text-purple-400 border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 rounded">
-                            Top 5 = {top5CapPct}% of cap
-                          </span>
-                        </div>
-                      </div>
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="text-[9px] uppercase tracking-[0.15em] text-neutral-600 border-b border-neutral-800">
-                            <th className="pb-2 font-semibold">Fund</th>
-                            <th className="pb-2 font-semibold text-right">Shares</th>
-                            <th className="pb-2 font-semibold text-right">% Cap</th>
-                            <th className="pb-2 font-semibold text-right">Chg</th>
-                            <th className="pb-2 font-semibold text-right">Chg%</th>
-                            <th className="pb-2 font-semibold text-right">Value</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {top5.map((tx: any, i: number) => {
-                            const isPos = !tx.sharesChangePCT?.includes('-') && tx.sharesChangePCT !== '0%' && tx.sharesChangePCT !== 'New';
-                            const isNeg = tx.sharesChangePCT?.includes('-');
-                            const isNew = tx.sharesChangePCT === 'New';
-                            const shareCount = parseInt((tx.sharesHeld || '').replace(/,/g, '')) || 0;
-                            const capPct = instData.totalSharesOutstanding > 0
-                              ? ((shareCount / instData.totalSharesOutstanding) * 100).toFixed(3)
-                              : '—';
-                            return (
-                              <tr key={i} className="border-b border-neutral-800/40 hover:bg-white/[0.015] transition-colors group">
-                                <td className="py-2.5 pr-2">
-                                  <div className="flex items-center gap-1.5">
-                                    <div className={`w-0.5 h-4 rounded-full shrink-0 ${isPos || isNew ? 'bg-emerald-500' : isNeg ? 'bg-rose-500' : 'bg-neutral-700'}`}></div>
-                                    <span className="text-[10px] font-bold text-neutral-300 truncate max-w-[110px] group-hover:text-white transition-colors" title={tx.ownerName}>{tx.ownerName}</span>
-                                  </div>
-                                </td>
-                                <td className="py-2.5 text-[10px] font-mono text-neutral-400 text-right">{tx.sharesHeld}</td>
-                                <td className="py-2.5 text-[11px] font-mono text-purple-400 text-right font-black">{capPct}%</td>
-                                <td className={`py-2.5 text-[10px] font-mono text-right font-bold ${isPos || isNew ? 'text-emerald-400' : isNeg ? 'text-rose-400' : 'text-neutral-600'}`}>
-                                  {isPos || isNew ? '+' : ''}{tx.sharesChange}
-                                </td>
-                                <td className={`py-2.5 text-[10px] font-mono text-right font-bold ${isPos || isNew ? 'text-emerald-400' : isNeg ? 'text-rose-400' : 'text-neutral-600'}`}>
-                                  {isNew ? <span className="px-1 py-0.5 bg-emerald-500/20 rounded text-[8px] uppercase">NEW</span> : tx.sharesChangePCT}
-                                </td>
-                                <td className="py-2.5 text-[10px] font-mono text-neutral-400 text-right">{tx.marketValue}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                })()}
+                {instData.holdingsTransactions && instData.holdingsTransactions.length > 0 && (
+                  <Top5Panel
+                    transactions={instData.holdingsTransactions.slice(0, 5)}
+                    totalShares={instData.totalSharesOutstanding ?? 0}
+                    quarter={instData.quarters?.current ?? ''}
+                  />
+                )}
 
               </div>
             ) : (
@@ -739,8 +757,9 @@ export default function Home() {
               </div>
             )}
           </div>
+        </div>
 
-                <div className="order-6 lg:order-none lg:col-span-1 lg:col-start-5 lg:row-start-1 lg:row-span-2 bg-neutral-900 border border-neutral-800 rounded-lg p-5 flex flex-col w-full h-full min-h-[400px]">
+        <div className="order-6 lg:order-none lg:col-span-1 lg:col-start-5 lg:row-start-1 lg:row-span-2 bg-neutral-900 border border-neutral-800 rounded-lg p-5 flex flex-col w-full h-full min-h-[400px]">
           <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4">Watchlist</h2>
           <div className="flex-1 flex flex-col min-h-0">
             {watchlist.length === 0 ? (
@@ -780,6 +799,47 @@ export default function Home() {
             )}
           </div>
         </div>
+
+
+        <div className="order-6 lg:order-none lg:col-span-1 lg:col-start-5 lg:row-start-1 lg:row-span-2 bg-neutral-900 border border-neutral-800 rounded-lg p-5 flex flex-col w-full h-full min-h-[400px]">
+          <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4">Watchlist</h2>
+          <div className="flex-1 flex flex-col min-h-0">
+            {watchlist.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center p-4 border border-dashed border-neutral-800 rounded bg-neutral-950/20 text-center">
+                <span className="text-xs text-neutral-500 font-mono">No favorited stocks. Click the tick icon next to the chart ticker to add.</span>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 overflow-y-auto max-h-[500px] pr-1">
+                {watchlist.map((item) => (
+                  <div
+                    key={item}
+                    onClick={() => { setTicker(item); fetchAnalysis(item); }}
+                    className={`flex items-center justify-between p-3 rounded border cursor-pointer transition-all ${
+                      (data?.ticker || ticker).toUpperCase() === item.toUpperCase()
+                        ? "bg-purple-950/25 border-purple-500/40 text-neutral-100"
+                        : "bg-neutral-950 border-neutral-850/70 hover:bg-neutral-850/50 text-neutral-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        (data?.ticker || ticker).toUpperCase() === item.toUpperCase() ? "bg-purple-500 animate-pulse" : "bg-neutral-700"
+                      }`} />
+                      <span className="font-mono font-bold text-sm tracking-wide">{item}</span>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleWatchlist(item); }}
+                      className="text-neutral-400 hover:text-white transition-colors p-1"
+                      title="Remove from Watchlist"
+                    >
+                      <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
       </main>
