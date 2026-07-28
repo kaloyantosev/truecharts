@@ -39,64 +39,22 @@ interface MacroForecastData {
 }
 
 interface InstData {
-  quarterLabels: {
-    current: string;
-    last: string;
-    prev: string;
+  source: string;
+  ownershipSummary?: {
+    SharesOutstandingPCT?: { label: string; value: string; };
+    ShareoutstandingTotal?: { label: string; value: string; };
+    TotalHoldingsValue?: { label: string; value: string; };
   };
-  darkPool?: {
-    currentQ: string;
-    lastQ: string;
-    prevQ: string;
-    pctChange: string;
-  };
-  hedgeFunds: {
-    prevQ: number;
-    lastQ: number;
-    currentQ: number;
-    pctCount: string;
-    capitalPrevQ: string;
-    capitalLastQ: string;
-    capitalCurrentQ: string;
-    pctCap: string;
-  };
-  totalFunds: {
-    prevQ: number;
-    lastQ: number;
-    currentQ: number;
-    pctCount: string;
-    capitalPrevQ: string;
-    capitalLastQ: string;
-    capitalCurrentQ: string;
-    pctCap: string;
-  };
-  sentimentFlow?: {
-    netFlowCurrentQ: string;
-    netFlowLastQ: string;
-    netFlowPrevQ: string;
-    netFlowPctChange: string;
-    netCapitalFlowPctMcap?: number;
-    netCapitalFlowLastPctMcap?: number;
-  };
-  ownership?: {
-    institutionsPct: number;
-    institutionsPctChange: number;
-    insiderPct: number;
-    insiderPctChange: number;
-    topHolderConcentration: number;
-    topHolderConcentrationLast: number;
-    topHolderConcentrationChange: number;
-    activePassive?: string;
-    holdTime?: number;
-    putCallRatio?: number;
-    longOnlyCount?: number;
-    shortOnlyCount?: number;
-    longShortCount?: number;
-    shortFloatPct?: number;
-    daysToCover?: number;
-    avgPortAlloc?: number;
-    avgPortAllocChange?: number;
-  };
+  activePositions?: { positions: string; holders: string; shares: string; }[];
+  newSoldOutPositions?: { positions: string; holders: string; shares: string; }[];
+  holdingsTransactions?: {
+    ownerName: string;
+    date: string;
+    sharesHeld: string;
+    sharesChange: string;
+    sharesChangePCT: string;
+    marketValue: string;
+  }[];
 }
 
 interface SectorRanking {
@@ -525,267 +483,131 @@ export default function Home() {
           </div>
 
           {/* Institutional Positioning Panel */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 flex flex-col w-full shrink-0">
+        <div className="order-4 lg:order-none lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-lg p-6 flex flex-col w-full shrink-0">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Institutional Positioning</h2>
-                <p className="text-xs text-neutral-500 mt-0.5">Top 10 Institutional Holders & Total 13F allocation based on public exchange disclosures</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-purple-300 border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 rounded font-mono uppercase tracking-widest font-bold shadow-sm">
-                  Next 13F Update: ~Aug 14
-                </span>
-                <span className="text-[10px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 rounded font-mono uppercase tracking-widest font-bold shadow-sm">
-                  As of {macroRotation?.lastFilingDate || "May 15"}
-                </span>
+                <p className="text-xs text-neutral-500 mt-0.5">Professional-grade 13F flow analysis derived natively from exchange filings</p>
               </div>
             </div>
 
-          {instData ? (
+          {instData && instData.source === 'nasdaq' ? (
             <div className="flex flex-col gap-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                    <h3 className="text-sm font-bold text-neutral-200">Top 10 13F Holders</h3>
+              
+              {/* Summary Stats Header */}
+              {instData.ownershipSummary && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-4 flex flex-col gap-1">
+                    <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-widest">{instData.ownershipSummary.SharesOutstandingPCT?.label || "Institutional Ownership"}</span>
+                    <span className="text-2xl font-mono font-bold text-purple-400">{instData.ownershipSummary.SharesOutstandingPCT?.value || "N/A"}</span>
                   </div>
-                  <div className="space-y-6">
-                    {renderStat("Major Holders (Count)", instData.hedgeFunds.currentQ, instData.hedgeFunds.lastQ, instData.hedgeFunds.prevQ, instData.hedgeFunds.pctCount, instData.quarterLabels)}
-                    <div className="pt-5 border-t border-neutral-900">
-                      {renderStat("Top 10 Invested", instData.hedgeFunds.capitalCurrentQ, instData.hedgeFunds.capitalLastQ, instData.hedgeFunds.capitalPrevQ, instData.hedgeFunds.pctCap, instData.quarterLabels)}
-                    </div>
+                  <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-4 flex flex-col gap-1">
+                    <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-widest">{instData.ownershipSummary.TotalHoldingsValue?.label || "Total Value of Holdings"}</span>
+                    <span className="text-2xl font-mono font-bold text-emerald-400">{instData.ownershipSummary.TotalHoldingsValue?.value || "N/A"}</span>
+                  </div>
+                  <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-4 flex flex-col gap-1">
+                    <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-widest">Total Active 13F Funds</span>
+                    <span className="text-2xl font-mono font-bold text-blue-400">
+                      {instData.activePositions?.find(p => p.positions.includes("Total"))?.holders || "N/A"}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Active Positions */}
+                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-4">
+                  <h3 className="text-sm font-bold text-neutral-200 border-b border-neutral-800 pb-2">Fund Activity (Inc vs Dec)</h3>
+                  <div className="space-y-3 pt-1">
+                    {instData.activePositions?.filter(p => !p.positions.includes("Total")).map((pos, i) => {
+                      const isIncreased = pos.positions.includes("Increased");
+                      const isDecreased = pos.positions.includes("Decreased");
+                      return (
+                        <div key={i} className="flex items-center justify-between">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">{pos.positions}</span>
+                          <div className="flex flex-col items-end">
+                            <span className={`text-sm font-mono font-bold ${isIncreased ? 'text-emerald-400' : isDecreased ? 'text-rose-400' : 'text-neutral-300'}`}>
+                              {pos.holders} Funds
+                            </span>
+                            <span className="text-[10px] text-neutral-500 font-mono">{pos.shares} Shares</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-6">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                    <h3 className="text-sm font-bold text-neutral-200">All 13F Institutions</h3>
-                  </div>
-                  <div className="space-y-6">
-                    {renderStat("Total Filers (Count)", instData.totalFunds.currentQ, instData.totalFunds.lastQ, instData.totalFunds.prevQ, instData.totalFunds.pctCount, instData.quarterLabels)}
-                    <div className="pt-5 border-t border-neutral-900">
-                      {renderStat("Total Invested", instData.totalFunds.capitalCurrentQ, instData.totalFunds.capitalLastQ, instData.totalFunds.capitalPrevQ, instData.totalFunds.pctCap, instData.quarterLabels)}
-                    </div>
+                {/* New vs Sold Out */}
+                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-4">
+                  <h3 className="text-sm font-bold text-neutral-200 border-b border-neutral-800 pb-2">New vs Sold Out Positions</h3>
+                  <div className="space-y-3 pt-1">
+                    {instData.newSoldOutPositions?.map((pos, i) => {
+                      const isNew = pos.positions.includes("New");
+                      const isSoldOut = pos.positions.includes("Sold Out");
+                      return (
+                        <div key={i} className="flex items-center justify-between">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">{pos.positions}</span>
+                          <div className="flex flex-col items-end">
+                            <span className={`text-sm font-mono font-bold ${isNew ? 'text-emerald-400' : isSoldOut ? 'text-rose-400' : 'text-neutral-300'}`}>
+                              {pos.holders} Funds
+                            </span>
+                            <span className="text-[10px] text-neutral-500 font-mono">{pos.shares} Shares</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
+
               </div>
 
-              {instData.sentimentFlow && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Net Capital Flow */}
-                  <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col justify-center">
-                    {renderStat(
-                      "Net Cash Flow (Piled In / Left Out)", 
-                      instData.sentimentFlow.netFlowCurrentQ, 
-                      instData.sentimentFlow.netFlowLastQ, 
-                      instData.sentimentFlow.netFlowPrevQ, 
-                      instData.sentimentFlow.netFlowPctChange, 
-                      instData.quarterLabels,
-                      instData.sentimentFlow.netCapitalFlowPctMcap !== undefined ? <span className="text-[10px] font-mono font-bold text-neutral-400 whitespace-nowrap">{instData.sentimentFlow.netCapitalFlowPctMcap.toFixed(1)}% of M.Cap</span> : undefined,
-                      instData.sentimentFlow.netCapitalFlowLastPctMcap !== undefined ? <span className="text-[10px] font-mono font-bold text-neutral-500 whitespace-nowrap">{instData.sentimentFlow.netCapitalFlowLastPctMcap.toFixed(1)}% of M.Cap</span> : undefined
-                    )}
-                  </div>
-
-                  {/* Dark Pool Activity -> Off-Exchange Vol */}
-                  {instData.darkPool && (
-                    <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col justify-center">
-                      {renderStat("Off-Exchange / Dark Pool Vol", instData.darkPool.currentQ, instData.darkPool.lastQ, instData.darkPool.prevQ, instData.darkPool.pctChange, instData.quarterLabels)}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {instData.ownership && (
-                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-6 flex flex-col gap-8">
-                  
-                  {/* Top: Ownership Distribution (Float) */}
-                  <div className="flex flex-col gap-6">
-                    <h3 className="text-sm font-bold text-neutral-300">Ownership Distribution (Float)</h3>
-
-                    {/* 100% Segmented Bar */}
-                    <div className="w-full h-3 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800 flex">
-                      <div className="h-full bg-purple-500" style={{ width: `${Math.min(100, instData.ownership.institutionsPct)}%` }}></div>
-                      <div className="h-full bg-amber-500" style={{ width: `${Math.min(100 - instData.ownership.institutionsPct, instData.ownership.insiderPct)}%` }}></div>
-                      <div className="h-full bg-neutral-700" style={{ width: `${Math.max(0, 100 - instData.ownership.institutionsPct - instData.ownership.insiderPct)}%` }}></div>
-                    </div>
-
-                    {/* Legend & Stats */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                          <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Institutions</span>
-                        </div>
-                        <div className="flex items-baseline gap-2 mt-1">
-                          <span className="text-xl font-mono font-bold text-purple-400">{instData.ownership.institutionsPct.toFixed(1)}%</span>
-                          {instData.ownership.institutionsPctChange !== undefined && (
-                            <span className={`text-xs font-mono font-bold flex items-center ${instData.ownership.institutionsPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                              {instData.ownership.institutionsPctChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.institutionsPctChange).toFixed(1)}%
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                          <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Insiders</span>
-                        </div>
-                        <div className="flex items-baseline gap-2 mt-1">
-                          <span className="text-xl font-mono font-bold text-amber-400">{instData.ownership.insiderPct.toFixed(1)}%</span>
-                          {instData.ownership.insiderPctChange !== undefined && (
-                            <span className={`text-xs font-mono font-bold flex items-center ${instData.ownership.insiderPctChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                              {instData.ownership.insiderPctChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.insiderPctChange).toFixed(1)}%
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-1 sm:border-l sm:border-neutral-800 sm:pl-6">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-neutral-700"></div>
-                          <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Public Float</span>
-                        </div>
-                        <div className="flex items-baseline gap-2 mt-1">
-                          <span className="text-xl font-mono font-bold text-neutral-400">
-                            {Math.max(0, 100 - instData.ownership.institutionsPct - instData.ownership.insiderPct).toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Bottom: Hedge-Fund Intelligence (Fintel Analytics) */}
-                  <div className="border-t border-neutral-850 pt-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Hedge-Fund & Institutional Allocation Intelligence</span>
-                      <span className="text-[10px] text-neutral-500 font-mono">SOURCE: FINTEL / SEC 13F / FINRA</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                      
-                      {/* Whale Concentration */}
-                      <div className="bg-neutral-900/60 border border-neutral-850/80 rounded p-4 flex flex-col justify-between">
-                        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2">Whale Concentration</span>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.topHolderConcentration.toFixed(1)}%</span>
-                          {instData.ownership.topHolderConcentrationChange !== undefined && (
-                            <span className={`whitespace-nowrap text-xs font-mono font-bold flex items-center ${instData.ownership.topHolderConcentrationChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                              {instData.ownership.topHolderConcentrationChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.topHolderConcentrationChange).toFixed(1)}% Q/Q
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[10px] text-neutral-500 mt-1 font-mono">Top 10 Holder Allocation (13F/NPORT)</span>
-                      </div>
-
-                      {/* Active vs Passive Split */}
-                      <div className="bg-neutral-900/60 border border-neutral-850/80 rounded p-4 flex flex-col justify-between">
-                        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2">Active / Passive Split</span>
-                        <div className="flex items-baseline justify-between gap-2">
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.activePassive?.split('/')[0] || "68%"}</span>
-                            <span className="text-xs font-mono text-neutral-500 font-bold">Active</span>
-                          </div>
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="text-2xl font-mono font-bold text-neutral-400 leading-none">{instData.ownership.activePassive?.split('/')[1] || "32%"}</span>
-                            <span className="text-xs font-mono text-neutral-500 font-bold">Passive</span>
-                          </div>
-                        </div>
-                        <span className="text-[10px] text-neutral-500 mt-1 font-mono">13F Managers vs NPORT ETFs</span>
-                      </div>
-
-                      {/* Avg Portfolio Allocation */}
-                      {instData.ownership.avgPortAlloc !== undefined && (
-                        <div className="bg-neutral-900/60 border border-neutral-850/80 rounded p-4 flex flex-col justify-between">
-                          <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2">Avg Port Allocation</span>
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-2xl font-mono font-bold text-white leading-none">{instData.ownership.avgPortAlloc.toFixed(2)}%</span>
-                            {instData.ownership.avgPortAllocChange !== undefined && (
-                              <span className={`whitespace-nowrap text-xs font-mono font-bold flex items-center ${instData.ownership.avgPortAllocChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                                {instData.ownership.avgPortAllocChange >= 0 ? "▲" : "▼"} {Math.abs(instData.ownership.avgPortAllocChange).toFixed(0)}% MRQ
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-neutral-500 mt-1 font-mono">Avg Weight in Institutional Portfolios</span>
-                        </div>
-                      )}
-
-                    </div>
+              {/* Top Institutional Transactions */}
+              {instData.holdingsTransactions && instData.holdingsTransactions.length > 0 && (
+                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-4">
+                  <h3 className="text-sm font-bold text-neutral-200 border-b border-neutral-800 pb-2">Top 13F Institutional Transactions</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="text-[10px] uppercase tracking-widest text-neutral-500 border-b border-neutral-800">
+                          <th className="pb-3 font-semibold">Fund Name</th>
+                          <th className="pb-3 font-semibold text-right">Shares Held</th>
+                          <th className="pb-3 font-semibold text-right">Change</th>
+                          <th className="pb-3 font-semibold text-right">Chg %</th>
+                          <th className="pb-3 font-semibold text-right">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {instData.holdingsTransactions.slice(0, 10).map((tx, i) => {
+                          const isPos = !tx.sharesChangePCT.includes("-") && tx.sharesChangePCT !== "0%" && tx.sharesChangePCT !== "New";
+                          const isNeg = tx.sharesChangePCT.includes("-");
+                          const isNew = tx.sharesChangePCT === "New";
+                          return (
+                            <tr key={i} className="border-b border-neutral-800/50 hover:bg-neutral-900/50 transition-colors">
+                              <td className="py-3 text-xs font-semibold text-neutral-300 truncate max-w-[140px]" title={tx.ownerName}>{tx.ownerName}</td>
+                              <td className="py-3 text-[11px] font-mono text-neutral-400 text-right">{tx.sharesHeld}</td>
+                              <td className={`py-3 text-[11px] font-mono text-right font-bold ${isPos || isNew ? 'text-emerald-400' : isNeg ? 'text-rose-400' : 'text-neutral-500'}`}>
+                                {isPos || isNew ? '+' : ''}{tx.sharesChange}
+                              </td>
+                              <td className={`py-3 text-[11px] font-mono text-right font-bold ${isPos || isNew ? 'text-emerald-400' : isNeg ? 'text-rose-400' : 'text-neutral-500'}`}>
+                                {tx.sharesChangePCT}
+                              </td>
+                              <td className="py-3 text-[11px] font-mono text-neutral-400 text-right">{tx.marketValue}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
+
             </div>
           ) : (
-            <div className="flex flex-col gap-6 w-full animate-pulse">
-              {/* 4-Card Grid Skeleton */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="bg-neutral-950/80 border border-neutral-850/80 rounded-lg p-5 flex flex-col gap-6 relative overflow-hidden">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-purple-500/40 animate-ping" />
-                        <div className="h-4 w-32 bg-neutral-800/80 rounded" />
-                      </div>
-                      <div className="h-3 w-16 bg-neutral-850 rounded" />
-                    </div>
-                    <div className="grid grid-cols-3 gap-4 pt-2">
-                      {[...Array(3)].map((_, j) => (
-                        <div key={j} className="flex flex-col gap-2">
-                          <div className="h-7 w-20 bg-neutral-800/90 rounded" />
-                          <div className="h-3 w-12 bg-neutral-850 rounded" />
-                        </div>
-                      ))}
-                    </div>
-                    <div className="pt-5 border-t border-neutral-900 flex justify-between items-center">
-                      <div className="flex flex-col gap-2">
-                        <div className="h-3 w-24 bg-neutral-850 rounded" />
-                        <div className="h-6 w-28 bg-neutral-800/80 rounded" />
-                      </div>
-                      <div className="h-5 w-16 bg-purple-500/10 border border-purple-500/20 rounded" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Ownership Distribution Skeleton */}
-              <div className="bg-neutral-950/80 border border-neutral-850/80 rounded-lg p-6 flex flex-col gap-8">
-                <div className="flex flex-col gap-6">
-                  <div className="h-4 w-48 bg-neutral-800/80 rounded" />
-                  <div className="w-full h-3 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800 flex">
-                    <div className="h-full w-1/3 bg-purple-500/30 animate-pulse" />
-                    <div className="h-full w-1/4 bg-amber-500/30 animate-pulse" />
-                    <div className="h-full w-5/12 bg-neutral-800/50 animate-pulse" />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {[...Array(3)].map((_, k) => (
-                      <div key={k} className="flex flex-col gap-2">
-                        <div className="h-3 w-20 bg-neutral-850 rounded" />
-                        <div className="h-7 w-24 bg-neutral-800/90 rounded" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Bottom Analytics Skeleton */}
-                <div className="border-t border-neutral-850 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="h-3 w-64 bg-neutral-850 rounded" />
-                    <div className="h-3 w-32 bg-neutral-900 rounded" />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                    {[...Array(3)].map((_, m) => (
-                      <div key={m} className="bg-neutral-900/30 border border-neutral-850/50 rounded p-4 flex flex-col justify-between h-24">
-                        <div className="h-3 w-32 bg-neutral-800/80 rounded" />
-                        <div className="h-7 w-20 bg-neutral-750/80 rounded" />
-                        <div className="h-2 w-40 bg-neutral-850 rounded" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <div className="flex items-center justify-center h-48 border border-neutral-800 border-dashed rounded-lg bg-neutral-900/50">
+              <span className="text-neutral-500 text-sm font-medium animate-pulse">{loading ? "Loading..." : "No 13F data available"}</span>
             </div>
           )}
-        </div>
         </div>
 
         <div className="order-6 lg:order-none lg:col-span-1 lg:col-start-5 lg:row-start-1 lg:row-span-2 bg-neutral-900 border border-neutral-800 rounded-lg p-5 flex flex-col w-full h-full min-h-[400px]">
