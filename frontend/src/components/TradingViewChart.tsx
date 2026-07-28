@@ -88,6 +88,8 @@ export default function TradingViewChart({
       else if (tf === "1h") step = 3600;
       else if (tf === "4h") step = 14400;
       else if (tf === "1w") step = 604800;
+      else if (tf === "1m") step = 2592000;
+      else if (tf === "3m") step = 7776000;
 
       const base = spotPrice > 0 ? spotPrice : 100.0;
       const list: any[] = [];
@@ -187,6 +189,9 @@ export default function TradingViewChart({
         else if (timeframe === "1h") barsToShow = 290;
         else if (timeframe === "15 min") barsToShow = 750;
         else if (timeframe === "5 min") barsToShow = 2250;
+        else if (timeframe === "1w") barsToShow = 52;
+        else if (timeframe === "1m") barsToShow = 36;
+        else if (timeframe === "3m") barsToShow = 24;
 
         chart.timeScale().setVisibleLogicalRange({
           from: data.length - Math.min(barsToShow, data.length),

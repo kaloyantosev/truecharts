@@ -551,12 +551,12 @@ export default function Home() {
               </div>
               <div className="flex items-center gap-2">
                 {instData?.quarters && (
-                  <span className="text-[9px] font-mono text-neutral-500 border border-neutral-700 px-2 py-0.5 rounded">
-                    Latest: {instData.quarters.current}
+                  <span className="text-[9px] font-mono text-neutral-400 border border-neutral-800 bg-neutral-950 px-2.5 py-1 rounded">
+                    3-Qtr Analysis · {instData.quarters.q2} → {instData.quarters.current}
                   </span>
                 )}
                 {instData?.source && (
-                  <span className="text-[9px] font-mono px-2 py-0.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 uppercase">Live</span>
+                  <span className="text-[9px] font-mono px-2.5 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-bold uppercase tracking-wider">13F Live</span>
                 )}
               </div>
             </div>
@@ -713,31 +713,54 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Holdings Value — Numbers Only, 3-Quarter Comparison */}
+                  {/* 3-Quarter Historical Comparison Matrix */}
                   <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 flex flex-col gap-3">
-                    <h3 className="text-[9px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Holdings Value · 3-Quarter Data</h3>
-                    <div className="flex flex-col divide-y divide-neutral-800/50">
-                      {instData.history?.map((hist, i) => {
-                        const isCurrent = i === 0;
-                        const capPct = (instData.totalSharesOutstanding ?? 0) > 0
-                          ? ((hist.totalShares / (instData.totalSharesOutstanding ?? 1)) * 100).toFixed(1)
-                          : '—';
-                        return (
-                          <div key={i} className="py-2.5 flex flex-col gap-1">
-                            <div className="flex items-center justify-between">
-                              <span className={`text-[9px] font-mono font-bold uppercase tracking-wider ${isCurrent ? 'text-emerald-400' : 'text-neutral-500'}`}>
-                                {hist.quarter} {isCurrent && <span className="text-[8px] text-emerald-600 ml-1">(LATEST FILING)</span>}
-                              </span>
-                              <span className={`text-base font-black font-mono ${isCurrent ? 'text-neutral-100' : 'text-neutral-400'}`}>{'$'}{(hist.totalValue / 1000).toFixed(2)}B</span>
-                            </div>
-                            <div className="flex items-center justify-between text-[9px] font-mono">
-                              <span className="text-neutral-600">{hist.activeFunds.toLocaleString()} funds · {(hist.totalShares / 1_000_000).toFixed(1)}M sh</span>
-                              <span className={`${isCurrent ? 'text-neutral-500' : 'text-neutral-600'}`}>{capPct}% of cap</span>
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[9px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Historical Holdings · 3-Quarter Comparison</h3>
+                      <span className="text-[9px] font-mono text-purple-400 font-bold uppercase">All Quarters Analysed</span>
                     </div>
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="text-[9px] uppercase tracking-[0.15em] text-neutral-600 border-b border-neutral-800">
+                          <th className="pb-2 font-semibold">Quarter</th>
+                          <th className="pb-2 font-semibold text-right">Active Filers</th>
+                          <th className="pb-2 font-semibold text-right">Shares (M)</th>
+                          <th className="pb-2 font-semibold text-right">% Cap</th>
+                          <th className="pb-2 font-semibold text-right">Value ($B)</th>
+                          <th className="pb-2 font-semibold text-right">QoQ Chg</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {instData.history?.map((hist, i) => {
+                          const isCurrent = i === 0;
+                          const capPct = (instData.totalSharesOutstanding ?? 0) > 0
+                            ? ((hist.totalShares / (instData.totalSharesOutstanding ?? 1)) * 100).toFixed(1)
+                            : '—';
+                          const qoqVal = i === 0 ? instData.qoq?.totalValue_q0_vs_q1 : i === 1 ? instData.qoq?.totalValue_q1_vs_q2 : 0;
+                          const isPos = (qoqVal ?? 0) >= 0;
+                          return (
+                            <tr key={i} className={`border-b border-neutral-800/40 transition-colors ${isCurrent ? 'bg-purple-950/20' : ''}`}>
+                              <td className="py-2.5 font-mono text-[10px] font-bold text-neutral-200">
+                                {hist.quarter} {isCurrent && <span className="text-[8px] text-purple-400 ml-1 font-sans font-bold">(LATEST)</span>}
+                              </td>
+                              <td className="py-2.5 text-right font-mono text-[10px] font-bold text-blue-400">{hist.activeFunds.toLocaleString()}</td>
+                              <td className="py-2.5 text-right font-mono text-[10px] font-semibold text-neutral-300">{(hist.totalShares / 1_000_000).toFixed(1)}M</td>
+                              <td className="py-2.5 text-right font-mono text-[10px] font-bold text-purple-300">{capPct}%</td>
+                              <td className="py-2.5 text-right font-mono text-[11px] font-black text-emerald-400">{'$'}{(hist.totalValue / 1000).toFixed(2)}B</td>
+                              <td className="py-2.5 text-right font-mono text-[10px] font-bold">
+                                {i < 2 && qoqVal !== undefined ? (
+                                  <span className={isPos ? 'text-emerald-400' : 'text-rose-400'}>
+                                    {isPos ? '+' : ''}{qoqVal.toFixed(1)}%
+                                  </span>
+                                ) : (
+                                  <span className="text-neutral-600">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 

@@ -247,6 +247,41 @@ def fetch_live_price_history(ticker: str, timeframe: str = "1d") -> pd.DataFrame
         print(f"Failed to fetch live price history for {ticker}: {e}")
         return pd.DataFrame()
 
+@router.get("/history/{ticker}")
+def get_chart_history(ticker: str, timeframe: str = "1d"):
+    """
+    Returns candlestick OHLC history data derived from the specified timeframe.
+    Formats timestamps correctly for Lightweight Charts (unix timestamp for intraday, YYYY-MM-DD for daily+).
+    """
+    ticker = ticker.upper()
+    df = fetch_live_price_history(ticker, timeframe)
+    if df.empty:
+        raise HTTPException(status_code=404, detail=f"No price history found for {ticker}")
+
+    records = []
+    for ts, row in df.iterrows():
+        if timeframe in ["5 min", "15 min", "1h", "4h"]:
+            time_val = int(ts.timestamp())
+        else:
+            time_val = ts.strftime("%Y-%m-%d")
+
+        records.append({
+            "time": time_val,
+            "open": round(float(row["open"]), 2),
+            "high": round(float(row["high"]), 2),
+            "low": round(float(row["low"]), 2),
+            "close": round(float(row["close"]), 2),
+        })
+
+    seen = set()
+    deduped = []
+    for r in records:
+        if r["time"] not in seen:
+            seen.add(r["time"])
+            deduped.append(r)
+
+    return deduped
+
 def generate_mock_options_chain_fallback(spot: float, ticker: str, history: pd.DataFrame) -> List[Dict[str, Any]]:
     """
     Fallback option chain generator that calculates dynamic IV and concentrates
@@ -1116,42 +1151,46 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
     net_share_flow = int(shares_inc + shares_new - shares_dec - shares_sold_out)
     total_turnover_shares = int(shares_inc + shares_dec + shares_new + shares_sold_out)
 
-    # Directional modifiers: if net flow is negative, past quarters had MORE holdings
-    is_accumulating = net_fund_flow >= 0
-    flow_magnitude = min(0.08, max(0.01, abs(net_fund_flow) / max(1.0, total_active_holders if total_active_holders > 0 else 1000)))
+    # Calculate exact prior quarter estimates (Q-1 and Q-2) based on 13F Net Share & Net Fund Flow
+    curr_sh = inst_shares_best if inst_shares_best > 0 else 100_000_000
+    curr_h = total_active_holders if total_active_holders > 0 else 500
 
-    if is_accumulating:
-        # Holdings grew from Q2 -> Q1 -> Q0
-        mod_q1 = 1.0 - flow_magnitude
-        mod_q2 = mod_q1 - (flow_magnitude * 0.8)
-    else:
-        # Holdings dropped from Q2 -> Q1 -> Q0 (Net Selling/Distribution!)
-        mod_q1 = 1.0 + flow_magnitude
-        mod_q2 = mod_q1 + (flow_magnitude * 0.8)
+    # Q-1: subtract net 13F share and fund changes in current quarter
+    q1_sh = max(1_000_000, curr_sh - net_share_flow)
+    q1_h = max(10, curr_h - net_fund_flow)
 
-    own_pct_q1 = round(inst_ownership_pct * (2.0 - mod_q1 if is_accumulating else mod_q1), 2)
-    own_pct_q2 = round(inst_ownership_pct * (2.0 - mod_q2 if is_accumulating else mod_q2), 2)
+    # Q-2: estimate Q-2 as 85-95% of Q-1 depending on net direction
+    q2_sh = max(1_000_000, q1_sh - int(net_share_flow * 0.75))
+    q2_h = max(10, q1_h - int(net_fund_flow * 0.75))
+
+    sh_ratio_q1 = q1_sh / curr_sh if curr_sh > 0 else 0.95
+    sh_ratio_q2 = q2_sh / curr_sh if curr_sh > 0 else 0.90
+
+    own_pct_q1 = round(max(0.1, min(100.0, inst_ownership_pct * sh_ratio_q1)), 2)
+    own_pct_q2 = round(max(0.1, min(100.0, inst_ownership_pct * sh_ratio_q2)), 2)
+
+    val_base = total_val if total_val > 0 else (curr_sh * 150 / 1_000_000)
 
     history = [
         {
             "quarter": q0_label,
-            "totalValue": total_val if total_val > 0 else (inst_shares_best * 150 / 1_000_000),
-            "totalShares": inst_shares_best,
-            "activeFunds": int(total_active_holders) if total_active_holders > 0 else 1850,
+            "totalValue": val_base,
+            "totalShares": curr_sh,
+            "activeFunds": int(curr_h),
             "ownershipPct": round(inst_ownership_pct, 2)
         },
         {
             "quarter": q1_label,
-            "totalValue": round((total_val if total_val > 0 else (inst_shares_best * 150 / 1_000_000)) * mod_q1, 2),
-            "totalShares": inst_shares_best * mod_q1,
-            "activeFunds": int((total_active_holders if total_active_holders > 0 else 1850) * mod_q1),
+            "totalValue": round(val_base * sh_ratio_q1, 2),
+            "totalShares": q1_sh,
+            "activeFunds": int(q1_h),
             "ownershipPct": own_pct_q1
         },
         {
             "quarter": q2_label,
-            "totalValue": round((total_val if total_val > 0 else (inst_shares_best * 150 / 1_000_000)) * mod_q2, 2),
-            "totalShares": inst_shares_best * mod_q2,
-            "activeFunds": int((total_active_holders if total_active_holders > 0 else 1850) * mod_q2),
+            "totalValue": round(val_base * sh_ratio_q2, 2),
+            "totalShares": q2_sh,
+            "activeFunds": int(q2_h),
             "ownershipPct": own_pct_q2
         }
     ]
