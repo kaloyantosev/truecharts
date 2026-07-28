@@ -599,7 +599,7 @@ export default function Home() {
                         {instData.history.map((h, i) => (
                           <div key={i} className="flex items-center justify-between gap-1">
                             <span className={`text-[9px] font-mono font-bold ${i === 0 ? 'text-emerald-400' : 'text-neutral-600'}`}>{h.quarter}</span>
-                            <span className={`text-[11px] font-mono font-bold ${i === 0 ? 'text-neutral-100' : 'text-neutral-500'}`}>${(h.totalValue / 1000).toFixed(1)}B</span>
+                            <span className={`text-[11px] font-mono font-bold ${i === 0 ? 'text-neutral-100' : 'text-neutral-500'}`}>{'$'}{(h.totalValue / 1000).toFixed(1)}B</span>
                             {i > 0 && instData.qoq && (
                               <span className={`text-[9px] font-mono font-bold ${
                                 (i === 1 ? instData.qoq.totalValue_q0_vs_q1 : instData.qoq.totalValue_q1_vs_q2) >= 0
@@ -728,7 +728,7 @@ export default function Home() {
                               <span className={`text-[9px] font-mono font-bold uppercase tracking-wider ${isCurrent ? 'text-emerald-400' : 'text-neutral-500'}`}>
                                 {hist.quarter} {isCurrent && <span className="text-[8px] text-emerald-600 ml-1">(LATEST FILING)</span>}
                               </span>
-                              <span className={`text-base font-black font-mono ${isCurrent ? 'text-neutral-100' : 'text-neutral-400'}`}>${(hist.totalValue / 1000).toFixed(2)}B</span>
+                              <span className={`text-base font-black font-mono ${isCurrent ? 'text-neutral-100' : 'text-neutral-400'}`}>{'$'}{(hist.totalValue / 1000).toFixed(2)}B</span>
                             </div>
                             <div className="flex items-center justify-between text-[9px] font-mono">
                               <span className="text-neutral-600">{hist.activeFunds.toLocaleString()} funds · {(hist.totalShares / 1_000_000).toFixed(1)}M sh</span>
