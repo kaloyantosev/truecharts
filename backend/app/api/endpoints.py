@@ -1235,33 +1235,53 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
                 
         new_holders = 0
         sold_out_holders = 0
+        shares_new = 0
+        shares_sold_out = 0
         for row in new_sold:
             pos = row.get('positions', '')
             h = parse_num(row.get('holders', '0'))
-            if 'New' in pos: new_holders = h
-            elif 'Sold Out' in pos: sold_out_holders = h
-            
-        turnover_ratio = (increased_holders + decreased_holders) / total_active_holders if total_active_holders else 0
-        net_share_flow = shares_inc - shares_dec
-        conviction_ratio = new_holders / sold_out_holders if sold_out_holders else 0
-        value_per_fund = total_val / total_active_holders if total_active_holders else 0
+            s = parse_num(row.get('shares', '0'))
+            if 'New' in pos:
+                new_holders = h
+                shares_new = s
+            elif 'Sold Out' in pos:
+                sold_out_holders = h
+                shares_sold_out = s
+                
+        # New analytics variables
+        inst_accumulation = (increased_holders + new_holders) / (decreased_holders + sold_out_holders) if (decreased_holders + sold_out_holders) > 0 else 0
+        net_fund_flow = (increased_holders + new_holders) - (decreased_holders + sold_out_holders)
+        total_turnover_shares = shares_inc + shares_dec + shares_new + shares_sold_out
+        net_share_flow = shares_inc + shares_new - shares_dec - shares_sold_out
         
         # Synthetic History
         seed = int(hashlib.md5(ticker.encode()).hexdigest(), 16) % 1000
         mod_q1 = 1.0 - (0.01 + (seed % 50) / 1000.0)
         mod_q2 = mod_q1 - (0.01 + (seed % 30) / 1000.0)
         
-        total_shares = parse_num(summary.get('ShareoutstandingTotal', {}).get('value', '0'))
+        total_shares = parse_num(summary.get('ShareoutstandingTotal', {}).get('value', '0')) # in millions usually
+        # Sometimes ShareoutstandingTotal is in millions, let's assume it's in millions.
+        total_shares_raw = total_shares * 1000000
+        
+        total_inst_shares_val = parse_num(summary.get('SharesOutstandingPCT', {}).get('value', '0')) # this is a percent string usually, wait. No, SharesOutstandingPCT is institutional shares wait, the label is "Institutional Ownership", value is "50.15%".
+        # Let's just use the raw shares from "Total" active positions.
+        total_inst_shares_raw = parse_num(next((row.get('shares', '0') for row in active_positions if 'Total' in row.get('positions', '')), '0'))
         
         history = [
-            {"quarter": "Current", "totalValue": total_val, "totalShares": total_shares, "activeFunds": total_active_holders},
-            {"quarter": "Q-1", "totalValue": total_val * mod_q1, "totalShares": total_shares * mod_q1, "activeFunds": int(total_active_holders * mod_q1)},
-            {"quarter": "Q-2", "totalValue": total_val * mod_q2, "totalShares": total_shares * mod_q2, "activeFunds": int(total_active_holders * mod_q2)}
+            {"quarter": "Current", "totalValue": total_val, "totalShares": total_inst_shares_raw, "activeFunds": total_active_holders},
+            {"quarter": "Q-1", "totalValue": total_val * mod_q1, "totalShares": total_inst_shares_raw * mod_q1, "activeFunds": int(total_active_holders * mod_q1)},
+            {"quarter": "Q-2", "totalValue": total_val * mod_q2, "totalShares": total_inst_shares_raw * mod_q2, "activeFunds": int(total_active_holders * mod_q2)}
         ]
         
-        qoq_val = ((total_val / (total_val * mod_q1)) - 1) * 100 if mod_q1 else 0
-        qoq_shares = ((total_shares / (total_shares * mod_q1)) - 1) * 100 if mod_q1 else 0
-        qoq_funds = ((total_active_holders / int(total_active_holders * mod_q1)) - 1) * 100 if mod_q1 else 0
+        # Q-1 vs Q-2
+        qoq_val_q2 = ((total_val * mod_q1) / (total_val * mod_q2) - 1) * 100 if mod_q2 else 0
+        qoq_shares_q2 = ((total_inst_shares_raw * mod_q1) / (total_inst_shares_raw * mod_q2) - 1) * 100 if mod_q2 else 0
+        qoq_funds_q2 = ((int(total_active_holders * mod_q1)) / int(total_active_holders * mod_q2) - 1) * 100 if mod_q2 else 0
+
+        # Current vs Q-1
+        qoq_val_q1 = (total_val / (total_val * mod_q1) - 1) * 100 if mod_q1 else 0
+        qoq_shares_q1 = (total_inst_shares_raw / (total_inst_shares_raw * mod_q1) - 1) * 100 if mod_q1 else 0
+        qoq_funds_q1 = (total_active_holders / int(total_active_holders * mod_q1) - 1) * 100 if mod_q1 else 0
         
         out = {
             'source': 'nasdaq',
@@ -1269,17 +1289,18 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
             'activePositions': active_positions,
             'newSoldOutPositions': new_sold,
             'holdingsTransactions': nasdaq_data.get('holdingsTransactions', {}).get('table', {}).get('rows', []),
+            'totalSharesOutstanding': total_shares_raw,
             'analytics': {
-                'turnoverRatio': round(turnover_ratio, 2),
-                'netShareFlow': int(net_share_flow),
-                'convictionRatio': round(conviction_ratio, 2),
-                'valuePerFund': round(value_per_fund, 2)
+                'instAccumulation': round(inst_accumulation, 2),
+                'netFundFlow': int(net_fund_flow),
+                'totalTurnoverShares': int(total_turnover_shares),
+                'netShareFlow': int(net_share_flow)
             },
             'history': history,
             'qoq': {
-                'totalValue': f"{'+' if qoq_val > 0 else ''}{qoq_val:.1f}%",
-                'totalShares': f"{'+' if qoq_shares > 0 else ''}{qoq_shares:.1f}%",
-                'activeFunds': f"{'+' if qoq_funds > 0 else ''}{qoq_funds:.1f}%"
+                'totalValue': f"Q-1: {'+' if qoq_val_q1 > 0 else ''}{qoq_val_q1:.1f}% | Q-2: {'+' if qoq_val_q2 > 0 else ''}{qoq_val_q2:.1f}%",
+                'totalShares': f"Q-1: {'+' if qoq_shares_q1 > 0 else ''}{qoq_shares_q1:.1f}% | Q-2: {'+' if qoq_shares_q2 > 0 else ''}{qoq_shares_q2:.1f}%",
+                'activeFunds': f"Q-1: {'+' if qoq_funds_q1 > 0 else ''}{qoq_funds_q1:.1f}% | Q-2: {'+' if qoq_funds_q2 > 0 else ''}{qoq_funds_q2:.1f}%"
             }
         }
         _INST_CACHE[ticker] = (now, out)

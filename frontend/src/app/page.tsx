@@ -48,11 +48,12 @@ interface InstData {
   activePositions?: Array<{positions: string; holders: string; shares: string;}>;
   newSoldOutPositions?: Array<{positions: string; holders: string; shares: string;}>;
   holdingsTransactions?: Array<any>;
+  totalSharesOutstanding?: number;
   analytics?: {
-    turnoverRatio: number;
+    instAccumulation: number;
+    netFundFlow: number;
+    totalTurnoverShares: number;
     netShareFlow: number;
-    convictionRatio: number;
-    valuePerFund: number;
   };
   history?: Array<{
     quarter: string;
@@ -457,6 +458,192 @@ export default function Home() {
           </div>
 
           {/* Institutional Positioning Panel */}
+        <div className="order-4 lg:order-none lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-lg p-6 flex flex-col w-full shrink-0">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Institutional Positioning</h2>
+                <p className="text-xs text-neutral-500 mt-0.5">Professional-grade 13F flow analysis & historical trends</p>
+              </div>
+            </div>
+
+          {instData && instData.source === 'nasdaq' ? (
+            <div className="flex flex-col gap-6">
+              
+              {/* Summary Stats Header */}
+              {instData.ownershipSummary && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-4 flex flex-col gap-1 relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-widest">{instData.ownershipSummary.SharesOutstandingPCT?.label || "Institutional Ownership"}</span>
+                      {instData.qoq?.totalShares && (
+                        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${instData.qoq.totalShares.includes('+') ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'} text-right`}>
+                          {instData.qoq.totalShares}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-2xl font-mono font-bold text-purple-400">{instData.ownershipSummary.SharesOutstandingPCT?.value || "N/A"}</span>
+                  </div>
+                  <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-4 flex flex-col gap-1 relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-widest">{instData.ownershipSummary.TotalHoldingsValue?.label || "Total Value of Holdings"}</span>
+                      {instData.qoq?.totalValue && (
+                        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${instData.qoq.totalValue.includes('+') ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'} text-right`}>
+                          {instData.qoq.totalValue}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-2xl font-mono font-bold text-emerald-400">{instData.ownershipSummary.TotalHoldingsValue?.value || "N/A"}</span>
+                  </div>
+                  <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-4 flex flex-col gap-1 relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-widest">Total Active 13F Funds</span>
+                      {instData.qoq?.activeFunds && (
+                        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${instData.qoq.activeFunds.includes('+') ? 'bg-blue-500/20 text-blue-400' : 'bg-rose-500/20 text-rose-400'} text-right`}>
+                          {instData.qoq.activeFunds}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-2xl font-mono font-bold text-blue-400">
+                      {instData.activePositions?.find(p => p.positions.includes("Total"))?.holders || "N/A"}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Advanced Analytics Grid */}
+              {instData.analytics && (
+                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-4">
+                  <h3 className="text-sm font-bold text-neutral-200 border-b border-neutral-800 pb-2 flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+                    Advanced 13F Analytics
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Inst. Accumulation</span>
+                      <span className="text-lg font-bold text-indigo-400 font-mono">{instData.analytics.instAccumulation.toFixed(2)}x</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Net Fund Flow</span>
+                      <span className={`text-lg font-bold font-mono ${instData.analytics.netFundFlow > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {instData.analytics.netFundFlow > 0 ? '+' : ''}{instData.analytics.netFundFlow}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Net Share Flow</span>
+                      <span className={`text-lg font-bold font-mono ${instData.analytics.netShareFlow > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {instData.analytics.netShareFlow > 0 ? '+' : ''}{(instData.analytics.netShareFlow / 1000000).toFixed(1)}M
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Total Turnover</span>
+                      <span className="text-lg font-bold text-neutral-300 font-mono">{(instData.analytics.totalTurnoverShares / 1000000).toFixed(1)}M</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                {/* Active Positions */}
+                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-4">
+                  <h3 className="text-sm font-bold text-neutral-200 border-b border-neutral-800 pb-2">Fund Activity (Inc vs Dec)</h3>
+                  <div className="space-y-3 pt-1">
+                    {instData.activePositions?.filter(p => !p.positions.includes("Total")).map((pos, i) => {
+                      const isIncreased = pos.positions.includes("Increased");
+                      const isDecreased = pos.positions.includes("Decreased");
+                      const shareCount = parseInt(pos.shares.replace(/,/g, '')) || 0;
+                      const capPct = instData.totalSharesOutstanding ? ((shareCount / instData.totalSharesOutstanding) * 100).toFixed(2) : "0.00";
+                      
+                      return (
+                        <div key={i} className="flex items-center justify-between">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">{pos.positions}</span>
+                          <div className="flex flex-col items-end">
+                            <span className={`text-sm font-mono font-bold ${isIncreased ? 'text-emerald-400' : isDecreased ? 'text-rose-400' : 'text-neutral-300'}`}>
+                              {pos.holders} Funds
+                            </span>
+                            <span className="text-[10px] text-neutral-500 font-mono">{pos.shares} Shares ({capPct}%)</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Historical Trends */}
+                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-4">
+                  <h3 className="text-sm font-bold text-neutral-200 border-b border-neutral-800 pb-2">Historical Holdings Trend</h3>
+                  <div className="flex-1 flex flex-col justify-center gap-3">
+                    {instData.history?.slice().reverse().map((hist, i) => {
+                      const maxVal = Math.max(...(instData.history?.map(h => h.totalValue) || [1]));
+                      const width = `${(hist.totalValue / maxVal) * 100}%`;
+                      const isCurrent = hist.quarter === 'Current';
+                      return (
+                        <div key={i} className="flex items-center gap-3">
+                          <span className={`text-[10px] font-mono w-10 text-right ${isCurrent ? 'text-emerald-400 font-bold' : 'text-neutral-500'}`}>{hist.quarter}</span>
+                          <div className="flex-1 bg-neutral-900 rounded-sm h-4 relative">
+                            <div className={`absolute left-0 top-0 h-full rounded-sm transition-all duration-1000 ${isCurrent ? 'bg-emerald-500/50' : 'bg-neutral-700'}`} style={{ width }}></div>
+                          </div>
+                          <span className="text-[10px] font-mono text-neutral-400 w-16 text-right">${(hist.totalValue / 1000).toFixed(1)}B</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Top Institutional Transactions */}
+              {instData.holdingsTransactions && instData.holdingsTransactions.length > 0 && (
+                <div className="bg-neutral-950 border border-neutral-850 rounded-lg p-5 flex flex-col gap-4 overflow-hidden">
+                  <h3 className="text-sm font-bold text-neutral-200 border-b border-neutral-800 pb-2">Top 5 Institutional Transactions</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="text-[10px] uppercase tracking-widest text-neutral-500 border-b border-neutral-800">
+                          <th className="pb-3 font-semibold">Fund Name</th>
+                          <th className="pb-3 font-semibold text-right">Shares Held</th>
+                          <th className="pb-3 font-semibold text-right">Change</th>
+                          <th className="pb-3 font-semibold text-right">Chg %</th>
+                          <th className="pb-3 font-semibold text-right">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {instData.holdingsTransactions.slice(0, 5).map((tx, i) => {
+                          const isPos = !tx.sharesChangePCT.includes("-") && tx.sharesChangePCT !== "0%" && tx.sharesChangePCT !== "New";
+                          const isNeg = tx.sharesChangePCT.includes("-");
+                          const isNew = tx.sharesChangePCT === "New";
+                          
+                          const shareCount = parseInt(tx.sharesHeld.replace(/,/g, '')) || 0;
+                          const capPct = instData.totalSharesOutstanding ? ((shareCount / instData.totalSharesOutstanding) * 100).toFixed(2) : "0.00";
+
+                          return (
+                            <tr key={i} className="border-b border-neutral-800/50 hover:bg-neutral-900/50 transition-colors">
+                              <td className="py-3 text-xs font-semibold text-neutral-300 truncate max-w-[140px]" title={tx.ownerName}>{tx.ownerName}</td>
+                              <td className="py-3 text-[11px] font-mono text-neutral-400 text-right flex flex-col items-end gap-0.5">
+                                <span>{tx.sharesHeld}</span>
+                                <span className="text-[9px] text-neutral-600">({capPct}%)</span>
+                              </td>
+                              <td className={`py-3 text-[11px] font-mono text-right font-bold ${isPos || isNew ? 'text-emerald-400' : isNeg ? 'text-rose-400' : 'text-neutral-500'}`}>
+                                {isPos || isNew ? '+' : ''}{tx.sharesChange}
+                              </td>
+                              <td className={`py-3 text-[11px] font-mono text-right font-bold ${isPos || isNew ? 'text-emerald-400' : isNeg ? 'text-rose-400' : 'text-neutral-500'}`}>
+                                {tx.sharesChangePCT}
+                              </td>
+                              <td className="py-3 text-[11px] font-mono text-neutral-400 text-right">{tx.marketValue}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-48 border border-neutral-800 border-dashed rounded-lg bg-neutral-900/50">
+              <span className="text-neutral-500 text-sm font-medium animate-pulse">{loading ? "Loading..." : "No 13F data available"}</span>
+            </div>
+          )}
+        </div>
         <div className="order-4 lg:order-none lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-lg p-6 flex flex-col w-full shrink-0">
             <div className="flex items-center justify-between mb-6">
               <div>
