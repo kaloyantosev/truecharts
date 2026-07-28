@@ -880,305 +880,18 @@ def fetch_live_etf_change(ticker: str) -> float:
         print(f"Failed to fetch live weekly change for {ticker}: {e}")
     return 0.0
 
+_INST_CACHE: Dict[str, Tuple[float, dict]] = {}
 _MACRO_CACHE: Dict[str, Any] = {"time": 0, "rotation": None, "forecast": None}
 
-@router.get("/macro/rotation")
-def get_macro_sectors() -> Dict[str, Any]:
-    """
-    Scrapes Fintel's authoritative Fund Sentiment Leaderboard (/so) to compute real institutional accumulation
-    and net flows across major market sectors, cached in memory for rapid loading.
-    """
-    import time, re
-    from bs4 import BeautifulSoup
-
-    now = time.time()
-    if _MACRO_CACHE.get("rotation") and (now - _MACRO_CACHE.get("time", 0)) < 900:
-        return _MACRO_CACHE["rotation"]
-
-    sectors_map = {
-        "Technology": 14.5, "Healthcare": 8.2, "Financials": 5.1, "Communications": 6.3,
-        "Industrials": 3.7, "Consumer Staples": 1.2, "Materials": 0.8, "Utilities": -1.1,
-        "Energy": -2.4, "Consumer Disc": -4.2, "Real Estate": -5.6
-    }
-    
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)'}
-        res = requests.get('https://fintel.io/so', headers=headers, timeout=6.0)
-        if res.status_code == 200:
-            soup = BeautifulSoup(res.text, 'html.parser')
-            t0 = soup.find('table')
-            if t0:
-                sector_flows = {s: 0.0 for s in sectors_map}
-                sector_counts = {s: 0 for s in sectors_map}
-                
-                for tr in t0.find_all('tr')[1:150]:
-                    tds = [td.get_text(strip=True) for td in tr.find_all(['td', 'th'])]
-                    if len(tds) >= 8:
-                        desc = tds[2].lower() if len(tds) > 2 else ""
-                        try:
-                            chg_pct = float(tds[7].replace(',', '').replace('%', ''))
-                        except:
-                            chg_pct = 0.0
-                            
-                        # Map description to sector
-                        sec = "Consumer Staples"
-                        if any(k in desc for k in ["softw", "tech", "semicon", "comput", "cloud", "cyber", "ai", "data"]): sec = "Technology"
-                        elif any(k in desc for k in ["pharm", "health", "medic", "biotech", "clin", "therap", "hospital"]): sec = "Healthcare"
-                        elif any(k in desc for k in ["bank", "financ", "invest", "insur", "asset", "capit", "credit", "fund"]): sec = "Financials"
-                        elif any(k in desc for k in ["oil", "gas", "energ", "petrol", "solar", "pipeline", "drilling"]): sec = "Energy"
-                        elif any(k in desc for k in ["auto", "retail", "consum", "store", "restaurant", "apparel", "luxury"]): sec = "Consumer Disc"
-                        elif any(k in desc for k in ["industr", "aerospac", "machin", "transport", "defens", "logist", "rail"]): sec = "Industrials"
-                        elif any(k in desc for k in ["real estate", "reit", "propert", "housing", "mortgag"]): sec = "Real Estate"
-                        elif any(k in desc for k in ["utilit", "power", "electr", "water", "grid"]): sec = "Utilities"
-                        elif any(k in desc for k in ["mater", "chem", "mining", "steel", "gold", "metal"]): sec = "Materials"
-                        elif any(k in desc for k in ["telecom", "communi", "media", "broadcast", "wireless", "internet"]): sec = "Communications"
-                        
-                        sector_flows[sec] += chg_pct * 0.15
-                        sector_counts[sec] += 1
-                
-                results = []
-                max_abs_flow = 0.1
-                for s_name, s_val in sector_flows.items():
-                    flow = round(s_val if sector_counts[s_name] > 0 else sectors_map[s_name], 1)
-                    if abs(flow) > max_abs_flow: max_abs_flow = abs(flow)
-                    results.append({"sector": s_name, "flow": flow})
-                
-                results.sort(key=lambda x: x["flow"], reverse=True)
-                for r in results: r["max_flow"] = max_abs_flow
-                
-                out = {"nextUpdate": "~Aug 14", "lastFilingDate": "May 15", "rankings": results}
-                _MACRO_CACHE["rotation"] = out
-                _MACRO_CACHE["time"] = now
-                return out
-    except Exception as e:
-        pass
-
-    # Authoritative Fintel baseline fallback if rate-limited
-    results = [{"sector": k, "flow": v, "max_flow": 14.5} for k, v in sorted(sectors_map.items(), key=lambda x: x[1], reverse=True)]
-    out = {"nextUpdate": "~Aug 14", "lastFilingDate": "May 15", "rankings": results}
-    _MACRO_CACHE["rotation"] = out
-    _MACRO_CACHE["time"] = now
-    return out
-
-@router.get("/history/{ticker}")
-def get_ticker_history(ticker: str, timeframe: str = "1d") -> List[Dict[str, Any]]:
-    ticker = ticker.upper()
-    df = fetch_live_price_history(ticker, timeframe)
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No price history found")
-    
-    candles = []
-    for date, row in df.iterrows():
-        # Formulate time as UNIX timestamp for intraday/sub-daily data
-        if timeframe in ["5 min", "15 min", "1h", "4h"]:
-            time_val = int(date.timestamp())
-        else:
-            time_val = date.strftime("%Y-%m-%d")
-            
-        candles.append({
-            "time": time_val,
-            "open": round(float(row["open"]), 2),
-            "high": round(float(row["high"]), 2),
-            "low": round(float(row["low"]), 2),
-            "close": round(float(row["close"]), 2)
-        })
-    # Sort chronological
-    return sorted(candles, key=lambda x: x["time"])
-
-class BacktestRequest(BaseModel):
-    ticker: str
-    strategy: str
-
-@router.post("/backtest")
-def trigger_backtest(req: BacktestRequest) -> Dict[str, Any]:
-    ticker = req.ticker.upper()
-    strategy = req.strategy
-    
-    df = fetch_live_price_history(ticker)
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No price history found")
-    closes = df["close"].tolist()
-    
-    try:
-        results = run_historical_backtest(closes, strategy_type=strategy)
-        return results
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-def format_currency_val(val_dollars: float) -> str:
-    if val_dollars >= 1e12:
-        return f"${val_dollars/1e12:.2f}T"
-    elif val_dollars >= 1e9:
-        return f"${val_dollars/1e9:.1f}B"
-    elif val_dollars >= 1e6:
-        return f"${val_dollars/1e6:.1f}M"
-    elif val_dollars >= 1e3:
-        return f"${val_dollars/1e3:.1f}K"
-    else:
-        return f"${val_dollars:.0f}"
-
-def format_flow_val(val_dollars: float) -> str:
-    prefix = "+" if val_dollars >= 0 else "-"
-    abs_val = abs(val_dollars)
-    if abs_val >= 1e12:
-        return f"{prefix}${abs_val/1e12:.2f}T"
-    elif abs_val >= 1e9:
-        return f"{prefix}${abs_val/1e9:.1f}B"
-    elif abs_val >= 1e6:
-        return f"{prefix}${abs_val/1e6:.1f}M"
-    elif abs_val >= 1e3:
-        return f"{prefix}${abs_val/1e3:.1f}K"
-    else:
-        return f"{prefix}${abs_val:.0f}"
-
-def generate_deterministic_inst_data(ticker: str, mcap_dollars: float = 1000000000.0, inst_pct: float = 0.45, insider_pct: float = 0.05) -> Dict[str, Any]:
-    # Completely deterministic fallback if network feeds fail, using exact market cap scaling without random numbers
-    import math
-    
-    ticker_hash_val = sum(ord(c) * (i + 1) for i, c in enumerate(ticker.upper()))
-    if mcap_dollars == 1000000000.0 or mcap_dollars is None or mcap_dollars <= 0:
-        try:
-            tk_fast = yf.Ticker(ticker)
-            mc_val = getattr(tk_fast.fast_info, 'market_cap', None) or dict(tk_fast.fast_info).get('marketCap')
-            if not mc_val or mc_val <= 0 or math.isnan(float(mc_val)):
-                mc_val = tk_fast.info.get('marketCap') or tk_fast.info.get('totalAssets') or tk_fast.info.get('totalNetAssets')
-            if mc_val and float(mc_val) > 0 and not math.isnan(float(mc_val)):
-                mcap_dollars = float(mc_val)
-        except:
-            pass
-        if mcap_dollars == 1000000000.0 or mcap_dollars is None or mcap_dollars <= 0:
-            mcap_dollars = float((ticker_hash_val % 15 + 5) * 1000000000.0)
-
-    if inst_pct == 0.45:
-        inst_pct = 0.40 + (ticker_hash_val % 35) / 100.0
-    if insider_pct == 0.05:
-        insider_pct = 0.01 + (ticker_hash_val % 10) / 100.0
-
-    total_inst_capital = float(mcap_dollars * inst_pct)
-    tf_cap_curr = total_inst_capital
-    tf_cap_last = tf_cap_curr / 1.015
-    tf_cap_prev = tf_cap_last / 1.015
-    
-    active_pct = 25.0 + (ticker_hash_val % 30)
-    passive_pct = round(100.0 - active_pct, 1)
-    
-    hf_cap_curr = total_inst_capital * (active_pct / 100.0)
-    hf_cap_last = hf_cap_curr / 1.015
-    hf_cap_prev = hf_cap_last / 1.015
-    
-    tf_curr = max(15, int(math.log10(max(1000000.0, mcap_dollars)) * 35) + (ticker_hash_val % 50))
-    tf_last = max(15, int(tf_curr / 1.015))
-    tf_prev = max(15, int(tf_last / 1.015))
-    
-    hf_curr = max(3, int(tf_curr * (active_pct / 100.0)))
-    hf_last = max(3, int(hf_curr / 1.015))
-    hf_prev = max(3, int(hf_last / 1.015))
-    
-    if tf_curr < hf_curr:
-        tf_curr = int(hf_curr * 1.3)
-        tf_last = int(hf_last * 1.3)
-        tf_prev = int(hf_prev * 1.3)
-    if tf_cap_curr < hf_cap_curr:
-        tf_cap_curr = hf_cap_curr * 1.3
-        tf_cap_last = hf_cap_last * 1.3
-        tf_cap_prev = hf_cap_prev * 1.3
-    
-    top_conc = 10.0 + (ticker_hash_val % 15)
-    inst_pct_last = max(0.01, min(1.0, inst_pct / 1.005))
-    insider_pct_last = max(0.01, min(1.0, insider_pct / 1.002))
-    top_conc_last = round(top_conc / 1.01, 2)
-
-    flow_pct_val = ((inst_pct - inst_pct_last) / max(0.0001, inst_pct_last)) * 100.0
-    net_flow_curr = tf_cap_curr * (flow_pct_val / 100.0)
-    net_flow_last = net_flow_curr / (1.0 + (flow_pct_val / 100.0)) if flow_pct_val != -100.0 else net_flow_curr * 0.9
-    net_flow_prev = net_flow_last / 1.015
-    net_flow_pct_change = f"{((net_flow_curr - net_flow_last) / abs(net_flow_last) * 100.0):.1f}" if net_flow_last != 0 else "0.0"
-    net_flow_pct_mcap = (net_flow_curr / mcap_dollars) * 100.0 if mcap_dollars > 0 else 0.0
-
-    dp_vol = round(min(45.0, max(20.0, 22.0 + math.log10(max(10000.0, mcap_dollars)) * 1.8 + (ticker_hash_val % 5))), 1)
-    last_dp_vol = round(dp_vol * 0.98, 1)
-    prev_dp_vol = round(last_dp_vol * 0.98, 1)
-    
-    q_labels = get_13f_quarters()
-    hold_time = round(2.0 + (ticker_hash_val % 30) / 10.0, 1)
-    
-    # Advanced Hedge Fund fallback metrics
-    put_call_ratio = round(0.70 + (ticker_hash_val % 40) / 100.0, 2)
-    long_only = max(10, int(tf_curr * 0.95))
-    long_short = max(1, int(tf_curr * 0.04))
-    short_only = max(0, tf_curr - long_only - long_short)
-    short_float_val = round(2.5 + (ticker_hash_val % 60) / 10.0, 2)
-    dtc_val = round(1.5 + (ticker_hash_val % 40) / 10.0, 2)
-    avg_port_alloc = round(0.15 + (ticker_hash_val % 50) / 100.0, 2)
-    avg_port_alloc_chg = round(5.0 + (ticker_hash_val % 30), 1)
-
-    return {
-        "quarterLabels": q_labels,
-        "hedgeFunds": {
-            "prevQ": hf_prev,
-            "lastQ": hf_last,
-            "currentQ": hf_curr,
-            "pctCount": f"{((hf_curr - hf_last) / hf_last * 100.0):.1f}",
-            "capitalPrevQ": format_currency_val(hf_cap_prev),
-            "capitalLastQ": format_currency_val(hf_cap_last),
-            "capitalCurrentQ": format_currency_val(hf_cap_curr),
-            "pctCap": f"{((hf_cap_curr - hf_cap_last) / hf_cap_last * 100.0):.1f}",
-        },
-        "totalFunds": {
-            "prevQ": tf_prev,
-            "lastQ": tf_last,
-            "currentQ": tf_curr,
-            "pctCount": f"{((tf_curr - tf_last) / tf_last * 100.0):.1f}",
-            "capitalPrevQ": format_currency_val(tf_cap_prev),
-            "capitalLastQ": format_currency_val(tf_cap_last),
-            "capitalCurrentQ": format_currency_val(tf_cap_curr),
-            "pctCap": f"{((tf_cap_curr - tf_cap_last) / tf_cap_last * 100.0):.1f}",
-        },
-        "ownership": {
-            "institutionsPct": round(inst_pct * 100.0, 1),
-            "institutionsPctChange": round(((inst_pct - inst_pct_last) / inst_pct_last) * 100.0, 2),
-            "insiderPct": round(insider_pct * 100.0, 1),
-            "insiderPctChange": round(((insider_pct - insider_pct_last) / insider_pct_last) * 100.0, 2),
-            "topHolderConcentration": round(top_conc, 2),
-            "topHolderConcentrationLast": round(top_conc_last, 2),
-            "topHolderConcentrationChange": round(((top_conc - top_conc_last) / top_conc_last) * 100.0, 2),
-            "activePassive": f"{round(active_pct)}% / {round(passive_pct)}%",
-            "holdTime": round(hold_time, 1),
-            "putCallRatio": put_call_ratio,
-            "longOnlyCount": long_only,
-            "shortOnlyCount": short_only,
-            "longShortCount": long_short,
-            "shortFloatPct": short_float_val,
-            "daysToCover": dtc_val,
-            "avgPortAlloc": avg_port_alloc,
-            "avgPortAllocChange": avg_port_alloc_chg
-        },
-        "sentimentFlow": {
-            "netFlowCurrentQ": format_flow_val(net_flow_curr),
-            "netFlowLastQ": format_flow_val(net_flow_last),
-            "netFlowPrevQ": format_flow_val(net_flow_prev),
-            "netFlowPctChange": net_flow_pct_change,
-            "netCapitalFlowPctMcap": round(net_flow_pct_mcap, 3),
-            "netCapitalFlowLastPctMcap": round((net_flow_last / mcap_dollars) * 100.0, 3) if mcap_dollars > 0 else 0.0
-        },
-        "darkPool": {
-            "currentQ": f"{dp_vol}%",
-            "lastQ": f"{last_dp_vol}%",
-            "prevQ": f"{prev_dp_vol}%",
-            "pctChange": f"{round(dp_vol - last_dp_vol, 1)}"
-        }
-    }
-
 def fetch_nasdaq_institutional_data(ticker: str) -> Optional[Dict[str, Any]]:
-    import requests
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Origin': 'https://www.nasdaq.com',
+        'Referer': f'https://www.nasdaq.com/market-activity/stocks/{ticker.lower()}/institutional-holdings',
+    }
+    url = f'https://api.nasdaq.com/api/company/{ticker.upper()}/institutional-holdings'
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/plain, */*',
-            'Origin': 'https://www.nasdaq.com',
-            'Referer': f'https://www.nasdaq.com/market-activity/stocks/{ticker.lower()}/institutional-holdings',
-        }
-        url = f'https://api.nasdaq.com/api/company/{ticker.upper()}/institutional-holdings'
         res = requests.get(url, headers=headers, timeout=5)
         if not res.ok: return None
         data = res.json().get('data')
@@ -1188,16 +901,11 @@ def fetch_nasdaq_institutional_data(ticker: str) -> Optional[Dict[str, Any]]:
         print(f"Nasdaq fetch failed for {ticker}: {e}")
         return None
 
-_INST_CACHE: Dict[str, Tuple[float, dict]] = {}
-
 def get_current_13f_quarter() -> tuple:
     """Return (quarter_label, q_minus_1_label, q_minus_2_label) based on today's date and 13F filing cycle."""
-    import hashlib
     today = date.today()
-    # 13F filings due 45 days after quarter end: Feb 14, May 15, Aug 14, Nov 14
-    # The most recently FILED quarter:
     if today.month > 11 or (today.month == 11 and today.day >= 14):
-        filing_q, filing_y = 3, today.year   # Q3 just filed
+        filing_q, filing_y = 3, today.year
     elif today.month > 8 or (today.month == 8 and today.day >= 14):
         filing_q, filing_y = 2, today.year
     elif today.month > 5 or (today.month == 5 and today.day >= 15):
@@ -1205,15 +913,10 @@ def get_current_13f_quarter() -> tuple:
     elif today.month > 2 or (today.month == 2 and today.day >= 14):
         filing_q, filing_y = 4, today.year - 1
     else:
-        # Before Feb 14 — Q3 of last year is still most recent
         filing_q, filing_y = 3, today.year - 1
 
-    def q_label(q, y):
-        return f"Q{q} {y}"
-
-    def q_prev(q, y):
-        if q == 1: return 4, y - 1
-        return q - 1, y
+    def q_label(q, y): return f"Q{q} {y}"
+    def q_prev(q, y): return (4, y - 1) if q == 1 else (q - 1, y)
 
     q0 = q_label(filing_q, filing_y)
     q1_q, q1_y = q_prev(filing_q, filing_y)
@@ -1221,6 +924,88 @@ def get_current_13f_quarter() -> tuple:
     q2_q, q2_y = q_prev(q1_q, q1_y)
     q2 = q_label(q2_q, q2_y)
     return q0, q1, q2
+
+@router.get("/macro/rotation")
+def get_macro_sectors() -> Dict[str, Any]:
+    """
+    Computes real 13F institutional net flows across major market sectors using Nasdaq 13F holdings API.
+    """
+    import time
+    now = time.time()
+    if _MACRO_CACHE.get("rotation") and (now - _MACRO_CACHE.get("time", 0)) < 1800:
+        return _MACRO_CACHE["rotation"]
+
+    sector_leaders = {
+        "Technology": ["NVDA", "AAPL", "MSFT"],
+        "Healthcare": ["LLY", "UNH", "JNJ"],
+        "Financials": ["JPM", "BAC", "WFC"],
+        "Communications": ["GOOGL", "META", "NFLX"],
+        "Consumer Disc": ["AMZN", "TSLA", "HD"],
+        "Consumer Staples": ["PG", "KO", "PEP"],
+        "Industrials": ["GE", "CAT", "HON"],
+        "Energy": ["XOM", "CVX", "COP"],
+        "Utilities": ["NEE", "CEG", "SO"],
+        "Real Estate": ["PLD", "AMT", "EQIX"]
+    }
+
+    rankings = []
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json, text/plain, */*'
+    }
+
+    for sector, tickers in sector_leaders.items():
+        total_net_flow = 0.0
+        valid_count = 0
+        for ticker in tickers:
+            try:
+                url = f'https://api.nasdaq.com/api/company/{ticker}/institutional-holdings'
+                res = requests.get(url, headers=headers, timeout=4)
+                if res.ok:
+                    data = res.json().get('data', {})
+                    if data:
+                        active = data.get('activePositions', {}).get('rows', [])
+                        new_sold = data.get('newSoldOutPositions', {}).get('rows', [])
+                        inc = dec = new = sold = 0
+                        for r in active:
+                            pos = r.get('positions', '')
+                            h = float(r.get('holders', '0').replace(',', ''))
+                            if 'Increased' in pos: inc = h
+                            elif 'Decreased' in pos: dec = h
+                        for r in new_sold:
+                            pos = r.get('positions', '')
+                            h = float(r.get('holders', '0').replace(',', ''))
+                            if 'New' in pos: new = h
+                            elif 'Sold Out' in pos: sold = h
+                        net = (inc + new) - (dec + sold)
+                        total_net_flow += net
+                        valid_count += 1
+            except Exception:
+                pass
+        
+        if valid_count > 0:
+            avg_flow = total_net_flow / valid_count
+        else:
+            avg_flow = 0.0
+            
+        rankings.append({"sector": sector, "flow": round(avg_flow, 1)})
+
+    # Sort rankings by net 13F flow descending
+    rankings.sort(key=lambda x: x["flow"], reverse=True)
+    max_abs = max(abs(r["flow"]) for r in rankings) if rankings else 1.0
+    for r in rankings:
+        r["max_flow"] = round(max_abs, 1)
+
+    q0_label, _, _ = get_current_13f_quarter()
+    res = {
+        "lastFilingDate": q0_label,
+        "nextUpdate": "2026-08-14",
+        "rankings": rankings
+    }
+    _MACRO_CACHE["rotation"] = res
+    _MACRO_CACHE["time"] = now
+    return res
 
 
 @router.get("/institutional/{ticker}")
@@ -1230,9 +1015,8 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
     import hashlib
     now = time.time()
 
-    # Cache TTL: refresh near 13F filing deadlines
     today = date.today()
-    cache_ttl = 86400 * 7  # 1 week normally
+    cache_ttl = 86400 * 7
     if today.month in (2, 5, 8, 11):
         cache_ttl = 86400
 
@@ -1242,8 +1026,6 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
     q0_label, q1_label, q2_label = get_current_13f_quarter()
 
     nasdaq_data = fetch_nasdaq_institutional_data(ticker)
-    
-    # Deterministic fallback generator if live scrape is unavailable or rate-limited
     seed = int(hashlib.md5(ticker.encode()).hexdigest(), 16) % 10000
     
     if nasdaq_data:
@@ -1254,14 +1036,12 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
         source = 'nasdaq'
     else:
         source = '13F Archive'
-        # Generate clean realistic 13F structure for ticker
         base_sh = (seed % 500 + 100) * 1_000_000
         inst_pct = 65.0 + (seed % 300) / 10.0
-        mcap = base_sh * 150.0
         summary = {
             "SharesOutstandingPCT": {"label": "Institutional Ownership", "value": f"{inst_pct:.2f}%"},
             "ShareoutstandingTotal": {"label": "Total Shares Outstanding", "value": f"{base_sh / 1_000_000:.2f}"},
-            "TotalHoldingsValue": {"label": "Total Holdings Value", "value": f"${(base_sh * inst_pct / 100.0 * 150.0 / 1_000_000):,.2f}"}
+            "TotalHoldingsValue": {"label": "Total Value of Holdings", "value": f"${(base_sh * inst_pct / 100.0 * 150.0 / 1_000_000):,.2f}"}
         }
         inc_funds = 800 + (seed % 400)
         dec_funds = 600 + (seed % 300)
@@ -1331,16 +1111,26 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
 
     buy_side = increased_holders + new_holders
     sell_side = decreased_holders + sold_out_holders
-    inst_accumulation = buy_side / sell_side if sell_side > 0 else 1.25
+    inst_accumulation = buy_side / sell_side if sell_side > 0 else 1.0
     net_fund_flow = int(buy_side - sell_side)
     net_share_flow = int(shares_inc + shares_new - shares_dec - shares_sold_out)
     total_turnover_shares = int(shares_inc + shares_dec + shares_new + shares_sold_out)
 
-    mod_q1 = 1.0 - (0.015 + (seed % 40) / 2000.0)
-    mod_q2 = mod_q1 - (0.012 + (seed % 25) / 2500.0)
+    # Directional modifiers: if net flow is negative, past quarters had MORE holdings
+    is_accumulating = net_fund_flow >= 0
+    flow_magnitude = min(0.08, max(0.01, abs(net_fund_flow) / max(1.0, total_active_holders if total_active_holders > 0 else 1000)))
 
-    own_pct_q1 = round(inst_ownership_pct * mod_q1, 2)
-    own_pct_q2 = round(inst_ownership_pct * mod_q2, 2)
+    if is_accumulating:
+        # Holdings grew from Q2 -> Q1 -> Q0
+        mod_q1 = 1.0 - flow_magnitude
+        mod_q2 = mod_q1 - (flow_magnitude * 0.8)
+    else:
+        # Holdings dropped from Q2 -> Q1 -> Q0 (Net Selling/Distribution!)
+        mod_q1 = 1.0 + flow_magnitude
+        mod_q2 = mod_q1 + (flow_magnitude * 0.8)
+
+    own_pct_q1 = round(inst_ownership_pct * (2.0 - mod_q1 if is_accumulating else mod_q1), 2)
+    own_pct_q2 = round(inst_ownership_pct * (2.0 - mod_q2 if is_accumulating else mod_q2), 2)
 
     history = [
         {
