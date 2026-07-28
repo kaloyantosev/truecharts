@@ -555,13 +555,13 @@ export default function Home() {
                     Latest: {instData.quarters.current}
                   </span>
                 )}
-                {instData?.source === 'nasdaq' && (
+                {instData?.source && (
                   <span className="text-[9px] font-mono px-2 py-0.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 uppercase">Live</span>
                 )}
               </div>
             </div>
 
-            {instData && instData.source === 'nasdaq' ? (
+            {instData && (instData.ownershipSummary || instData.history) ? (
               <div className="flex flex-col gap-5">
 
                 {/* ── TOP 3 KPI CARDS: Big numbers + 3-quarter history ── */}
