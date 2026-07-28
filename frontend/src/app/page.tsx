@@ -617,7 +617,7 @@ export default function Home() {
                     {/* Total Active 13F Funds */}
                     <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 flex flex-col gap-3">
                       <span className="text-[9px] text-neutral-500 font-semibold uppercase tracking-[0.18em]">Active 13F Funds</span>
-                      <span className="text-3xl font-mono font-black text-blue-400 leading-none">{instData.history[0].activeFunds.toLocaleString()}</span>
+                      <span className="text-3xl font-mono font-black text-blue-400 leading-none">{instData.history?.[0]?.activeFunds?.toLocaleString() ?? '—'}</span>
                       <div className="flex flex-col gap-1.5 border-t border-neutral-800 pt-2">
                         {instData.history.map((h, i) => (
                           <div key={i} className="flex items-center justify-between gap-1">
@@ -664,18 +664,18 @@ export default function Home() {
                         <span className={`text-2xl font-black font-mono leading-none ${instData.analytics.netShareFlow > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {instData.analytics.netShareFlow > 0 ? '+' : ''}{(Math.abs(instData.analytics.netShareFlow) / 1_000_000).toFixed(1)}M
                         </span>
-                        {instData.totalSharesOutstanding > 0 && (
+                        {(instData.totalSharesOutstanding ?? 0) > 0 && (
                           <span className="text-[9px] text-neutral-600 font-mono block mt-1">
-                            {((instData.analytics.netShareFlow / instData.totalSharesOutstanding) * 100).toFixed(3)}% of cap
+                            {((instData.analytics.netShareFlow / (instData.totalSharesOutstanding ?? 1)) * 100).toFixed(3)}% of cap
                           </span>
                         )}
                       </div>
                       <div>
                         <span className="text-[9px] text-neutral-500 uppercase font-mono tracking-wider block mb-1">Qtr Turnover</span>
                         <span className="text-2xl font-black text-amber-400 font-mono leading-none">{(instData.analytics.totalTurnoverShares / 1_000_000).toFixed(1)}M</span>
-                        {instData.totalSharesOutstanding > 0 && (
+                        {(instData.totalSharesOutstanding ?? 0) > 0 && (
                           <span className="text-[9px] text-neutral-600 font-mono block mt-1">
-                            {((instData.analytics.totalTurnoverShares / instData.totalSharesOutstanding) * 100).toFixed(2)}% rotated
+                            {((instData.analytics.totalTurnoverShares / (instData.totalSharesOutstanding ?? 1)) * 100).toFixed(2)}% rotated
                           </span>
                         )}
                       </div>
@@ -694,8 +694,8 @@ export default function Home() {
                         const isPos = pos.positions.includes('Increased') || pos.positions.includes('New');
                         const isNeg = pos.positions.includes('Decreased') || pos.positions.includes('Sold');
                         const shareCount = parseInt(pos.shares.replace(/,/g, '')) || 0;
-                        const capPct = instData.totalSharesOutstanding > 0
-                          ? ((shareCount / instData.totalSharesOutstanding) * 100).toFixed(3)
+                        const capPct = (instData.totalSharesOutstanding ?? 0) > 0
+                          ? ((shareCount / (instData.totalSharesOutstanding ?? 1)) * 100).toFixed(3)
                           : '—';
                         return (
                           <div key={i} className="flex items-center justify-between py-2.5">
@@ -719,8 +719,8 @@ export default function Home() {
                     <div className="flex flex-col divide-y divide-neutral-800/50">
                       {instData.history?.map((hist, i) => {
                         const isCurrent = i === 0;
-                        const capPct = instData.totalSharesOutstanding > 0
-                          ? ((hist.totalShares / instData.totalSharesOutstanding) * 100).toFixed(1)
+                        const capPct = (instData.totalSharesOutstanding ?? 0) > 0
+                          ? ((hist.totalShares / (instData.totalSharesOutstanding ?? 1)) * 100).toFixed(1)
                           : '—';
                         return (
                           <div key={i} className="py-2.5 flex flex-col gap-1">
