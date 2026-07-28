@@ -186,43 +186,7 @@ export default function Home() {
     }
   };
 
-  const renderStat = (
-    title: string,
-    current: number | string,
-    last: number | string,
-    prev: number | string,
-    pct: string | undefined,
-    labels: InstData["quarterLabels"],
-    currentSubDetail?: React.ReactNode,
-    lastSubDetail?: React.ReactNode
-  ) => {
-    return (
-      <div className="flex flex-col gap-3">
-        <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">{title}</h3>
-        <div className="grid grid-cols-3 w-full">
-          <div className="flex flex-col pr-6 border-r border-neutral-800 opacity-50">
-            <span className="text-2xl font-mono font-bold text-neutral-500 leading-none">{prev}</span>
-            <span className="text-[10px] text-neutral-600 font-mono uppercase mt-1">[{labels.prev}]</span>
-          </div>
-          <div className="flex flex-col px-6 border-r border-neutral-800 opacity-80">
-            <span className="text-2xl font-mono font-bold text-neutral-400 leading-none">{last}</span>
-            <span className="text-[10px] text-neutral-500 font-mono uppercase mt-1">[{labels.last}]</span>
-            {lastSubDetail && <div className="mt-0.5">{lastSubDetail}</div>}
-          </div>
-          <div className="flex flex-col pl-6">
-            <span className="text-2xl font-mono font-bold text-white leading-none">{current}</span>
-            <span className="text-[10px] text-neutral-400 font-mono uppercase mt-1">[{labels.current}]</span>
-            {currentSubDetail && <div className="mt-0.5">{currentSubDetail}</div>}
-            {pct && (
-              <span className={`text-xs font-mono font-bold flex items-center mt-1 ${parseFloat(pct) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                {parseFloat(pct) >= 0 ? "▲" : "▼"} {Math.abs(parseFloat(pct))}% Q/Q
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
+
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans flex flex-col">
