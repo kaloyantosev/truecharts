@@ -698,12 +698,14 @@ export default function Home() {
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Turnover Ratio</span>
-                      <span className="text-lg font-bold text-indigo-400 font-mono">{instData.analytics.turnoverRatio.toFixed(2)}x</span>
+                      <span className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Inst. Accumulation</span>
+                      <span className="text-lg font-bold text-indigo-400 font-mono">{instData.analytics.instAccumulation.toFixed(2)}x</span>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Conviction Ratio</span>
-                      <span className="text-lg font-bold text-amber-400 font-mono">{instData.analytics.convictionRatio.toFixed(2)}</span>
+                      <span className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Net Fund Flow</span>
+                      <span className={`text-lg font-bold font-mono ${instData.analytics.netFundFlow > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {instData.analytics.netFundFlow > 0 ? '+' : ''}{instData.analytics.netFundFlow}
+                      </span>
                     </div>
                     <div className="flex flex-col gap-1">
                       <span className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Net Share Flow</span>
@@ -712,8 +714,8 @@ export default function Home() {
                       </span>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Value Per Fund</span>
-                      <span className="text-lg font-bold text-neutral-300 font-mono">${(instData.analytics.valuePerFund / 1000000).toFixed(1)}M</span>
+                      <span className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Total Turnover</span>
+                      <span className="text-lg font-bold text-neutral-300 font-mono">{(instData.analytics.totalTurnoverShares / 1000000).toFixed(1)}M</span>
                     </div>
                   </div>
                 </div>
