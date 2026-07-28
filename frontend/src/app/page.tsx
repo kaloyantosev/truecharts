@@ -61,14 +61,14 @@ interface InstData {
     totalShares: number;
     activeFunds: number;
     ownershipPct: number;
+    hedgeFunds?: number;
+    top10?: number;
+    increased?: number;
+    reduced?: number;
+    closed?: number;
   }>;
   qoq?: {
-    totalValue_q0_vs_q1: number;
-    totalValue_q1_vs_q2: number;
-    activeFunds_q0_vs_q1: number;
-    activeFunds_q1_vs_q2: number;
-    ownership_q0_vs_q1: number;
-    ownership_q1_vs_q2: number;
+    [key: string]: number;
   };
   quarters?: {
     current: string;
@@ -564,77 +564,47 @@ export default function Home() {
             {instData && (instData.ownershipSummary || instData.history) ? (
               <div className="flex flex-col gap-5">
 
-                {/* ── TOP 3 KPI CARDS: Big numbers + 3-quarter history ── */}
-                {instData.ownershipSummary && instData.history && instData.history.length >= 3 && (
+                {/* ── TOP 3 KPI CARDS: WhaleWisdom Filters ── */}
+                {instData.history && instData.history.length >= 3 && (
                   <div className="grid grid-cols-3 gap-3">
-
-                    {/* Institutional Ownership % */}
-                    <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 flex flex-col gap-3">
-                      <span className="text-[9px] text-neutral-500 font-semibold uppercase tracking-[0.18em]">Inst. Ownership</span>
-                      <span className="text-3xl font-mono font-black text-purple-400 leading-none">{instData.ownershipSummary.SharesOutstandingPCT?.value || '—'}</span>
-                      <div className="flex flex-col gap-1.5 border-t border-neutral-800 pt-2">
-                        {instData.history.map((h, i) => (
-                          <div key={i} className="flex items-center justify-between gap-1">
-                            <span className={`text-[9px] font-mono font-bold ${i === 0 ? 'text-purple-400' : 'text-neutral-600'}`}>{h.quarter}</span>
-                            <span className={`text-[11px] font-mono font-bold ${i === 0 ? 'text-neutral-100' : 'text-neutral-500'}`}>{h.ownershipPct.toFixed(2)}%</span>
-                            {i > 0 && instData.qoq && (
-                              <span className={`text-[9px] font-mono font-bold ${
-                                (i === 1 ? instData.qoq.ownership_q0_vs_q1 : instData.qoq.ownership_q1_vs_q2) >= 0
-                                  ? 'text-emerald-400' : 'text-rose-400'
-                              }`}>
-                                {(i === 1 ? instData.qoq.ownership_q0_vs_q1 : instData.qoq.ownership_q1_vs_q2) >= 0 ? '+' : ''}
-                                {(i === 1 ? instData.qoq.ownership_q0_vs_q1 : instData.qoq.ownership_q1_vs_q2).toFixed(1)}%
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                    <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 flex flex-col gap-2">
+                      <span className="text-[9px] text-neutral-500 font-semibold uppercase tracking-[0.18em]">Active Funds</span>
+                      <span className="text-3xl font-mono font-black text-blue-400 leading-none">{instData.history[0].activeFunds.toLocaleString()}</span>
+                      {instData.qoq && (
+                        <span className="text-[10px] text-neutral-500 font-mono">
+                          Prior: {instData.history[1].activeFunds.toLocaleString()} (
+                          <span className={instData.qoq.activeFunds_q0_vs_q1 >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                            {instData.qoq.activeFunds_q0_vs_q1 >= 0 ? '+' : ''}{instData.qoq.activeFunds_q0_vs_q1.toFixed(1)}%
+                          </span>
+                          )
+                        </span>
+                      )}
                     </div>
-
-                    {/* Total Holdings Value */}
-                    <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 flex flex-col gap-3">
-                      <span className="text-[9px] text-neutral-500 font-semibold uppercase tracking-[0.18em]">Total Value (M)</span>
-                      <span className="text-3xl font-mono font-black text-emerald-400 leading-none">{instData.ownershipSummary.TotalHoldingsValue?.value || '—'}</span>
-                      <div className="flex flex-col gap-1.5 border-t border-neutral-800 pt-2">
-                        {instData.history.map((h, i) => (
-                          <div key={i} className="flex items-center justify-between gap-1">
-                            <span className={`text-[9px] font-mono font-bold ${i === 0 ? 'text-emerald-400' : 'text-neutral-600'}`}>{h.quarter}</span>
-                            <span className={`text-[11px] font-mono font-bold ${i === 0 ? 'text-neutral-100' : 'text-neutral-500'}`}>{'$'}{(h.totalValue / 1000).toFixed(1)}B</span>
-                            {i > 0 && instData.qoq && (
-                              <span className={`text-[9px] font-mono font-bold ${
-                                (i === 1 ? instData.qoq.totalValue_q0_vs_q1 : instData.qoq.totalValue_q1_vs_q2) >= 0
-                                  ? 'text-emerald-400' : 'text-rose-400'
-                              }`}>
-                                {(i === 1 ? instData.qoq.totalValue_q0_vs_q1 : instData.qoq.totalValue_q1_vs_q2) >= 0 ? '+' : ''}
-                                {(i === 1 ? instData.qoq.totalValue_q0_vs_q1 : instData.qoq.totalValue_q1_vs_q2).toFixed(1)}%
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                    <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 flex flex-col gap-2">
+                      <span className="text-[9px] text-neutral-500 font-semibold uppercase tracking-[0.18em]">Hedge Funds</span>
+                      <span className="text-3xl font-mono font-black text-purple-400 leading-none">{instData.history[0].hedgeFunds?.toLocaleString() ?? '—'}</span>
+                      {instData.qoq && (
+                        <span className="text-[10px] text-neutral-500 font-mono">
+                          Prior: {instData.history[1].hedgeFunds?.toLocaleString() ?? '—'} (
+                          <span className={instData.qoq.hedgeFunds_q0_vs_q1 >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                            {instData.qoq.hedgeFunds_q0_vs_q1 >= 0 ? '+' : ''}{instData.qoq.hedgeFunds_q0_vs_q1.toFixed(1)}%
+                          </span>
+                          )
+                        </span>
+                      )}
                     </div>
-
-                    {/* Total Active 13F Funds */}
-                    <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 flex flex-col gap-3">
-                      <span className="text-[9px] text-neutral-500 font-semibold uppercase tracking-[0.18em]">Active 13F Funds</span>
-                      <span className="text-3xl font-mono font-black text-blue-400 leading-none">{instData.history?.[0]?.activeFunds?.toLocaleString() ?? '—'}</span>
-                      <div className="flex flex-col gap-1.5 border-t border-neutral-800 pt-2">
-                        {instData.history.map((h, i) => (
-                          <div key={i} className="flex items-center justify-between gap-1">
-                            <span className={`text-[9px] font-mono font-bold ${i === 0 ? 'text-blue-400' : 'text-neutral-600'}`}>{h.quarter}</span>
-                            <span className={`text-[11px] font-mono font-bold ${i === 0 ? 'text-neutral-100' : 'text-neutral-500'}`}>{h.activeFunds.toLocaleString()}</span>
-                            {i > 0 && instData.qoq && (
-                              <span className={`text-[9px] font-mono font-bold ${
-                                (i === 1 ? instData.qoq.activeFunds_q0_vs_q1 : instData.qoq.activeFunds_q1_vs_q2) >= 0
-                                  ? 'text-blue-400' : 'text-rose-400'
-                              }`}>
-                                {(i === 1 ? instData.qoq.activeFunds_q0_vs_q1 : instData.qoq.activeFunds_q1_vs_q2) >= 0 ? '+' : ''}
-                                {(i === 1 ? instData.qoq.activeFunds_q0_vs_q1 : instData.qoq.activeFunds_q1_vs_q2).toFixed(1)}%
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                    <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 flex flex-col gap-2">
+                      <span className="text-[9px] text-neutral-500 font-semibold uppercase tracking-[0.18em]">In Top 10</span>
+                      <span className="text-3xl font-mono font-black text-emerald-400 leading-none">{instData.history[0].top10 ?? '—'}</span>
+                      {instData.qoq && (
+                        <span className="text-[10px] text-neutral-500 font-mono">
+                          Prior: {instData.history[1].top10 ?? '—'} (
+                          <span className={instData.qoq.top10_q0_vs_q1 >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                            {instData.qoq.top10_q0_vs_q1 >= 0 ? '+' : ''}{instData.qoq.top10_q0_vs_q1.toFixed(1)}%
+                          </span>
+                          )
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -713,49 +683,63 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* 3-Quarter Historical Comparison Matrix */}
+                  {/* WhaleWisdom-Style 3-Quarter Comparative Matrix */}
                   <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 flex flex-col gap-3">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-[9px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Historical Holdings · 3-Quarter Comparison</h3>
-                      <span className="text-[9px] font-mono text-purple-400 font-bold uppercase">All Quarters Analysed</span>
+                      <h3 className="text-[9px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Institutional Filings · 3-Quarter History</h3>
+                      <span className="text-[9px] font-mono text-purple-400 font-bold uppercase">WhaleWisdom Quality Filtered</span>
                     </div>
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="text-[9px] uppercase tracking-[0.15em] text-neutral-600 border-b border-neutral-800">
-                          <th className="pb-2 font-semibold">Quarter</th>
-                          <th className="pb-2 font-semibold text-right">Active Filers</th>
-                          <th className="pb-2 font-semibold text-right">Shares (M)</th>
-                          <th className="pb-2 font-semibold text-right">% Cap</th>
-                          <th className="pb-2 font-semibold text-right">Value ($B)</th>
-                          <th className="pb-2 font-semibold text-right">QoQ Chg</th>
+                          <th className="pb-2 font-semibold">13F Metric</th>
+                          <th className="pb-2 font-semibold text-right">{instData.quarters?.current}</th>
+                          <th className="pb-2 font-semibold text-right">QoQ Change</th>
+                          <th className="pb-2 font-semibold text-right">{instData.quarters?.q1}</th>
+                          <th className="pb-2 font-semibold text-right">QoQ Change</th>
+                          <th className="pb-2 font-semibold text-right">{instData.quarters?.q2}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {instData.history?.map((hist, i) => {
-                          const isCurrent = i === 0;
-                          const capPct = (instData.totalSharesOutstanding ?? 0) > 0
-                            ? ((hist.totalShares / (instData.totalSharesOutstanding ?? 1)) * 100).toFixed(1)
-                            : '—';
-                          const qoqVal = i === 0 ? instData.qoq?.totalValue_q0_vs_q1 : i === 1 ? instData.qoq?.totalValue_q1_vs_q2 : 0;
-                          const isPos = (qoqVal ?? 0) >= 0;
+                        {[
+                          { label: "Funds Holding", q0: instData.history?.[0]?.activeFunds, q1: instData.history?.[1]?.activeFunds, q2: instData.history?.[2]?.activeFunds, qoq1: instData.qoq?.activeFunds_q0_vs_q1, qoq2: instData.qoq?.activeFunds_q1_vs_q2, fmt: (v: number) => v.toLocaleString() },
+                          { label: "Hedge Funds Holding", q0: instData.history?.[0]?.hedgeFunds, q1: instData.history?.[1]?.hedgeFunds, q2: instData.history?.[2]?.hedgeFunds, qoq1: instData.qoq?.hedgeFunds_q0_vs_q1, qoq2: instData.qoq?.hedgeFunds_q1_vs_q2, fmt: (v: number) => v.toLocaleString() },
+                          { label: "In Top 10 Positions", q0: instData.history?.[0]?.top10, q1: instData.history?.[1]?.top10, q2: instData.history?.[2]?.top10, qoq1: instData.qoq?.top10_q0_vs_q1, qoq2: instData.qoq?.top10_q1_vs_q2, fmt: (v: number) => v.toLocaleString() },
+                          { label: "Increased Positions", q0: instData.history?.[0]?.increased, q1: instData.history?.[1]?.increased, q2: instData.history?.[2]?.increased, qoq1: instData.qoq?.increased_q0_vs_q1, qoq2: instData.qoq?.increased_q1_vs_q2, fmt: (v: number) => v.toLocaleString() },
+                          { label: "Reduced Positions", q0: instData.history?.[0]?.reduced, q1: instData.history?.[1]?.reduced, q2: instData.history?.[2]?.reduced, qoq1: instData.qoq?.reduced_q0_vs_q1, qoq2: instData.qoq?.reduced_q1_vs_q2, fmt: (v: number) => v.toLocaleString() },
+                          { label: "Closed Positions", q0: instData.history?.[0]?.closed, q1: instData.history?.[1]?.closed, q2: instData.history?.[2]?.closed, qoq1: instData.qoq?.closed_q0_vs_q1, qoq2: instData.qoq?.closed_q1_vs_q2, fmt: (v: number) => v.toLocaleString() },
+                          { label: "% Ownership (Filtered)", q0: instData.history?.[0]?.ownershipPct, q1: instData.history?.[1]?.ownershipPct, q2: instData.history?.[2]?.ownershipPct, qoq1: instData.qoq?.ownership_q0_vs_q1, qoq2: instData.qoq?.ownership_q1_vs_q2, fmt: (v: number) => `${v.toFixed(2)}%` },
+                          { label: "Total Shares Held", q0: instData.history?.[0]?.totalShares, q1: instData.history?.[1]?.totalShares, q2: instData.history?.[2]?.totalShares, qoq1: instData.qoq?.ownership_q0_vs_q1, qoq2: instData.qoq?.ownership_q1_vs_q2, fmt: (v: number) => `${(v / 1_000_000).toFixed(1)}M` },
+                          { label: "Holdings Value", q0: instData.history?.[0]?.totalValue, q1: instData.history?.[1]?.totalValue, q2: instData.history?.[2]?.totalValue, qoq1: instData.qoq?.totalValue_q0_vs_q1, qoq2: instData.qoq?.totalValue_q1_vs_q2, fmt: (v: number) => `$${(v / 1000).toFixed(2)}B` }
+                        ].map((row, idx) => {
+                          const hasQoq1 = row.qoq1 !== undefined;
+                          const hasQoq2 = row.qoq2 !== undefined;
+                          const isPos1 = (row.qoq1 ?? 0) >= 0;
+                          const isPos2 = (row.qoq2 ?? 0) >= 0;
                           return (
-                            <tr key={i} className={`border-b border-neutral-800/40 transition-colors ${isCurrent ? 'bg-purple-950/20' : ''}`}>
-                              <td className="py-2.5 font-mono text-[10px] font-bold text-neutral-200">
-                                {hist.quarter} {isCurrent && <span className="text-[8px] text-purple-400 ml-1 font-sans font-bold">(LATEST)</span>}
-                              </td>
-                              <td className="py-2.5 text-right font-mono text-[10px] font-bold text-blue-400">{hist.activeFunds.toLocaleString()}</td>
-                              <td className="py-2.5 text-right font-mono text-[10px] font-semibold text-neutral-300">{(hist.totalShares / 1_000_000).toFixed(1)}M</td>
-                              <td className="py-2.5 text-right font-mono text-[10px] font-bold text-purple-300">{capPct}%</td>
-                              <td className="py-2.5 text-right font-mono text-[11px] font-black text-emerald-400">{'$'}{(hist.totalValue / 1000).toFixed(2)}B</td>
+                            <tr key={idx} className="border-b border-neutral-800/40 hover:bg-neutral-900/10">
+                              <td className="py-2.5 text-xs font-semibold text-neutral-300">{row.label}</td>
+                              <td className="py-2.5 text-right font-mono text-xs font-black text-neutral-100">{row.q0 !== undefined ? row.fmt(row.q0) : '—'}</td>
                               <td className="py-2.5 text-right font-mono text-[10px] font-bold">
-                                {i < 2 && qoqVal !== undefined ? (
-                                  <span className={isPos ? 'text-emerald-400' : 'text-rose-400'}>
-                                    {isPos ? '+' : ''}{qoqVal.toFixed(1)}%
+                                {hasQoq1 ? (
+                                  <span className={isPos1 ? 'text-emerald-400' : 'text-rose-400'}>
+                                    {isPos1 ? '+' : ''}{row.qoq1?.toFixed(1)}%
                                   </span>
                                 ) : (
                                   <span className="text-neutral-600">—</span>
                                 )}
                               </td>
+                              <td className="py-2.5 text-right font-mono text-xs font-bold text-neutral-400">{row.q1 !== undefined ? row.fmt(row.q1) : '—'}</td>
+                              <td className="py-2.5 text-right font-mono text-[10px] font-bold">
+                                {hasQoq2 ? (
+                                  <span className={isPos2 ? 'text-emerald-400' : 'text-rose-400'}>
+                                    {isPos2 ? '+' : ''}{row.qoq2?.toFixed(1)}%
+                                  </span>
+                                ) : (
+                                  <span className="text-neutral-600">—</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 text-right font-mono text-xs text-neutral-500">{row.q2 !== undefined ? row.fmt(row.q2) : '—'}</td>
                             </tr>
                           );
                         })}
