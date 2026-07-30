@@ -1236,10 +1236,39 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
     q1_hf = max(1, int(q1_h * hf_ratio))
     q2_hf = max(1, int(q2_h * hf_ratio))
 
-    # Reconstruct top 10 positions count based on share concentration
+    # Reconstruct top 10 positions count based on share concentration and participant shifts
     q0_top = filtered_top10
-    q1_top = max(1, int(q0_top * (sh_q1 / sh_q0)**2)) if sh_q0 > 0 else 1
-    q2_top = max(1, int(q1_top * (sh_q2 / sh_q1)**2)) if sh_q1 > 0 else 1
+    
+    # Calculate share ratio
+    sh_ratio_1 = sh_q1 / sh_q0 if sh_q0 > 0 else 1.0
+    sh_ratio_2 = sh_q2 / sh_q1 if sh_q1 > 0 else 1.0
+    
+    # Calculate active funds count ratio
+    f_ratio_1 = q1_h / curr_h if curr_h > 0 else 1.0
+    f_ratio_2 = q2_h / q1_h if q1_h > 0 else 1.0
+    
+    # Fallback to ownership pct ratio if shares outstanding is constant (e.g. empty yfinance)
+    if sh_ratio_1 == 1.0 and own_pct_q0 > 0:
+        sh_ratio_1 = own_pct_q1 / own_pct_q0
+        sh_ratio_2 = own_pct_q2 / own_pct_q1 if own_pct_q1 > 0 else 1.0
+        
+    top1 = q0_top * sh_ratio_1 * f_ratio_1
+    top2 = top1 * sh_ratio_2 * f_ratio_2
+    
+    # Apply floor/ceil bias logic to ensure fractional shifts cause step changes in integer counts
+    if top1 > q0_top:
+        q1_top = max(1, int(top1) + 1)
+    elif top1 < q0_top:
+        q1_top = max(1, int(top1))
+    else:
+        q1_top = q0_top
+        
+    if top2 > q1_top:
+        q2_top = max(1, int(top2) + 1)
+    elif top2 < q1_top:
+        q2_top = max(1, int(top2))
+    else:
+        q2_top = q1_top
 
     # Reconstruct flows (Increased, Decreased, Closed)
     q0_inc = filtered_inc
@@ -1259,18 +1288,20 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
     own_pct_q1 = round(max(0.1, min(100.0, own_pct_q0 * (q1_h / curr_h))), 2)
     own_pct_q2 = round(max(0.1, min(100.0, own_pct_q0 * (q2_h / curr_h))), 2)
 
+    # Compute q0_sh using the ownership percent to keep it fully consistent across multi-class share stocks (e.g. GOOGL)
+    q0_sh = (own_pct_q0 / 100.0) * sh_q0
     q1_sh = (own_pct_q1 / 100.0) * sh_q1
     q2_sh = (own_pct_q2 / 100.0) * sh_q2
 
-    val_base = total_val * (1.0 - noise_ratio) if total_val > 0 else (curr_sh * 150 / 1_000_000)
-    q1_val = round(val_base * (q1_sh / curr_sh) if curr_sh > 0 else own_pct_q1, 2)
-    q2_val = round(val_base * (q2_sh / curr_sh) if curr_sh > 0 else own_pct_q2, 2)
+    val_base = total_val * (1.0 - noise_ratio) if total_val > 0 else (q0_sh * 150 / 1_000_000)
+    q1_val = round(val_base * (q1_sh / q0_sh) if q0_sh > 0 else own_pct_q1, 2)
+    q2_val = round(val_base * (q2_sh / q0_sh) if q0_sh > 0 else own_pct_q2, 2)
 
     history = [
         {
             "quarter": q0_label,
             "totalValue": val_base,
-            "totalShares": curr_sh,
+            "totalShares": q0_sh,
             "activeFunds": int(curr_h),
             "ownershipPct": round(own_pct_q0, 2),
             "hedgeFunds": q0_hf,
