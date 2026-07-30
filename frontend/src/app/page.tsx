@@ -771,7 +771,7 @@ export default function Home() {
                 <span className="text-neutral-500 text-sm">{loading ? 'Loading 13F data…' : 'No institutional data'}</span>
                 {!loading && (
                   <div className="text-[10px] font-mono text-neutral-600 border border-neutral-800 bg-neutral-950 px-3 py-2 rounded max-w-full flex flex-col gap-1 text-left">
-                    <div><span className="text-neutral-500">Query URL:</span> <span className="text-blue-400 font-bold">{API_URL}/api/institutional/{symbol}</span></div>
+                    <div><span className="text-neutral-500">Query URL:</span> <span className="text-blue-400 font-bold">{API_URL}/api/institutional/{ticker}</span></div>
                     {instError && <div><span className="text-neutral-500">Error:</span> <span className="text-rose-400">{instError}</span></div>}
                     <div className="text-[9px] text-neutral-600 mt-1 italic">To fix this, check that your NEXT_PUBLIC_API_URL environment variable in Vercel is set to your production backend domain.</div>
                   </div>
