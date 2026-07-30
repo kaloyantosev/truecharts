@@ -1200,8 +1200,8 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
     filtered_top10 = 12 if ticker == "SM" else max(1, int(top_10_count * (1.0 - noise_ratio)))
 
     # Fetch historical shares outstanding series from yfinance
-    import yfinance as yf
     try:
+        import yfinance as yf
         yf_ticker = yf.Ticker(ticker)
         shares_series = yf_ticker.get_shares_full(start="2025-01-01")
         if not shares_series.empty:
