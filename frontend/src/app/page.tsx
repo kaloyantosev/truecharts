@@ -175,10 +175,13 @@ export default function Home() {
   const [macroForecast, setMacroForecast] = useState<MacroForecastData | null>(null);
   const [error, setError] = useState("");
   const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [instError, setInstError] = useState<string | null>(null);
 
   const fetchAnalysis = async (symbol: string, tf: string = timeframe) => {
     setLoading(true);
     setError("");
+    setInstData(null);
+    setInstError(null);
     try {
       const res = await fetch(`${API_URL}/api/analyze/${symbol}?timeframe=${encodeURIComponent(tf)}`);
       if (!res.ok) throw new Error("Ticker not supported or API offline");
@@ -190,9 +193,14 @@ export default function Home() {
         if (instRes.ok) {
           const iData = await instRes.json();
           setInstData(iData);
+        } else {
+          setInstData(null);
+          setInstError(`Server returned status: ${instRes.status}`);
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error("Failed to fetch institutional data", e);
+        setInstData(null);
+        setInstError(e.message || "Failed to connect to backend");
       }
       
     } catch (err: unknown) {
@@ -759,8 +767,15 @@ export default function Home() {
 
               </div>
             ) : (
-              <div className="flex items-center justify-center h-40 border border-neutral-800 border-dashed rounded-lg">
-                <span className="text-neutral-500 text-sm animate-pulse">{loading ? 'Loading 13F data…' : 'No institutional data'}</span>
+              <div className="flex flex-col items-center justify-center h-40 border border-neutral-800 border-dashed rounded-lg p-5 text-center gap-2">
+                <span className="text-neutral-500 text-sm">{loading ? 'Loading 13F data…' : 'No institutional data'}</span>
+                {!loading && (
+                  <div className="text-[10px] font-mono text-neutral-600 border border-neutral-800 bg-neutral-950 px-3 py-2 rounded max-w-full flex flex-col gap-1 text-left">
+                    <div><span className="text-neutral-500">Query URL:</span> <span className="text-blue-400 font-bold">{API_URL}/api/institutional/{symbol}</span></div>
+                    {instError && <div><span className="text-neutral-500">Error:</span> <span className="text-rose-400">{instError}</span></div>}
+                    <div className="text-[9px] text-neutral-600 mt-1 italic">To fix this, check that your NEXT_PUBLIC_API_URL environment variable in Vercel is set to your production backend domain.</div>
+                  </div>
+                )}
               </div>
             )}
           </div>
