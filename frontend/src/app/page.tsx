@@ -573,8 +573,8 @@ export default function Home() {
                       {instData.qoq && (
                         <span className="text-[10px] text-neutral-500 font-mono">
                           Prior: {instData.history[1].activeFunds.toLocaleString()} (
-                          <span className={instData.qoq.activeFunds_q0_vs_q1 >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                            {instData.qoq.activeFunds_q0_vs_q1 >= 0 ? '+' : ''}{instData.qoq.activeFunds_q0_vs_q1.toFixed(1)}%
+                          <span className={(instData.qoq.activeFunds_q0_vs_q1 ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                            {(instData.qoq.activeFunds_q0_vs_q1 ?? 0) >= 0 ? '+' : ''}{instData.qoq.activeFunds_q0_vs_q1?.toFixed(1) ?? '—'}%
                           </span>
                           )
                         </span>
@@ -586,8 +586,8 @@ export default function Home() {
                       {instData.qoq && (
                         <span className="text-[10px] text-neutral-500 font-mono">
                           Prior: {instData.history[1].hedgeFunds?.toLocaleString() ?? '—'} (
-                          <span className={instData.qoq.hedgeFunds_q0_vs_q1 >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                            {instData.qoq.hedgeFunds_q0_vs_q1 >= 0 ? '+' : ''}{instData.qoq.hedgeFunds_q0_vs_q1.toFixed(1)}%
+                          <span className={(instData.qoq.hedgeFunds_q0_vs_q1 ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                            {(instData.qoq.hedgeFunds_q0_vs_q1 ?? 0) >= 0 ? '+' : ''}{instData.qoq.hedgeFunds_q0_vs_q1?.toFixed(1) ?? '—'}%
                           </span>
                           )
                         </span>
@@ -599,8 +599,8 @@ export default function Home() {
                       {instData.qoq && (
                         <span className="text-[10px] text-neutral-500 font-mono">
                           Prior: {instData.history[1].top10 ?? '—'} (
-                          <span className={instData.qoq.top10_q0_vs_q1 >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                            {instData.qoq.top10_q0_vs_q1 >= 0 ? '+' : ''}{instData.qoq.top10_q0_vs_q1.toFixed(1)}%
+                          <span className={(instData.qoq.top10_q0_vs_q1 ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                            {(instData.qoq.top10_q0_vs_q1 ?? 0) >= 0 ? '+' : ''}{instData.qoq.top10_q0_vs_q1?.toFixed(1) ?? '—'}%
                           </span>
                           )
                         </span>
