@@ -195,7 +195,12 @@ export default function Home() {
           setInstData(iData);
         } else {
           setInstData(null);
-          setInstError(`Server returned status: ${instRes.status}`);
+          try {
+            const errData = await instRes.json();
+            setInstError(errData.traceback || errData.error || `Server returned status: ${instRes.status}`);
+          } catch {
+            setInstError(`Server returned status: ${instRes.status}`);
+          }
         }
       } catch (e: any) {
         console.error("Failed to fetch institutional data", e);

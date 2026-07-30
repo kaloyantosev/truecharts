@@ -1044,7 +1044,7 @@ def get_macro_sectors() -> Dict[str, Any]:
 
 
 @router.get("/institutional/{ticker}")
-def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
+def _get_institutional_positioning_impl(ticker: str):
     ticker = ticker.upper()
     import time
     import hashlib
@@ -1379,6 +1379,23 @@ def get_institutional_positioning(ticker: str) -> Dict[str, Any]:
     }
     _INST_CACHE[ticker] = (now, out)
     return out
+
+@router.get("/institutional/{ticker}")
+def get_institutional_positioning(ticker: str):
+    try:
+        return _get_institutional_positioning_impl(ticker)
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"CRITICAL ERROR in get_institutional_positioning for {ticker}: {error_details}")
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": str(e),
+                "traceback": error_details
+            }
+        )
 
 
 @router.get("/macro/forecast")
