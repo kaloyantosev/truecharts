@@ -1380,10 +1380,23 @@ def _get_institutional_positioning_impl(ticker: str):
     _INST_CACHE[ticker] = (now, out)
     return out
 
+def clean_json_data(val):
+    import math
+    if isinstance(val, dict):
+        return {k: clean_json_data(v) for k, v in val.items()}
+    elif isinstance(val, list):
+        return [clean_json_data(v) for v in val]
+    elif isinstance(val, float):
+        if math.isnan(val) or math.isinf(val):
+            return 0.0
+        return val
+    return val
+
 @router.get("/institutional/{ticker}")
 def get_institutional_positioning(ticker: str):
     try:
-        return _get_institutional_positioning_impl(ticker)
+        raw_out = _get_institutional_positioning_impl(ticker)
+        return clean_json_data(raw_out)
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
