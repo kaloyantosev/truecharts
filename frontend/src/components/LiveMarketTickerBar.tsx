@@ -11,16 +11,19 @@ interface TickerAsset {
 }
 
 const INITIAL_ASSETS: TickerAsset[] = [
-  { symbol: "SPY", name: "S&P 500", price: 582.40, changePct: 0.45 },
-  { symbol: "QQQ", name: "Nasdaq 100", price: 504.15, changePct: 0.82 },
-  { symbol: "IWM", name: "Russell 2000", price: 218.90, changePct: -0.15 },
-  { symbol: "DXY", name: "US Dollar Index", price: 101.42, changePct: -0.22 },
-  { symbol: "VIX", name: "CBOE Volatility", price: 14.82, changePct: -2.95 },
-  { symbol: "TNX", name: "10Y Treasury Yield", price: 4.08, changePct: 0.62 },
-  { symbol: "GOLD", name: "Spot Gold ($/oz)", price: 2684.50, changePct: 1.14 },
-  { symbol: "CL1!", name: "WTI Crude Oil", price: 71.85, changePct: -1.45 },
-  { symbol: "BTC/USD", name: "Bitcoin", price: 67840.00, changePct: 3.25 },
-  { symbol: "EUR/USD", name: "Euro FX", price: 1.0864, changePct: 0.18 },
+  { symbol: "SPY", name: "S&P 500", price: 761.22, changePct: -0.42 },
+  { symbol: "QQQ", name: "Nasdaq 100", price: 709.84, changePct: -0.71 },
+  { symbol: "IWM", name: "Russell 2000", price: 288.23, changePct: -0.23 },
+  { symbol: "NVDA", name: "NVIDIA Corp", price: 211.71, changePct: -3.00 },
+  { symbol: "AAPL", name: "Apple Inc", price: 334.23, changePct: 0.51 },
+  { symbol: "MSFT", name: "Microsoft Corp", price: 505.33, changePct: 2.11 },
+  { symbol: "DXY", name: "US Dollar Index", price: 99.56, changePct: 0.24 },
+  { symbol: "VIX", name: "CBOE Volatility", price: 17.20, changePct: 8.58 },
+  { symbol: "TNX", name: "10Y Treasury Yield", price: 4.97, changePct: 0.00 },
+  { symbol: "GOLD", name: "Spot Gold ($/oz)", price: 4325.30, changePct: -1.04 },
+  { symbol: "CL1!", name: "WTI Crude Oil", price: 103.79, changePct: 0.52 },
+  { symbol: "BTC/USD", name: "Bitcoin", price: 78422.50, changePct: 2.11 },
+  { symbol: "EUR/USD", name: "Euro FX", price: 1.1620, changePct: 0.00 },
 ];
 
 export default function LiveMarketTickerBar({

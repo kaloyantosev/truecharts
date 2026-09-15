@@ -224,9 +224,36 @@ const BUBBLE_STOCKS = [
   { ticker: "NEE", sizeB: 28.4, qoqChg: -11.5, perf3M: -18.9, color: "#ff3355" },
 ];
 
+function getLatestFilingQuarter(): string {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+  const year = now.getFullYear();
+  let q = 4;
+  let y = year - 1;
+  if (month > 11 || (month === 11 && day >= 15)) {
+    q = 3;
+    y = year;
+  } else if (month > 8 || (month === 8 && day >= 15)) {
+    q = 2;
+    y = year;
+  } else if (month > 5 || (month === 5 && day >= 15)) {
+    q = 1;
+    y = year;
+  } else if (month > 2 || (month === 2 && day >= 15)) {
+    q = 4;
+    y = year - 1;
+  } else {
+    q = 3;
+    y = year - 1;
+  }
+  return `Q${q} ${y}`;
+}
+
 export default function InstitutionalSectorFlow({ onSelectTicker }: { onSelectTicker: (t: string) => void }) {
   const [expandedSector, setExpandedSector] = useState<string | null>("XLK");
   const [hoveredBubble, setHoveredBubble] = useState<any | null>(null);
+  const latestQuarter = getLatestFilingQuarter();
 
   return (
     <div className="bg-[#0b0b13] border border-[#1e1e2f] rounded-lg p-5 flex flex-col gap-6">
@@ -239,15 +266,15 @@ export default function InstitutionalSectorFlow({ onSelectTicker }: { onSelectTi
               13F Institutional Flow & Sector Rotation
             </h2>
           </div>
-          <p className="text-[11px] font-mono text-neutral-400 mt-0.5">
+          <p className="text-[11px] text-neutral-400 mt-0.5">
             Quarter-over-Quarter SEC 13F Filing Analysis · Institutional Accumulation vs Distribution
           </p>
         </div>
-        <div className="flex items-center gap-2 font-mono text-[10px]">
-          <span className="bg-[#12121e] border border-[#232338] text-neutral-300 px-2.5 py-1 rounded">
-            Latest Filing Quarter: Q2 2024
+        <div className="flex items-center gap-2 text-[10px]">
+          <span className="bg-[#12121e] border border-[#232338] text-neutral-200 px-2.5 py-1 rounded font-mono font-medium">
+            Latest Filing Quarter: {latestQuarter}
           </span>
-          <span className="bg-[#00ff88]/10 border border-[#00ff88]/30 text-[#00ff88] px-2.5 py-1 rounded font-bold">
+          <span className="bg-[#00ff88]/10 border border-[#00ff88]/30 text-[#00ff88] px-2.5 py-1 rounded font-bold tracking-wider">
             SEC 13F VERIFIED
           </span>
         </div>
@@ -286,7 +313,6 @@ export default function InstitutionalSectorFlow({ onSelectTicker }: { onSelectTi
                 key={sec.code}
                 onClick={() => {
                   setExpandedSector(expandedSector === sec.code ? null : sec.code);
-                  onSelectTicker(sec.code);
                 }}
                 style={{ backgroundColor: bgStyle }}
                 className={`border rounded-md p-3 cursor-pointer transition-all duration-200 flex flex-col justify-between min-h-[90px] relative overflow-hidden group ${borderStyle}`}
@@ -352,8 +378,8 @@ export default function InstitutionalSectorFlow({ onSelectTicker }: { onSelectTi
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Top Net Buying Stocks */}
                     <div className="bg-[#0c0c16] border border-emerald-900/30 rounded p-3 flex flex-col gap-2">
-                      <span className="text-[10px] font-mono font-bold text-[#00ff88] uppercase tracking-wider">
-                        ▲ Top Net 13F Buying Positions
+                      <span className="text-[10px] font-bold text-[#00ff88] uppercase tracking-wider">
+                        Top Net 13F Buying Positions
                       </span>
                       <div className="flex flex-col divide-y divide-[#181827]">
                         {sec.topBuyStocks.map((stk) => (
@@ -373,8 +399,8 @@ export default function InstitutionalSectorFlow({ onSelectTicker }: { onSelectTi
 
                     {/* Top Net Selling Stocks */}
                     <div className="bg-[#0c0c16] border border-rose-900/30 rounded p-3 flex flex-col gap-2">
-                      <span className="text-[10px] font-mono font-bold text-rose-400 uppercase tracking-wider">
-                        ▼ Top Net 13F Distribution Positions
+                      <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">
+                        Top Net 13F Distribution Positions
                       </span>
                       <div className="flex flex-col divide-y divide-[#181827]">
                         {sec.topSellStocks.map((stk) => (
@@ -427,28 +453,33 @@ export default function InstitutionalSectorFlow({ onSelectTicker }: { onSelectTi
                 // Map Perf3M (-30 to +40) to SVG Y (90% to 10%)
                 const cy = 50 - (stk.perf3M / 45) * 40;
                 // Radius based on 13F size $B (min 6px, max 24px)
-                const r = Math.max(6, Math.min(24, Math.sqrt(stk.sizeB) * 1.1));
+                const baseR = Math.max(6, Math.min(24, Math.sqrt(stk.sizeB) * 1.1));
+                const isHovered = hoveredBubble?.ticker === stk.ticker;
 
                 return (
-                  <g key={stk.ticker} className="cursor-pointer group" onClick={() => onSelectTicker(stk.ticker)}>
+                  <g
+                    key={stk.ticker}
+                    className="cursor-pointer"
+                    onClick={() => onSelectTicker(stk.ticker)}
+                    onMouseEnter={() => setHoveredBubble(stk)}
+                    onMouseLeave={() => setHoveredBubble(null)}
+                  >
                     <circle
                       cx={`${cx}%`}
                       cy={`${cy}%`}
-                      r={r}
+                      r={isHovered ? baseR + 3.5 : baseR}
                       fill={stk.color}
-                      fillOpacity="0.35"
+                      fillOpacity={isHovered ? 0.85 : 0.4}
                       stroke={stk.color}
-                      strokeWidth="1.5"
-                      className="transition-all hover:fill-opacity-80 hover:scale-125"
-                      onMouseEnter={() => setHoveredBubble(stk)}
-                      onMouseLeave={() => setHoveredBubble(null)}
+                      strokeWidth={isHovered ? 2.5 : 1.5}
+                      style={{ transition: "r 0.15s ease-out, fill-opacity 0.15s ease-out, stroke-width 0.15s ease-out" }}
                     />
                     <text
                       x={`${cx}%`}
                       y={`${cy}%`}
                       dy="4"
                       textAnchor="middle"
-                      style={{ fontSize: '9px', fontFamily: 'monospace', fontWeight: 'bold', fill: 'white', pointerEvents: 'none', userSelect: 'none' }}
+                      style={{ fontSize: "9px", fontFamily: "monospace", fontWeight: "bold", fill: "white", pointerEvents: "none", userSelect: "none" }}
                     >
                       {stk.ticker}
                     </text>
@@ -459,7 +490,7 @@ export default function InstitutionalSectorFlow({ onSelectTicker }: { onSelectTi
 
             {/* Hover Tooltip */}
             {hoveredBubble && (
-              <div className="absolute top-2 right-2 bg-[#0d0d16] border border-[#00e5ff]/50 px-3 py-2 rounded text-[10px] font-mono shadow-xl z-10">
+              <div className="absolute top-2 right-2 bg-[#0d0d16] border border-[#00e5ff]/50 px-3 py-2 rounded text-[10px] font-mono shadow-xl z-10 pointer-events-none">
                 <div className="font-bold text-[#00e5ff]">{hoveredBubble.ticker}</div>
                 <div className="text-neutral-300">13F Holdings: ${hoveredBubble.sizeB}B</div>
                 <div className="text-neutral-300">QoQ 13F Change: {hoveredBubble.qoqChg}%</div>
@@ -473,8 +504,8 @@ export default function InstitutionalSectorFlow({ onSelectTicker }: { onSelectTi
         <div className="xl:col-span-7 bg-[#090910] border border-[#1b1b2d] rounded-lg p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between border-b border-[#1a1a2b] pb-2.5">
             <div>
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-                <span className="text-[#00ff88]">★</span> Hedge Fund Conviction Table (Top 20 Positions)
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-sans flex items-center gap-2">
+                Hedge Fund Conviction Table (Top 20 Positions)
               </h3>
               <p className="text-[10px] font-mono text-neutral-400">
                 Ranked by number of 13F institutional fund holders this quarter

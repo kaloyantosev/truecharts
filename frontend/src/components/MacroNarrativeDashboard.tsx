@@ -3,12 +3,12 @@
 import React from "react";
 
 const POLICY_EVENTS = [
-  { date: "Oct 2023", fed: "5.25%-5.50%", spx: 4200, label: "Fed Pause", type: "neutral" },
-  { date: "Dec 2023", fed: "5.25%-5.50%", spx: 4700, label: "Dovish Pivot Hint", type: "bullish" },
-  { date: "Mar 2024", fed: "5.25%-5.50%", spx: 5200, label: "BOJ Ends Neg Rates", type: "neutral" },
-  { date: "Jun 2024", fed: "5.25%-5.50%", spx: 5450, label: "ECB First 25bps Cut", type: "bullish" },
   { date: "Sep 2024", fed: "4.75%-5.00%", spx: 5700, label: "Fed 50bps Jumbo Cut", type: "bullish" },
-  { date: "Jan 2025", fed: "4.25%-4.50%", spx: 6050, label: "Global Synchronized Cuts", type: "bullish" },
+  { date: "Dec 2024", fed: "4.50%-4.75%", spx: 6050, label: "Year-End Easing Step", type: "bullish" },
+  { date: "May 2025", fed: "4.25%-4.50%", spx: 6480, label: "Coordinated Global Pivot", type: "bullish" },
+  { date: "Nov 2025", fed: "4.00%-4.25%", spx: 6920, label: "Liquidity Re-Injection", type: "bullish" },
+  { date: "Apr 2026", fed: "3.75%-4.00%", spx: 7350, label: "Neutral Rate Target Approach", type: "neutral" },
+  { date: "Aug 2026", fed: "3.75%-4.00%", spx: 7610, label: "Current Policy Regime", type: "bullish" },
 ];
 
 const COT_CONTRACTS = [
@@ -30,12 +30,12 @@ export default function MacroNarrativeDashboard() {
               Macro Narrative & Liquidity Dashboard
             </h2>
           </div>
-          <p className="text-[11px] font-mono text-neutral-400 mt-0.5">
+          <p className="text-[11px] text-neutral-400 mt-0.5">
             Quantamental Edge · Central Bank Rates, Net USD Liquidity & Institutional COT Positioning
           </p>
         </div>
-        <div className="flex items-center gap-2 font-mono text-[10px]">
-          <span className="bg-[#00ff88]/10 border border-[#00ff88]/30 text-[#00ff88] px-2.5 py-1 rounded font-bold">
+        <div className="flex items-center gap-2 text-[10px]">
+          <span className="bg-[#00ff88]/10 border border-[#00ff88]/30 text-[#00ff88] px-2.5 py-1 rounded font-bold tracking-wider">
             EXPANDING LIQUIDITY REGIME
           </span>
         </div>
@@ -47,7 +47,7 @@ export default function MacroNarrativeDashboard() {
         {/* PANEL 1 (LEFT): Central Bank Policy Tracker */}
         <div className="bg-[#08080f] border border-[#1a1a2a] rounded-lg p-4 flex flex-col gap-4">
           <div className="flex items-center justify-between border-b border-[#161625] pb-2">
-            <h3 className="text-xs font-bold text-neutral-200 uppercase tracking-wider font-mono flex items-center gap-1.5">
+            <h3 className="text-xs font-bold text-neutral-200 uppercase tracking-wider flex items-center gap-1.5">
               <span>Central Bank Policy Tracker</span>
             </h3>
             <span className="text-[9px] font-mono text-[#00e5ff]">12M Timeline</span>
@@ -57,15 +57,15 @@ export default function MacroNarrativeDashboard() {
           <div className="grid grid-cols-3 gap-2 font-mono">
             <div className="bg-[#0d0d16] border border-[#1f1f32] p-2 rounded text-center">
               <span className="text-[9px] text-neutral-500 block uppercase">US Fed</span>
-              <span className="text-xs font-bold text-[#00ff88]">4.75 - 5.00%</span>
+              <span className="text-xs font-bold text-[#00ff88]">3.75 - 4.00%</span>
             </div>
             <div className="bg-[#0d0d16] border border-[#1f1f32] p-2 rounded text-center">
               <span className="text-[9px] text-neutral-500 block uppercase">ECB</span>
-              <span className="text-xs font-bold text-[#00e5ff]">3.25%</span>
+              <span className="text-xs font-bold text-[#00e5ff]">2.75%</span>
             </div>
             <div className="bg-[#0d0d16] border border-[#1f1f32] p-2 rounded text-center">
               <span className="text-[9px] text-neutral-500 block uppercase">BOJ</span>
-              <span className="text-xs font-bold text-amber-400">0.25%</span>
+              <span className="text-xs font-bold text-amber-400">0.50%</span>
             </div>
           </div>
 
@@ -73,7 +73,7 @@ export default function MacroNarrativeDashboard() {
           <div className="bg-[#050508] border border-[#161624] rounded p-3 relative flex flex-col gap-3">
             <div className="flex items-center justify-between text-[9px] font-mono text-neutral-400">
               <span>S&P 500 Index vs Rate Policy</span>
-              <span className="text-[#00ff88]">+44% 12M Rally</span>
+              <span className="text-[#00ff88]">+33.5% 12M Expansion</span>
             </div>
 
             <svg className="w-full h-28 text-[#00ff88]" viewBox="0 0 300 90" fill="none">
@@ -89,11 +89,11 @@ export default function MacroNarrativeDashboard() {
                 fill="none"
               />
               
-              {/* Event Circles */}
+              {/* Event Circles - Clean stable markers, no jumping CSS ping transform */}
               <circle cx="30" cy="73" r="3" fill="#00e5ff" />
               <circle cx="90" cy="55" r="3" fill="#00ff88" />
               <circle cx="160" cy="40" r="3" fill="#00ff88" />
-              <circle cx="230" cy="25" r="4" fill="#00ff88" className="animate-ping" />
+              <circle cx="230" cy="25" r="5" fill="#00ff88" fillOpacity="0.25" />
               <circle cx="230" cy="25" r="3" fill="#00ff88" />
             </svg>
 

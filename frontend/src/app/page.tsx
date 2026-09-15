@@ -241,7 +241,6 @@ export default function Home() {
     if (target) {
       setTicker(target);
       fetchAnalysis(target, timeframe);
-      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 

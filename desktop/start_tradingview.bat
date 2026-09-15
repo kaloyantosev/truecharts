@@ -1,0 +1,3 @@
+@echo off
+echo Locating and Starting TradingView Desktop with Remote Debugging Port 9222...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$pkg = (Get-AppxPackage *TradingView*).InstallLocation; if ($pkg -and (Test-Path "$pkg\TradingView.exe")) { start "" "$pkg\TradingView.exe" --remote-debugging-port=9222 --remote-allow-origins=* } else { start tradingview: --remote-debugging-port=9222 --remote-allow-origins=* }"

@@ -16,15 +16,14 @@ interface WatchlistItem {
 }
 
 const DEFAULT_WATCHLIST_DATA: WatchlistItem[] = [
-  { ticker: "SPY", name: "S&P 500 ETF", price: 582.40, change1D: 0.45, volVs20D: "+118%", volSurge: false, netDelta: "+58% Buy Delta", isDeltaBullish: true, oiNearestStrike: "$580.00 Call Gamma Magnet", trend13F: "Accumulating" },
-  { ticker: "QQQ", name: "Invesco QQQ Trust", price: 504.15, change1D: 0.82, volVs20D: "+142%", volSurge: true, netDelta: "+64% Buy Delta", isDeltaBullish: true, oiNearestStrike: "$500.00 Call Gamma Magnet", trend13F: "Accumulating" },
-  { ticker: "NVDA", name: "NVIDIA Corp", price: 138.25, change1D: 2.40, volVs20D: "+185%", volSurge: true, netDelta: "+72% Heavy Call Flow", isDeltaBullish: true, oiNearestStrike: "$140.00 Major Call Strike", trend13F: "Accumulating" },
-  { ticker: "AAPL", name: "Apple Inc.", price: 232.10, change1D: 0.35, volVs20D: "+95%", volSurge: false, netDelta: "+51% Neutral Delta", isDeltaBullish: true, oiNearestStrike: "$230.00 Put Wall Magnet", trend13F: "Accumulating" },
-  { ticker: "MSFT", name: "Microsoft Corp", price: 448.60, change1D: 1.10, volVs20D: "+124%", volSurge: false, netDelta: "+61% Buy Delta", isDeltaBullish: true, oiNearestStrike: "$450.00 Call Resistance", trend13F: "Accumulating" },
-  { ticker: "META", name: "Meta Platforms", price: 524.30, change1D: 1.85, volVs20D: "+160%", volSurge: true, netDelta: "+68% Buy Delta", isDeltaBullish: true, oiNearestStrike: "$520.00 Gamma Anchor", trend13F: "Accumulating" },
-  { ticker: "TSLA", name: "Tesla Inc.", price: 218.40, change1D: -1.20, volVs20D: "+138%", volSurge: false, netDelta: "-58% Put Heavy", isDeltaBullish: false, oiNearestStrike: "$210.00 Put Support Strike", trend13F: "Distributing" },
-  { ticker: "SMCI", name: "Super Micro Computer", price: 42.80, change1D: 4.15, volVs20D: "+210%", volSurge: true, netDelta: "+79% Speculative Calls", isDeltaBullish: true, oiNearestStrike: "$45.00 Call Pin Magnet", trend13F: "Accumulating" },
-  { ticker: "IWM", name: "Russell 2000 ETF", price: 218.90, change1D: -0.15, volVs20D: "+88%", volSurge: false, netDelta: "-48% Neutral Delta", isDeltaBullish: false, oiNearestStrike: "$220.00 Resistance Wall", trend13F: "Neutral" },
+  { ticker: "SPY", name: "S&P 500 ETF", price: 761.22, change1D: -0.42, volVs20D: "+118%", volSurge: false, netDelta: "+58% Buy Delta", isDeltaBullish: true, oiNearestStrike: "$760.00 Call Gamma Magnet", trend13F: "Accumulating" },
+  { ticker: "QQQ", name: "Invesco QQQ Trust", price: 709.84, change1D: -0.71, volVs20D: "+142%", volSurge: true, netDelta: "+64% Buy Delta", isDeltaBullish: true, oiNearestStrike: "$710.00 Call Gamma Magnet", trend13F: "Accumulating" },
+  { ticker: "NVDA", name: "NVIDIA Corp", price: 211.71, change1D: -3.00, volVs20D: "+185%", volSurge: true, netDelta: "+72% Heavy Call Flow", isDeltaBullish: true, oiNearestStrike: "$210.00 Major Call Strike", trend13F: "Accumulating" },
+  { ticker: "AAPL", name: "Apple Inc.", price: 334.23, change1D: 0.51, volVs20D: "+95%", volSurge: false, netDelta: "+51% Neutral Delta", isDeltaBullish: true, oiNearestStrike: "$335.00 Call Wall Magnet", trend13F: "Accumulating" },
+  { ticker: "MSFT", name: "Microsoft Corp", price: 505.33, change1D: 2.11, volVs20D: "+124%", volSurge: false, netDelta: "+61% Buy Delta", isDeltaBullish: true, oiNearestStrike: "$500.00 Call Support", trend13F: "Accumulating" },
+  { ticker: "META", name: "Meta Platforms", price: 659.64, change1D: 1.85, volVs20D: "+160%", volSurge: true, netDelta: "+68% Buy Delta", isDeltaBullish: true, oiNearestStrike: "$660.00 Gamma Anchor", trend13F: "Accumulating" },
+  { ticker: "TSLA", name: "Tesla Inc.", price: 363.36, change1D: -0.52, volVs20D: "+138%", volSurge: false, netDelta: "-58% Put Heavy", isDeltaBullish: false, oiNearestStrike: "$360.00 Put Support Strike", trend13F: "Distributing" },
+  { ticker: "IWM", name: "Russell 2000 ETF", price: 288.23, change1D: -0.23, volVs20D: "+88%", volSurge: false, netDelta: "-48% Neutral Delta", isDeltaBullish: false, oiNearestStrike: "$290.00 Resistance Wall", trend13F: "Neutral" },
 ];
 
 export default function MultiAssetWatchlist({
@@ -180,8 +179,8 @@ export default function MultiAssetWatchlist({
                     <div className="flex items-center justify-end gap-1">
                       <span className="font-bold text-neutral-200">{item.volVs20D}</span>
                       {item.volSurge && (
-                        <span className="text-[#00e5ff] text-[10px]" title="Volume Surge Active">
-                          ⚡
+                        <span className="text-[9px] font-bold text-[#00e5ff] bg-[#00e5ff]/10 border border-[#00e5ff]/30 px-1 py-0.5 rounded uppercase tracking-wider" title="Volume Surge Active">
+                          SURGE
                         </span>
                       )}
                     </div>
