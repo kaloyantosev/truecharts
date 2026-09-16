@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.models import OptionMetricsRecord, TechnicalLevelRecord
-from app.core.options import calculate_gex_profile, calculate_max_pain
+from app.core.options import calculate_gex_profile, calculate_max_pain, calculate_gamma_flip, calculate_expected_move
 from app.core.sr_zones import calculate_sr_levels
 from app.core.backtest import run_historical_backtest
 
@@ -404,7 +404,7 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
     if not chain:
         return {"supports": [], "resistances": []}
         
-    # Group puts and calls by strike & dte to unify them
+    # Group puts and calls by strike & dte to unify them while preserving individual wing IV (Natenberg Volatility Skew)
     grouped = {}
     for c in chain:
         strike = float(c["strike"])
@@ -416,31 +416,36 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
                 "dte": dte,
                 "callVol": 0.0,
                 "putVol": 0.0,
-                "iv_sum": 0.0,
-                "iv_count": 0
+                "callIv": 0.0,
+                "putIv": 0.0,
+                "hasCall": False,
+                "hasPut": False
             }
         g = grouped[key]
         if c["type"].lower() == "call":
             g["callVol"] = float(c["open_interest"])
+            g["callIv"] = float(c["iv"]) * 100.0
+            g["hasCall"] = True
         else:
             g["putVol"] = float(c["open_interest"])
+            g["putIv"] = float(c["iv"]) * 100.0
+            g["hasPut"] = True
             
-        g["iv_sum"] += float(c["iv"]) * 100.0  # Convert to percentage
-        g["iv_count"] += 1
-        
     unified_rows = []
     for g in grouped.values():
-        avg_iv = g["iv_sum"] / g["iv_count"] if g["iv_count"] > 0 else 30.0
+        c_iv = g["callIv"] if g["hasCall"] else (g["putIv"] if g["hasPut"] else 28.0)
+        p_iv = g["putIv"] if g["hasPut"] else (g["callIv"] if g["hasCall"] else 28.0)
         unified_rows.append({
             "strike": g["strike"],
             "dte": g["dte"],
             "callVol": g["callVol"],
             "putVol": g["putVol"],
-            "iv": avg_iv,
+            "callIv": c_iv,
+            "putIv": p_iv,
             "spot": spot
         })
         
-    # Split rows by horizon
+    # Split rows by horizon (Natenberg minor, intermediate, major)
     minor_rows = [r for r in unified_rows if r["dte"] <= 10]
     inter_rows = [r for r in unified_rows if r["dte"] > 10 and r["dte"] <= 35]
     major_rows = [r for r in unified_rows if r["dte"] > 35]
@@ -452,13 +457,16 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
             dte = 4.0 if row["dte"] <= 0 else row["dte"]
             weight = min(1.5, 30.0 / dte)
             
-            gamma = calculate_gamma(spot, row["strike"], row["iv"], dte)
+            # Use wing-specific IV for Black-Scholes Greeks to preserve skew
+            call_gamma = calculate_gamma(spot, row["strike"], row["callIv"], dte)
+            put_gamma = calculate_gamma(spot, row["strike"], row["putIv"], dte)
+            
             weighted_call_vol = row["callVol"] * weight
             weighted_put_vol = row["putVol"] * weight
             total_vol = row["callVol"] + row["putVol"]
             
-            call_gex = weighted_call_vol * gamma * (spot ** 2) * 0.01
-            put_gex = -weighted_put_vol * gamma * (spot ** 2) * 0.01
+            call_gex = weighted_call_vol * call_gamma * (spot ** 2) * 0.01
+            put_gex = -weighted_put_vol * put_gamma * (spot ** 2) * 0.01
             net_gex = call_gex + put_gex
             
             strike = row["strike"]
@@ -467,8 +475,10 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
                 existing["callVol"] += weighted_call_vol
                 existing["putVol"] += weighted_put_vol
                 existing["netGex"] += net_gex
-                existing["gammaSum"] += gamma
-                existing["ivSum"] += row["iv"]
+                existing["callGammaSum"] += call_gamma
+                existing["putGammaSum"] += put_gamma
+                existing["callIvSum"] += row["callIv"]
+                existing["putIvSum"] += row["putIv"]
                 existing["ivCount"] += 1
                 existing["weightedDteSum"] += dte * total_vol
                 existing["volSum"] += total_vol
@@ -478,8 +488,10 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
                     "callVol": weighted_call_vol,
                     "putVol": weighted_put_vol,
                     "netGex": net_gex,
-                    "gammaSum": gamma,
-                    "ivSum": row["iv"],
+                    "callGammaSum": call_gamma,
+                    "putGammaSum": put_gamma,
+                    "callIvSum": row["callIv"],
+                    "putIvSum": row["putIv"],
                     "ivCount": 1,
                     "spot": spot,
                     "weightedDteSum": dte * total_vol,
@@ -488,20 +500,23 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
                 
         aggregated = []
         for o in option_data_map.values():
-            avg_iv = o["ivSum"] / o["ivCount"]
-            avg_gamma = o["gammaSum"] / o["ivCount"]
+            avg_call_iv = o["callIvSum"] / o["ivCount"]
+            avg_put_iv = o["putIvSum"] / o["ivCount"]
+            avg_call_gamma = o["callGammaSum"] / o["ivCount"]
+            avg_put_gamma = o["putGammaSum"] / o["ivCount"]
             avg_dte = round(o["weightedDteSum"] / o["volSum"]) if o["volSum"] > 0 else 30
             
-            call_delta = calculate_delta(spot, o["strike"], avg_iv, avg_dte, True)
-            put_delta = calculate_delta(spot, o["strike"], avg_iv, avg_dte, False)
+            call_delta = calculate_delta(spot, o["strike"], avg_call_iv, avg_dte, True)
+            put_delta = calculate_delta(spot, o["strike"], avg_put_iv, avg_dte, False)
             
             aggregated.append({
                 "strike": o["strike"],
                 "callVol": o["callVol"],
                 "putVol": o["putVol"],
                 "netGex": o["netGex"],
-                "avgIv": avg_iv,
-                "avgGamma": avg_gamma,
+                "avgCallIv": avg_call_iv,
+                "avgPutIv": avg_put_iv,
+                "avgGamma": (avg_call_gamma + avg_put_gamma) / 2.0,
                 "avgDte": avg_dte,
                 "callDelta": call_delta,
                 "putDelta": put_delta,
@@ -513,7 +528,6 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
     if not global_aggregated:
         return {"supports": [], "resistances": []}
         
-    # Calculate classification category based on options liquidity
     raw_max_vol = max([max(o["callVol"], o["putVol"]) for o in global_aggregated])
     if raw_max_vol >= 2000:
         category = 'LARGE'
@@ -537,7 +551,7 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
     strike_low = spot * (1.0 - strike_range_mult)
     strike_high = spot * (1.0 + strike_range_mult)
     
-    # Helper to score horizon candidates
+    # Helper to score horizon candidates with strict geographic orientation (McMillan Ch. 31-33)
     def score_horizon_candidates(rows, horizon_name):
         if not rows:
             return []
@@ -585,11 +599,31 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
             gex_metric = abs(curr["netGex"]) / max_abs_gex
             significance_score = (vol_metric * 0.5 + gex_metric * 0.5) * proximity_score * round_bonus
             
+            # Geographic Orientation: Below spot = Support, Above spot = Resistance
+            is_support = curr["strike"] <= spot
+            
+            if is_support:
+                if curr["putVol"] >= curr["callVol"]:
+                    level_name = "PUT WALL"
+                    sublabel = f"OI Absorption: {round(significance_score * 100)} ({int(curr['avgDte'])}d DTE)"
+                else:
+                    level_name = "ITM CALL DELTA FLOOR"
+                    sublabel = f"Synthetic Long Delta ({int(curr['avgDte'])}d DTE)"
+            else:
+                if curr["callVol"] >= curr["putVol"]:
+                    level_name = "CALL WALL"
+                    sublabel = f"Gamma Ceiling: {round(significance_score * 100)} ({int(curr['avgDte'])}d DTE)"
+                else:
+                    level_name = "ITM PUT COLLAR CEILING"
+                    sublabel = f"Protective Hedge Ceiling ({int(curr['avgDte'])}d DTE)"
+            
             candidates.append({
                 **curr,
                 "horizonName": horizon_name,
                 "significanceScore": significance_score,
-                "isCallWall": curr["callVol"] >= curr["putVol"],
+                "isSupport": is_support,
+                "levelName": level_name,
+                "sublabel": sublabel,
                 "totalVol": total_strike_vol
             })
         return candidates
@@ -617,17 +651,19 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
                 
             level_obj = {
                 "price": cand["strike"],
-                # Multiply by 100 so it scales nicely (ranges from 0 to 150)
                 "strength": round(cand["significanceScore"] * 100.0, 2),
                 "source": "options",
                 "dte": cand["avgDte"],
-                "horizon": cand["horizonName"].lower()
+                "horizon": cand["horizonName"].lower(),
+                "title_prefix": cand["levelName"],
+                "title": f"{cand['levelName']} · ${cand['strike']:.2f}",
+                "sublabel": cand["sublabel"]
             }
             
-            if cand["isCallWall"]:
-                selected_resistances.append(level_obj)
-            else:
+            if cand["isSupport"]:
                 selected_supports.append(level_obj)
+            else:
+                selected_resistances.append(level_obj)
                 
             selected_strikes.add(cand["strike"])
             added += 1
@@ -637,8 +673,8 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
     add_horizon_top_candidates(major_candidates, 2)
     
     return {
-        "supports": sorted(selected_supports, key=lambda x: x["strength"], reverse=True),
-        "resistances": sorted(selected_resistances, key=lambda x: x["strength"], reverse=True)
+        "supports": sorted(selected_supports, key=lambda x: x["price"], reverse=True),
+        "resistances": sorted(selected_resistances, key=lambda x: x["price"])
     }
 
 def get_db():
@@ -679,9 +715,17 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
         # Fallback to mock chain center around spot using history/ticker details
         chain = generate_mock_options_chain_fallback(spot, ticker, history)
         
-    max_pain = calculate_max_pain(chain)
+    # Dual-Expiration Max Pain (McMillan Ch. 31-33)
+    weekly_max_pain = calculate_max_pain(chain, max_dte=7.0)
+    monthly_max_pain = calculate_max_pain(chain, min_dte=14.0, max_dte=45.0)
+    max_pain = weekly_max_pain if weekly_max_pain > 0 else calculate_max_pain(chain)
+    if monthly_max_pain == 0:
+        monthly_max_pain = max_pain
+
+    # True Mathematical Gamma Flip (Zero Net GEX Root)
+    gamma_flip = calculate_gamma_flip(spot, chain)
     
-    # 2.5 Calculate additional options metrics
+    # 2.5 Calculate additional options metrics & Volatility Envelope (McMillan Ch. 34)
     put_oi = sum(c["open_interest"] for c in chain if c["type"].lower() == "put")
     call_oi = sum(c["open_interest"] for c in chain if c["type"].lower() == "call")
     pcr = round(put_oi / call_oi, 2) if call_oi > 0 else 0.8
@@ -726,6 +770,11 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
         iv_regime = f"Elevated ({avg_iv:.1f}%)"
     else:
         iv_regime = f"High ({avg_iv:.1f}%)"
+
+    # McMillan Expected Move Boundaries (+- 1-standard deviation)
+    em_res = calculate_expected_move(spot, avg_iv, dte=7.0)
+    expected_move_upper = em_res["upper"]
+    expected_move_lower = em_res["lower"]
             
     # 3. Technical S/R zones (limit to top 3 for clarity)
     sr_levels = calculate_sr_levels(history, window=10, num_levels=3)
@@ -738,55 +787,99 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
         res["dte"] = None
         res["horizon"] = "minor"
 
-    # 4. Options S/R zones
+    # 4. Options S/R zones (geographically oriented)
     opt_levels = calculate_options_levels(chain, spot)
     
-    # Deduplicate: 
-    # 1. Filter out S/R levels (both technical and options) that are within 0.7% of Max Pain (Max Pain is highest priority)
-    # 2. Filter out technical levels that are within 0.7% of options levels
-    def is_close_to_max_pain(price, mp_val):
-        if mp_val <= 0:
-            return False
-        return abs(price - mp_val) <= 0.007 * mp_val
+    # 5. Confluence Detection Engine (Natenberg & McMillan)
+    # Never delete overlapping levels; merge them into high-conviction Confluence Zones!
+    def merge_confluence(opt_list, tech_list, is_support: bool):
+        merged = []
+        used_tech = set()
 
-    # Filter options levels first (discard if close to max pain)
-    filtered_opt_supports = [lvl for lvl in opt_levels["supports"] if not is_close_to_max_pain(lvl["price"], max_pain)]
-    filtered_opt_resistances = [lvl for lvl in opt_levels["resistances"] if not is_close_to_max_pain(lvl["price"], max_pain)]
+        for opt in opt_list:
+            opt_price = opt["price"]
+            matched_tech = []
+            for t_idx, tech in enumerate(tech_list):
+                if t_idx in used_tech:
+                    continue
+                if abs(tech["price"] - opt_price) <= 0.008 * opt_price:
+                    matched_tech.append((t_idx, tech))
 
-    # Filter technical levels (discard if close to max pain or close to filtered options levels)
-    filtered_tech_supports = []
-    for sup in sr_levels["supports"]:
-        if is_close_to_max_pain(sup["price"], max_pain):
-            continue
-        is_close_to_opt = False
-        for opt_sup in filtered_opt_supports:
-            if abs(sup["price"] - opt_sup["price"]) <= 0.007 * opt_sup["price"]:
-                is_close_to_opt = True
-                break
-        if not is_close_to_opt:
-            filtered_tech_supports.append(sup)
+            matched_mp = []
+            if abs(opt_price - weekly_max_pain) <= 0.008 * opt_price:
+                matched_mp.append("Weekly Max Pain")
+            if abs(opt_price - monthly_max_pain) <= 0.008 * opt_price and monthly_max_pain != weekly_max_pain:
+                matched_mp.append("Monthly OPEX Pin")
 
-    filtered_tech_resistances = []
-    for res in sr_levels["resistances"]:
-        if is_close_to_max_pain(res["price"], max_pain):
-            continue
-        is_close_to_opt = False
-        for opt_res in filtered_opt_resistances:
-            if abs(res["price"] - opt_res["price"]) <= 0.007 * opt_res["price"]:
-                is_close_to_opt = True
-                break
-        if not is_close_to_opt:
-            filtered_tech_resistances.append(res)
+            if matched_tech or matched_mp:
+                factors = [opt.get("title_prefix") or ("Put Wall" if is_support else "Call Wall")]
+                for t_idx, t in matched_tech:
+                    factors.append(f"Technical S/R ({t.get('tests', 0)} tests)")
+                    used_tech.add(t_idx)
+                for mp in matched_mp:
+                    factors.append(mp)
+                
+                boost = 1.0 + 0.25 * len(matched_tech) + 0.35 * len(matched_mp)
+                merged_strength = round(opt["strength"] * boost, 2)
+                merged.append({
+                    "price": opt_price,
+                    "strength": merged_strength,
+                    "source": "confluence",
+                    "confluence_factors": factors,
+                    "title": f"CONFLUENCE · ${opt_price:.2f}",
+                    "sublabel": " + ".join(factors),
+                    "dte": opt.get("dte"),
+                    "horizon": opt.get("horizon", "intermediate"),
+                    "is_confluence": True
+                })
+            else:
+                merged.append({
+                    **opt,
+                    "is_confluence": False,
+                    "title": opt.get("title") or (f"PUT WALL · ${opt_price:.2f}" if is_support else f"CALL WALL · ${opt_price:.2f}"),
+                    "sublabel": opt.get("sublabel") or f"OI Absorption: {round(opt['strength'])}"
+                })
 
-    # Combine supports and resistances (sorted closest to spot, capped to top 3 each for clarity)
-    combined_supports = sorted(filtered_tech_supports + filtered_opt_supports, key=lambda x: x["price"], reverse=True)[:3]
-    combined_resistances = sorted(filtered_tech_resistances + filtered_opt_resistances, key=lambda x: x["price"])[:3]
+        for t_idx, tech in enumerate(tech_list):
+            if t_idx not in used_tech:
+                matched_mp = []
+                if abs(tech["price"] - weekly_max_pain) <= 0.008 * tech["price"]:
+                    matched_mp.append("Weekly Max Pain")
+                if abs(tech["price"] - monthly_max_pain) <= 0.008 * tech["price"] and monthly_max_pain != weekly_max_pain:
+                    matched_mp.append("Monthly OPEX Pin")
+
+                if matched_mp:
+                    factors = [f"Technical S/R ({tech.get('tests', 0)} tests)"] + matched_mp
+                    merged.append({
+                        "price": tech["price"],
+                        "strength": round(tech["strength"] * 1.3, 2),
+                        "source": "confluence",
+                        "confluence_factors": factors,
+                        "title": f"CONFLUENCE · ${tech['price']:.2f}",
+                        "sublabel": " + ".join(factors),
+                        "dte": None,
+                        "horizon": "minor",
+                        "tests": tech.get("tests", 0),
+                        "is_confluence": True
+                    })
+                else:
+                    merged.append({
+                        **tech,
+                        "is_confluence": False,
+                        "title": f"TECH {'SUPPORT' if is_support else 'RESISTANCE'} · ${tech['price']:.2f}",
+                        "sublabel": f"Price Action ({tech.get('tests', 0)} swing tests)"
+                    })
+
+        if is_support:
+            return sorted(merged, key=lambda x: x["price"], reverse=True)[:4]
+        else:
+            return sorted(merged, key=lambda x: x["price"])[:4]
+
+    combined_supports = merge_confluence(opt_levels["supports"], sr_levels["supports"], is_support=True)
+    combined_resistances = merge_confluence(opt_levels["resistances"], sr_levels["resistances"], is_support=False)
     
     # 3. Formulate trade recommendations
-    # Simple rule engine:
     trade_ideas = []
-    
-    # Use simple close comparison to historical mean as a proxy for trend
     is_bullish = spot > float(history["close"].mean())
     if is_bullish:
         trade_ideas.append({
@@ -845,7 +938,7 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
             ticker=ticker,
             spot=spot,
             max_pain=max_pain,
-            gamma_flip=0.0,
+            gamma_flip=gamma_flip,
             total_net_gex=0.0
         )
         db.add(db_metrics)
@@ -883,6 +976,12 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
         "name": asset_name,
         "spot": spot,
         "max_pain": max_pain,
+        "weekly_max_pain": weekly_max_pain,
+        "monthly_max_pain": monthly_max_pain,
+        "gamma_flip": gamma_flip,
+        "expected_move_upper": expected_move_upper,
+        "expected_move_lower": expected_move_lower,
+        "expected_move_range": em_res["move"],
         "supports": combined_supports,
         "resistances": combined_resistances,
         "trade_ideas": trade_ideas,
