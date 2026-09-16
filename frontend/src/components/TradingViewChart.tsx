@@ -54,22 +54,11 @@ export default function TradingViewChart({
   const [weeklyGaps, setWeeklyGaps] = useState<any[]>([]);
   const [svgRects, setSvgRects] = useState<any[]>([]);
 
-  // Institutional Options Enhancements Toggles
-  const [showPockets, setShowPockets] = useState(true);
-  const [showGexProfile, setShowGexProfile] = useState(true);
-  const [showGammaFlip, setShowGammaFlip] = useState(true);
-  const [showExpectedMove, setShowExpectedMove] = useState(true);
-
-  // SVG Layer States
-  const [pockets, setPockets] = useState<any[]>([]);
-  const [gexBars, setGexBars] = useState<any[]>([]);
-  const [emChannel, setEmChannel] = useState<{ yTop: number; yBot: number; width: number } | null>(null);
-
-  // Max Pain Resolutions
+  // Effective Max Pain levels
   const effectiveWeeklyMaxPain = weeklyMaxPain && weeklyMaxPain > 0 ? weeklyMaxPain : maxPain;
   const effectiveMonthlyMaxPain = monthlyMaxPain && monthlyMaxPain > 0 ? monthlyMaxPain : maxPain;
 
-  // Dynamic Strengths
+  // Maximum absorption strengths for scaling
   const maxSupportAbs = useMemo(() => {
     return supports.length > 0 ? Math.max(...supports.map((s) => s.strength)) : 1.0;
   }, [supports]);
@@ -119,7 +108,7 @@ export default function TradingViewChart({
         mode: 0,
       },
       width: chartContainerRef.current.clientWidth,
-      height: 420,
+      height: 440,
       timeScale: {
         borderColor: "#262626",
         timeVisible: true,
@@ -287,11 +276,10 @@ export default function TradingViewChart({
     };
   }, [ticker, timeframe]);
 
-  // Update horizontal lines and SVG overlays
+  // Update native price lines (Zero lag, pure canvas rendering)
   useEffect(() => {
     const candleSeries = candleSeriesRef.current;
-    const chart = chartRef.current;
-    if (!candleSeries || !chart || !chartContainerRef.current) return;
+    if (!candleSeries) return;
 
     // Clear previous lines
     priceLinesRef.current.forEach((line) => {
@@ -334,7 +322,7 @@ export default function TradingViewChart({
     }
 
     // 3. Gamma Flip Benchmark Line (#fbbf24 Amber Gold, 2px Dashed)
-    if (showGammaFlip && gammaFlipPrice > 0) {
+    if (gammaFlipPrice > 0) {
       const line = candleSeries.createPriceLine({
         price: gammaFlipPrice,
         color: "#fbbf24",
@@ -348,8 +336,8 @@ export default function TradingViewChart({
       priceLinesRef.current.push(line);
     }
 
-    // 4. Expected Move Envelope (+- 1-Standard Deviation)
-    if (showExpectedMove && emUpper > 0 && emLower > 0) {
+    // 4. Expected Move Envelope (+- 1-Standard Deviation, Sky Blue)
+    if (emUpper > 0 && emLower > 0) {
       const upperLine = candleSeries.createPriceLine({
         price: emUpper,
         color: "#38bdf8",
@@ -357,7 +345,7 @@ export default function TradingViewChart({
         lineStyle: 2,
         axisLabelVisible: true,
         title: isHovered
-          ? `+1σ EXPECTED MOVE: $${emUpper.toFixed(2)} (Weekly Volatility Envelope · 68% Prob)`
+          ? `+1σ EXPECTED MOVE: $${emUpper.toFixed(2)} (Weekly Volatility Ceiling · 68% Prob)`
           : `+1σ EXP MOVE · $${emUpper.toFixed(2)}`,
       });
       const lowerLine = candleSeries.createPriceLine({
@@ -367,7 +355,7 @@ export default function TradingViewChart({
         lineStyle: 2,
         axisLabelVisible: true,
         title: isHovered
-          ? `-1σ EXPECTED MOVE: $${emLower.toFixed(2)} (Weekly Volatility Envelope · 68% Prob)`
+          ? `-1σ EXPECTED MOVE: $${emLower.toFixed(2)} (Weekly Volatility Floor · 68% Prob)`
           : `-1σ EXP MOVE · $${emLower.toFixed(2)}`,
       });
       priceLinesRef.current.push(upperLine, lowerLine);
@@ -469,9 +457,10 @@ export default function TradingViewChart({
       priceLinesRef.current.push(resistanceLine);
     });
 
+    // Subtle hover detection without heavy re-renders
     const onCrosshairMove = (param: any) => {
       if (!param.point || !chartRef.current) {
-        setIsHovered(false);
+        if (isHovered) setIsHovered(false);
         return;
       }
 
@@ -479,20 +468,20 @@ export default function TradingViewChart({
       const mouseX = param.point.x;
       const containerWidth = chartContainerRef.current?.clientWidth || 800;
       
-      const rightEdge = containerWidth - 60;
-      const leftEdge = containerWidth - 140;
+      const rightEdge = containerWidth - 50;
+      const leftEdge = containerWidth - 160;
 
       if (mouseX < leftEdge || mouseX > rightEdge) {
-        setIsHovered(false);
+        if (isHovered) setIsHovered(false);
         return;
       }
 
       const allPrices: number[] = [];
       if (effectiveWeeklyMaxPain > 0) allPrices.push(effectiveWeeklyMaxPain);
       if (effectiveMonthlyMaxPain > 0) allPrices.push(effectiveMonthlyMaxPain);
-      if (showGammaFlip && gammaFlipPrice > 0) allPrices.push(gammaFlipPrice);
-      if (showExpectedMove && emUpper > 0) allPrices.push(emUpper);
-      if (showExpectedMove && emLower > 0) allPrices.push(emLower);
+      if (gammaFlipPrice > 0) allPrices.push(gammaFlipPrice);
+      if (emUpper > 0) allPrices.push(emUpper);
+      if (emLower > 0) allPrices.push(emLower);
       supports.forEach((s) => allPrices.push(s.price));
       resistances.forEach((r) => allPrices.push(r.price));
 
@@ -503,396 +492,58 @@ export default function TradingViewChart({
         const levelY = candleSeries.priceToCoordinate(price);
         if (levelY === null) continue;
 
-        const distance = Math.abs(mouseY - levelY);
-        if (distance < minDistance) {
+        if (Math.abs(mouseY - levelY) < minDistance) {
           hoverActive = true;
           break;
         }
       }
 
-      setIsHovered(hoverActive);
+      if (hoverActive !== isHovered) {
+        setIsHovered(hoverActive);
+      }
     };
 
-    const updateAllOverlays = () => {
-      if (!chart || !candleSeries) return;
-      const containerWidth = chartContainerRef.current?.clientWidth || 800;
-      const plotWidth = Math.max(100, containerWidth - 62);
-
-      // 1. Weekly Imbalance Gaps
-      if (weeklyGaps.length > 0) {
-        const rects = weeklyGaps.map((gap, idx) => {
-          const x1 = chart.timeScale().timeToCoordinate(gap.startTime);
-          const x2 = chart.timeScale().timeToCoordinate(gap.endTime);
-          const y1 = candleSeries.priceToCoordinate(gap.top);
-          const y2 = candleSeries.priceToCoordinate(gap.bottom);
-
-          if (x1 === null || x2 === null || y1 === null || y2 === null) return null;
-
-          return {
-            id: idx,
-            x: Math.min(x1, x2),
-            y: Math.min(y1, y2),
-            width: Math.max(Math.abs(x2 - x1), 15),
-            height: Math.abs(y2 - y1),
-          };
-        }).filter(Boolean) as any[];
-        setSvgRects(rects);
-      } else {
-        setSvgRects([]);
-      }
-
-      // 2. Expected Move Volatility Corridor
-      if (showExpectedMove && emUpper > 0 && emLower > 0) {
-        const yTop = candleSeries.priceToCoordinate(emUpper);
-        const yBot = candleSeries.priceToCoordinate(emLower);
-        if (yTop !== null && yBot !== null) {
-          setEmChannel({
-            yTop: Math.min(yTop, yBot),
-            yBot: Math.max(yTop, yBot),
-            width: plotWidth,
-          });
-        } else {
-          setEmChannel(null);
-        }
-      } else {
-        setEmChannel(null);
-      }
-
-      // 3. Rectangular Liquidity Pockets
-      const computedPockets: any[] = [];
-      const levelsForPockets: any[] = [];
-
-      supports.forEach((s) => {
-        const rel = s.strength / maxSupportAbs;
-        if (rel >= 0.4 || s.is_confluence) levelsForPockets.push({ ...s, type: "support", rel });
-      });
-
-      resistances.forEach((r) => {
-        const rel = r.strength / maxResistanceAbs;
-        if (rel >= 0.4 || r.is_confluence) levelsForPockets.push({ ...r, type: "resistance", rel });
-      });
-
-      if (effectiveWeeklyMaxPain > 0) {
-        levelsForPockets.push({ price: effectiveWeeklyMaxPain, strength: 50, type: "maxpain", rel: 0.8, dte: 7 });
-      }
-
-      levelsForPockets.forEach((lvl, idx) => {
-        const spreadPct = lvl.is_confluence ? 0.004 : lvl.rel >= 0.75 ? 0.0035 : 0.0025;
-        const pTop = lvl.price * (1 + spreadPct);
-        const pBot = lvl.price * (1 - spreadPct);
-        const yTop = candleSeries.priceToCoordinate(pTop);
-        const yBot = candleSeries.priceToCoordinate(pBot);
-
-        if (yTop !== null && yBot !== null) {
-          const y = Math.min(yTop, yBot);
-          const h = Math.max(16, Math.abs(yBot - yTop));
-          const isWeekly = lvl.dte !== null && lvl.dte !== undefined && lvl.dte <= 7;
-
-          let title = "";
-          let fill = "";
-          let stroke = "";
-
-          if (lvl.is_confluence) {
-            title = `L3 CONFLUENCE ZONE · $${lvl.price.toFixed(2)}`;
-            fill = "rgba(245, 158, 11, 0.09)";
-            stroke = "rgba(245, 158, 11, 0.55)";
-          } else if (lvl.type === "support") {
-            title = `PUT LIQUIDITY POCKET · $${lvl.price.toFixed(2)}`;
-            fill = "rgba(0, 255, 136, 0.07)";
-            stroke = "rgba(0, 255, 136, 0.35)";
-          } else if (lvl.type === "resistance") {
-            title = `CALL LIQUIDITY POCKET · $${lvl.price.toFixed(2)}`;
-            fill = "rgba(255, 51, 85, 0.07)";
-            stroke = "rgba(255, 51, 85, 0.35)";
-          } else {
-            title = `MAX PAIN GAMMA PIN · $${lvl.price.toFixed(2)}`;
-            fill = "rgba(186, 104, 200, 0.08)";
-            stroke = "rgba(186, 104, 200, 0.4)";
-          }
-
-          computedPockets.push({
-            id: `pocket-${idx}-${lvl.price}`,
-            price: lvl.price,
-            type: lvl.type,
-            isConfluence: lvl.is_confluence,
-            y,
-            height: h,
-            width: plotWidth,
-            isWeekly,
-            dte: lvl.dte,
-            title,
-            fill,
-            stroke,
-          });
-        }
-      });
-      setPockets(computedPockets);
-
-      // 4. Right-Axis Horizontal Gamma Profile Histogram (Volume Profile Style)
-      const computedGex: any[] = [];
-      const allLevels = [
-        ...supports.map((s) => ({ ...s, type: "support" })),
-        ...resistances.map((r) => ({ ...r, type: "resistance" })),
-      ];
-      if (effectiveWeeklyMaxPain > 0) {
-        allLevels.push({ price: effectiveWeeklyMaxPain, strength: maxSupportAbs * 0.75, type: "maxpain" } as any);
-      }
-
-      const peakStrength = Math.max(
-        ...allLevels.map((l) => l.strength || 1),
-        1.0
-      );
-
-      allLevels.forEach((lvl, idx) => {
-        const y = candleSeries.priceToCoordinate(lvl.price);
-        if (y !== null) {
-          const norm = Math.min(1.0, Math.max(0.2, (lvl.strength || 1) / peakStrength));
-          const barWidth = Math.round(norm * 115) + 20;
-          const isCall = lvl.type === "resistance";
-          const isPut = lvl.type === "support";
-          const isConf = (lvl as any).is_confluence;
-
-          let color = "#ba68c8";
-          let bgColor = "rgba(186, 104, 200, 0.25)";
-          let borderColor = "rgba(186, 104, 200, 0.5)";
-          let label = `PIN ${Math.round(lvl.strength)}k`;
-
-          if (isConf) {
-            color = "#f59e0b";
-            bgColor = "rgba(245, 158, 11, 0.25)";
-            borderColor = "rgba(245, 158, 11, 0.6)";
-            label = `CONF ${Math.round(lvl.strength)}k`;
-          } else if (isCall) {
-            color = "#00e5ff";
-            bgColor = "rgba(0, 229, 255, 0.22)";
-            borderColor = "rgba(0, 229, 255, 0.45)";
-            label = `+${Math.round(lvl.strength)}k GEX`;
-          } else if (isPut) {
-            color = "#00ff88";
-            bgColor = "rgba(0, 255, 136, 0.22)";
-            borderColor = "rgba(0, 255, 136, 0.45)";
-            label = `-${Math.round(lvl.strength)}k GEX`;
-          }
-
-          computedGex.push({
-            id: `gex-${idx}-${lvl.price}`,
-            y: y - 7,
-            x: plotWidth - barWidth,
-            width: barWidth,
-            height: 14,
-            price: lvl.price,
-            label,
-            color,
-            bgColor,
-            borderColor,
-          });
-        }
-      });
-      setGexBars(computedGex);
-    };
-
-    setTimeout(updateAllOverlays, 60);
-
-    const rangeSubscription = () => {
-      updateAllOverlays();
-    };
-
-    chart.subscribeCrosshairMove(onCrosshairMove);
-    chart.timeScale().subscribeVisibleLogicalRangeChange(rangeSubscription);
+    chartRef.current?.subscribeCrosshairMove(onCrosshairMove);
 
     return () => {
-      chart.unsubscribeCrosshairMove(onCrosshairMove);
-      chart.timeScale().unsubscribeVisibleLogicalRangeChange(rangeSubscription);
+      chartRef.current?.unsubscribeCrosshairMove(onCrosshairMove);
     };
 
-  }, [effectiveWeeklyMaxPain, effectiveMonthlyMaxPain, supports, resistances, isHovered, weeklyGaps, showGammaFlip, gammaFlipPrice, showExpectedMove, emUpper, emLower, maxSupportAbs, maxResistanceAbs]);
+  }, [effectiveWeeklyMaxPain, effectiveMonthlyMaxPain, supports, resistances, isHovered, gammaFlipPrice, emUpper, emLower, maxSupportAbs, maxResistanceAbs]);
 
   return (
     <div className="w-full bg-neutral-950 rounded-lg p-2 border border-neutral-900 overflow-hidden relative">
-      {/* Chart Top Control Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-2 pt-1">
-        {/* Left: Live Status + Regime Watermark */}
+      {/* Clean Status Header (No toggles, pure live info) */}
+      <div className="flex items-center justify-between gap-2 mb-2 px-2 pt-1">
         <div className="flex items-center gap-3">
           <div className="flex gap-1.5 items-center bg-[#0d0d16] border border-[#1f1f32] px-2.5 py-1 rounded">
             <span className="w-2 h-2 rounded-full bg-[#00ff88] animate-pulse" />
             <span className="text-[10px] font-mono font-bold tracking-wider text-neutral-200">LIVE FEED</span>
           </div>
 
-          {showGammaFlip && (
-            <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-[10px] font-mono font-bold uppercase tracking-wider ${
-                isLongGamma
-                  ? "bg-[#00ff88]/10 text-[#00ff88] border-[#00ff88]/30"
-                  : "bg-amber-500/10 text-amber-400 border-amber-500/30"
-              }`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${isLongGamma ? "bg-[#00ff88]" : "bg-amber-400"}`} />
-              <span>
-                {isLongGamma
-                  ? "LONG GAMMA REGIME (Vol Suppressed / Mean-Reverting)"
-                  : "SHORT GAMMA REGIME (Vol Expansion / Acceleration)"}
-              </span>
-            </div>
-          )}
+          <div
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-[10px] font-mono font-bold uppercase tracking-wider ${
+              isLongGamma
+                ? "bg-[#00ff88]/10 text-[#00ff88] border-[#00ff88]/30"
+                : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${isLongGamma ? "bg-[#00ff88]" : "bg-amber-400"}`} />
+            <span>
+              {isLongGamma
+                ? "LONG GAMMA REGIME (Vol Suppressed / Mean-Reverting)"
+                : "SHORT GAMMA REGIME (Vol Expansion / Acceleration)"}
+            </span>
+          </div>
         </div>
 
-        {/* Right: Toggle Options Layers */}
-        <div className="flex items-center gap-2 text-[10px] font-mono">
-          <button
-            onClick={() => setShowPockets(!showPockets)}
-            className={`px-2 py-0.5 rounded border transition-all ${
-              showPockets
-                ? "bg-[#00e5ff]/15 text-[#00e5ff] border-[#00e5ff]/40 font-bold"
-                : "bg-[#11111d] text-neutral-500 border-[#222234] hover:text-neutral-300"
-            }`}
-          >
-            Pockets: {showPockets ? "ON" : "OFF"}
-          </button>
-
-          <button
-            onClick={() => setShowGexProfile(!showGexProfile)}
-            className={`px-2 py-0.5 rounded border transition-all ${
-              showGexProfile
-                ? "bg-[#00ff88]/15 text-[#00ff88] border-[#00ff88]/40 font-bold"
-                : "bg-[#11111d] text-neutral-500 border-[#222234] hover:text-neutral-300"
-            }`}
-          >
-            GEX Profile: {showGexProfile ? "ON" : "OFF"}
-          </button>
-
-          <button
-            onClick={() => setShowGammaFlip(!showGammaFlip)}
-            className={`px-2 py-0.5 rounded border transition-all ${
-              showGammaFlip
-                ? "bg-amber-500/15 text-amber-300 border-amber-500/40 font-bold"
-                : "bg-[#11111d] text-neutral-500 border-[#222234] hover:text-neutral-300"
-            }`}
-          >
-            Gamma Flip: {showGammaFlip ? "ON" : "OFF"}
-          </button>
-
-          <button
-            onClick={() => setShowExpectedMove(!showExpectedMove)}
-            className={`px-2 py-0.5 rounded border transition-all ${
-              showExpectedMove
-                ? "bg-sky-500/15 text-sky-300 border-sky-500/40 font-bold"
-                : "bg-[#11111d] text-neutral-500 border-[#222234] hover:text-neutral-300"
-            }`}
-          >
-            Expected Move: {showExpectedMove ? "ON" : "OFF"}
-          </button>
+        <div className="text-[10px] font-mono text-neutral-500">
+          ZERO-LAG QUANT ENGINE
         </div>
       </div>
 
-      {/* Chart Canvas & SVG Overlay */}
-      <div ref={chartContainerRef} className="w-full relative">
-        <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
-          {/* 1. Weekly Imbalance Zones */}
-          {svgRects.map((rect) => (
-            <rect
-              key={rect.id}
-              x={rect.x}
-              y={rect.y}
-              width={rect.width}
-              height={rect.height}
-              fill="rgba(6, 182, 212, 0.22)"
-              stroke="rgba(6, 182, 212, 0.45)"
-              strokeWidth={1}
-            />
-          ))}
-
-          {/* 2. Expected Move Corridor */}
-          {showExpectedMove && emChannel && (
-            <g>
-              <rect
-                x={0}
-                y={emChannel.yTop}
-                width={emChannel.width}
-                height={Math.max(2, emChannel.yBot - emChannel.yTop)}
-                fill="rgba(56, 189, 248, 0.035)"
-                stroke="rgba(56, 189, 248, 0.2)"
-                strokeWidth={1}
-                strokeDasharray="3 3"
-              />
-              <text
-                x={8}
-                y={emChannel.yTop + 12}
-                style={{
-                  fontSize: "8.5px",
-                  fontFamily: "monospace",
-                  fontWeight: "bold",
-                  fill: "#38bdf8",
-                  opacity: 0.75,
-                  pointerEvents: "none",
-                }}
-              >
-                ±1σ EXPECTED MOVE VOLATILITY CORRIDOR (${emLower} – ${emUpper})
-              </text>
-            </g>
-          )}
-
-          {/* 3. Liquidity Pockets (Horizontal Channels) */}
-          {showPockets &&
-            pockets.map((pkt) => (
-              <g key={pkt.id}>
-                <rect
-                  x={0}
-                  y={pkt.y}
-                  width={pkt.width}
-                  height={pkt.height}
-                  fill={pkt.fill}
-                  stroke={pkt.stroke}
-                  strokeWidth={1}
-                  strokeDasharray="4 3"
-                />
-                <text
-                  x={8}
-                  y={pkt.y + 11}
-                  style={{
-                    fontSize: "9px",
-                    fontFamily: "monospace",
-                    fontWeight: "bold",
-                    fill: pkt.isConfluence ? "#f59e0b" : pkt.type === "support" ? "#00ff88" : pkt.type === "resistance" ? "#ff4d6d" : "#ba68c8",
-                    opacity: 0.85,
-                    pointerEvents: "none",
-                  }}
-                >
-                  {pkt.title} {pkt.isWeekly ? "· 0DTE/WEEKLY" : "· OPEX ANCHOR"}
-                </text>
-              </g>
-            ))}
-
-          {/* 4. Right-Axis Horizontal Gamma Profile Histogram */}
-          {showGexProfile &&
-            gexBars.map((bar) => (
-              <g key={bar.id}>
-                <rect
-                  x={bar.x}
-                  y={bar.y}
-                  width={bar.width}
-                  height={bar.height}
-                  fill={bar.bgColor}
-                  stroke={bar.borderColor}
-                  strokeWidth={1}
-                  rx={2}
-                />
-                <text
-                  x={bar.x + 5}
-                  y={bar.y + 10}
-                  style={{
-                    fontSize: "8.5px",
-                    fontFamily: "monospace",
-                    fontWeight: "bold",
-                    fill: bar.color,
-                    pointerEvents: "none",
-                  }}
-                >
-                  {bar.label}
-                </text>
-              </g>
-            ))}
-        </svg>
-      </div>
+      {/* Chart Canvas */}
+      <div ref={chartContainerRef} className="w-full relative" />
     </div>
   );
 }
