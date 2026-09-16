@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickSeries } from "lightweight-charts";
 
-interface Level {
+export interface Level {
   price: number;
   strength: number;
   volume_concentration?: number;
@@ -11,12 +11,22 @@ interface Level {
   dte?: number | null;
   horizon?: string;
   tests?: number;
+  title?: string;
+  sublabel?: string;
+  is_confluence?: boolean;
+  confluence_factors?: string[];
 }
 
-interface TradingViewChartProps {
+export interface TradingViewChartProps {
   ticker: string;
   spot: number;
   maxPain: number;
+  weeklyMaxPain?: number;
+  monthlyMaxPain?: number;
+  gammaFlip?: number;
+  expectedMoveUpper?: number;
+  expectedMoveLower?: number;
+  expectedMoveRange?: number;
   supports: Level[];
   resistances: Level[];
   timeframe: string;
@@ -26,6 +36,12 @@ export default function TradingViewChart({
   ticker,
   spot,
   maxPain,
+  weeklyMaxPain,
+  monthlyMaxPain,
+  gammaFlip,
+  expectedMoveUpper,
+  expectedMoveLower,
+  expectedMoveRange,
   supports,
   resistances,
   timeframe,
@@ -42,12 +58,18 @@ export default function TradingViewChart({
   const [showPockets, setShowPockets] = useState(true);
   const [showGexProfile, setShowGexProfile] = useState(true);
   const [showGammaFlip, setShowGammaFlip] = useState(true);
+  const [showExpectedMove, setShowExpectedMove] = useState(true);
 
   // SVG Layer States
   const [pockets, setPockets] = useState<any[]>([]);
   const [gexBars, setGexBars] = useState<any[]>([]);
+  const [emChannel, setEmChannel] = useState<{ yTop: number; yBot: number; width: number } | null>(null);
 
-  // Dynamic Gamma Flip (Zero Gamma Level) Calculation
+  // Max Pain Resolutions
+  const effectiveWeeklyMaxPain = weeklyMaxPain && weeklyMaxPain > 0 ? weeklyMaxPain : maxPain;
+  const effectiveMonthlyMaxPain = monthlyMaxPain && monthlyMaxPain > 0 ? monthlyMaxPain : maxPain;
+
+  // Dynamic Strengths
   const maxSupportAbs = useMemo(() => {
     return supports.length > 0 ? Math.max(...supports.map((s) => s.strength)) : 1.0;
   }, [supports]);
@@ -56,14 +78,27 @@ export default function TradingViewChart({
     return resistances.length > 0 ? Math.max(...resistances.map((r) => r.strength)) : 1.0;
   }, [resistances]);
 
+  // Gamma Flip (Zero Net GEX Level)
   const gammaFlipPrice = useMemo(() => {
+    if (gammaFlip && gammaFlip > 0) return Number(gammaFlip.toFixed(2));
     const majorSup = supports.find((s) => s.strength / maxSupportAbs >= 0.75)?.price;
     const majorRes = resistances.find((r) => r.strength / maxResistanceAbs >= 0.75)?.price;
     if (majorSup && majorRes) {
       return Number(((majorSup * 0.48) + (majorRes * 0.52)).toFixed(2));
     }
     return Number((spot * 0.994).toFixed(2));
-  }, [supports, resistances, maxSupportAbs, maxResistanceAbs, spot]);
+  }, [gammaFlip, supports, resistances, maxSupportAbs, maxResistanceAbs, spot]);
+
+  // Expected Move Boundaries
+  const emUpper = useMemo(() => {
+    if (expectedMoveUpper && expectedMoveUpper > 0) return Number(expectedMoveUpper.toFixed(2));
+    return Number((spot * 1.022).toFixed(2));
+  }, [expectedMoveUpper, spot]);
+
+  const emLower = useMemo(() => {
+    if (expectedMoveLower && expectedMoveLower > 0) return Number(expectedMoveLower.toFixed(2));
+    return Number((spot * 0.978).toFixed(2));
+  }, [expectedMoveLower, spot]);
 
   const isLongGamma = spot >= gammaFlipPrice;
 
@@ -81,7 +116,7 @@ export default function TradingViewChart({
         horzLines: { visible: false },
       },
       crosshair: {
-        mode: 0, // CrosshairMode.Normal
+        mode: 0,
       },
       width: chartContainerRef.current.clientWidth,
       height: 420,
@@ -95,7 +130,6 @@ export default function TradingViewChart({
       },
     });
 
-    // Add Candlestick Series
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#D4A300",
       borderUpColor: "#D4A300",
@@ -162,7 +196,6 @@ export default function TradingViewChart({
       candleSeries.setData(data);
 
       if (data.length > 0) {
-        // Calculate weekly imbalance gaps
         const gaps: any[] = [];
         
         const getBarDate = (barTime: any) => {
@@ -233,7 +266,6 @@ export default function TradingViewChart({
 
     loadData();
 
-    // Responsive chart resizing
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
         chartRef.current.applyOptions({
@@ -250,7 +282,7 @@ export default function TradingViewChart({
     };
   }, [ticker, timeframe]);
 
-  // Update horizontal lines and SVG overlays (Pockets, GEX Profile, Gamma Flip)
+  // Update horizontal lines and SVG overlays
   useEffect(() => {
     const candleSeries = candleSeriesRef.current;
     const chart = chartRef.current;
@@ -266,107 +298,168 @@ export default function TradingViewChart({
     });
     priceLinesRef.current = [];
 
-    // 1. Plot Max Pain Level (1px Solid Orchid Purple: #ba68c8)
-    if (maxPain > 0) {
-      const maxPainTitle = isHovered 
-        ? `Max Pain: $${maxPain.toFixed(2)}`
-        : "Max Pain";
-      const maxPainLine = candleSeries.createPriceLine({
-        price: maxPain,
+    // 1. Weekly Max Pain Line (#ba68c8 Orchid Purple, 2px Solid)
+    if (effectiveWeeklyMaxPain > 0) {
+      const line = candleSeries.createPriceLine({
+        price: effectiveWeeklyMaxPain,
         color: "#ba68c8",
-        lineWidth: 1,
-        lineStyle: 0, // Solid
+        lineWidth: 2,
+        lineStyle: 0,
         axisLabelVisible: true,
-        title: maxPainTitle,
+        title: isHovered
+          ? `WEEKLY MAX PAIN: $${effectiveWeeklyMaxPain.toFixed(2)} (Near-Term Pin Magnet)`
+          : `WEEKLY PIN · $${effectiveWeeklyMaxPain.toFixed(2)}`,
       });
-      priceLinesRef.current.push(maxPainLine);
+      priceLinesRef.current.push(line);
     }
 
-    // 2. Plot Gamma Flip Benchmark Line (Amber Gold)
+    // 2. Monthly OPEX Anchor Pin (if distinct from weekly pin)
+    if (effectiveMonthlyMaxPain > 0 && Math.abs(effectiveMonthlyMaxPain - effectiveWeeklyMaxPain) > 0.003 * effectiveWeeklyMaxPain) {
+      const line = candleSeries.createPriceLine({
+        price: effectiveMonthlyMaxPain,
+        color: "#a855f7",
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: isHovered
+          ? `MONTHLY OPEX PIN: $${effectiveMonthlyMaxPain.toFixed(2)} (Institutional Balance Anchor)`
+          : `OPEX ANCHOR · $${effectiveMonthlyMaxPain.toFixed(2)}`,
+      });
+      priceLinesRef.current.push(line);
+    }
+
+    // 3. Gamma Flip Benchmark Line (#fbbf24 Amber Gold, 2px Dashed)
     if (showGammaFlip && gammaFlipPrice > 0) {
-      const flipLine = candleSeries.createPriceLine({
+      const line = candleSeries.createPriceLine({
         price: gammaFlipPrice,
         color: "#fbbf24",
         lineWidth: 2,
-        lineStyle: 2, // Dashed
+        lineStyle: 2,
         axisLabelVisible: true,
         title: isHovered
-          ? `Gamma Flip: $${gammaFlipPrice.toFixed(2)} (Regime Pivot)`
-          : "Gamma Flip",
+          ? `GAMMA FLIP: $${gammaFlipPrice.toFixed(2)} (Zero-GEX Regime Boundary)`
+          : `GAMMA FLIP · $${gammaFlipPrice.toFixed(2)}`,
       });
-      priceLinesRef.current.push(flipLine);
+      priceLinesRef.current.push(line);
     }
 
-    // 3. Plot Support Levels (classified into Minor, Intermediate, and Major)
+    // 4. Expected Move Envelope (+- 1-Standard Deviation)
+    if (showExpectedMove && emUpper > 0 && emLower > 0) {
+      const upperLine = candleSeries.createPriceLine({
+        price: emUpper,
+        color: "#38bdf8",
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: isHovered
+          ? `+1σ EXPECTED MOVE: $${emUpper.toFixed(2)} (Weekly Volatility Envelope · 68% Prob)`
+          : `+1σ EXP MOVE · $${emUpper.toFixed(2)}`,
+      });
+      const lowerLine = candleSeries.createPriceLine({
+        price: emLower,
+        color: "#38bdf8",
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: isHovered
+          ? `-1σ EXPECTED MOVE: $${emLower.toFixed(2)} (Weekly Volatility Envelope · 68% Prob)`
+          : `-1σ EXP MOVE · $${emLower.toFixed(2)}`,
+      });
+      priceLinesRef.current.push(upperLine, lowerLine);
+    }
+
+    // 5. Plot Supports (Confluence / Put Walls / Technical)
     supports.forEach((sup) => {
-      let color = "rgba(16, 185, 129, 0.5)"; // Minor Support: Light Green
+      let color = "rgba(16, 185, 129, 0.55)";
       let lineWidth: any = 1;
-      let lineStyle: any = 1; // Dotted
-      let title = "Minor Sup";
+      let lineStyle: any = 1;
+      let title = `SUP · $${sup.price.toFixed(2)}`;
 
-      const relStrength = sup.strength / maxSupportAbs;
-      if (relStrength >= 0.75) {
-        color = "rgba(4, 120, 87, 0.85)"; // Major Support
+      if (sup.is_confluence) {
+        color = "#f59e0b"; // Amber Gold for high conviction confluence
         lineWidth = 3;
-        lineStyle = 0; // Solid
-        title = "Major Sup";
-      } else if (relStrength >= 0.4) {
-        color = "rgba(5, 150, 105, 0.85)"; // Intermediate Support
-        lineWidth = 2;
-        lineStyle = 0; // Solid
-        title = "Int Sup";
+        lineStyle = 0;
+        title = isHovered
+          ? `CONFLUENCE FORTRESS: $${sup.price.toFixed(2)} [${sup.sublabel || 'Multi-Factor'}]`
+          : `CONFLUENCE · $${sup.price.toFixed(2)}`;
+      } else {
+        const rel = sup.strength / maxSupportAbs;
+        if (rel >= 0.75) {
+          color = "rgba(4, 120, 87, 0.9)";
+          lineWidth = 3;
+          lineStyle = 0;
+          title = isHovered
+            ? `MAJOR PUT WALL: $${sup.price.toFixed(2)} (${sup.sublabel || 'OI Absorption: ' + Math.round(sup.strength)})`
+            : `PUT WALL · $${sup.price.toFixed(2)}`;
+        } else if (rel >= 0.4) {
+          color = "rgba(5, 150, 105, 0.85)";
+          lineWidth = 2;
+          lineStyle = 0;
+          title = isHovered
+            ? `INT PUT SUPPORT: $${sup.price.toFixed(2)} (${sup.sublabel || 'Options Floor'})`
+            : `INT SUP · $${sup.price.toFixed(2)}`;
+        } else {
+          title = isHovered
+            ? `MINOR SUPPORT: $${sup.price.toFixed(2)} (${sup.sublabel || 'Technical/Minor'})`
+            : `SUP · $${sup.price.toFixed(2)}`;
+        }
       }
-
-      const displayTitle = isHovered
-        ? (sup.source === "options"
-            ? `${title}: $${sup.price.toFixed(2)} (Absorption: ${Math.round(sup.strength)} — Options ${sup.dte}d DTE)`
-            : `${title}: $${sup.price.toFixed(2)} (Tests: ${sup.tests || 0} — Technical)`)
-        : title;
 
       const supportLine = candleSeries.createPriceLine({
         price: sup.price,
-        color: color,
-        lineWidth: lineWidth,
-        lineStyle: lineStyle,
+        color,
+        lineWidth,
+        lineStyle,
         axisLabelVisible: true,
-        title: displayTitle,
+        title,
       });
       priceLinesRef.current.push(supportLine);
     });
 
-    // 4. Plot Resistance Levels (classified into Minor, Intermediate, and Major)
+    // 6. Plot Resistances (Confluence / Call Walls / Technical)
     resistances.forEach((res) => {
-      let color = "rgba(239, 68, 68, 0.5)"; // Minor Resistance
+      let color = "rgba(239, 68, 68, 0.55)";
       let lineWidth: any = 1;
-      let lineStyle: any = 1; // Dotted
-      let title = "Minor Res";
+      let lineStyle: any = 1;
+      let title = `RES · $${res.price.toFixed(2)}`;
 
-      const relStrength = res.strength / maxResistanceAbs;
-      if (relStrength >= 0.75) {
-        color = "rgba(255, 51, 51, 0.55)"; // Major Resistance
+      if (res.is_confluence) {
+        color = "#f59e0b";
         lineWidth = 3;
-        lineStyle = 0; // Solid
-        title = "Major Res";
-      } else if (relStrength >= 0.4) {
-        color = "rgba(211, 47, 47, 1.0)"; // Intermediate Resistance
-        lineWidth = 2;
-        lineStyle = 0; // Solid
-        title = "Int Res";
+        lineStyle = 0;
+        title = isHovered
+          ? `CONFLUENCE CEILING: $${res.price.toFixed(2)} [${res.sublabel || 'Multi-Factor'}]`
+          : `CONFLUENCE · $${res.price.toFixed(2)}`;
+      } else {
+        const rel = res.strength / maxResistanceAbs;
+        if (rel >= 0.75) {
+          color = "rgba(220, 38, 38, 0.9)";
+          lineWidth = 3;
+          lineStyle = 0;
+          title = isHovered
+            ? `MAJOR CALL WALL: $${res.price.toFixed(2)} (${res.sublabel || 'Gamma Ceiling: ' + Math.round(res.strength)})`
+            : `CALL WALL · $${res.price.toFixed(2)}`;
+        } else if (rel >= 0.4) {
+          color = "rgba(239, 68, 68, 0.85)";
+          lineWidth = 2;
+          lineStyle = 0;
+          title = isHovered
+            ? `INT CALL RESISTANCE: $${res.price.toFixed(2)} (${res.sublabel || 'Options Ceiling'})`
+            : `INT RES · $${res.price.toFixed(2)}`;
+        } else {
+          title = isHovered
+            ? `MINOR RESISTANCE: $${res.price.toFixed(2)} (${res.sublabel || 'Technical/Minor'})`
+            : `RES · $${res.price.toFixed(2)}`;
+        }
       }
-
-      const displayTitle = isHovered
-        ? (res.source === "options"
-            ? `${title}: $${res.price.toFixed(2)} (Absorption: ${Math.round(res.strength)} — Options ${res.dte}d DTE)`
-            : `${title}: $${res.price.toFixed(2)} (Tests: ${res.tests || 0} — Technical)`)
-        : title;
 
       const resistanceLine = candleSeries.createPriceLine({
         price: res.price,
-        color: color,
-        lineWidth: lineWidth,
-        lineStyle: lineStyle,
+        color,
+        lineWidth,
+        lineStyle,
         axisLabelVisible: true,
-        title: displayTitle,
+        title,
       });
       priceLinesRef.current.push(resistanceLine);
     });
@@ -390,8 +483,11 @@ export default function TradingViewChart({
       }
 
       const allPrices: number[] = [];
-      if (maxPain > 0) allPrices.push(maxPain);
+      if (effectiveWeeklyMaxPain > 0) allPrices.push(effectiveWeeklyMaxPain);
+      if (effectiveMonthlyMaxPain > 0) allPrices.push(effectiveMonthlyMaxPain);
       if (showGammaFlip && gammaFlipPrice > 0) allPrices.push(gammaFlipPrice);
+      if (showExpectedMove && emUpper > 0) allPrices.push(emUpper);
+      if (showExpectedMove && emLower > 0) allPrices.push(emLower);
       supports.forEach((s) => allPrices.push(s.price));
       resistances.forEach((r) => allPrices.push(r.price));
 
@@ -440,26 +536,43 @@ export default function TradingViewChart({
         setSvgRects([]);
       }
 
-      // 2. Rectangular Liquidity Pockets
+      // 2. Expected Move Volatility Corridor
+      if (showExpectedMove && emUpper > 0 && emLower > 0) {
+        const yTop = candleSeries.priceToCoordinate(emUpper);
+        const yBot = candleSeries.priceToCoordinate(emLower);
+        if (yTop !== null && yBot !== null) {
+          setEmChannel({
+            yTop: Math.min(yTop, yBot),
+            yBot: Math.max(yTop, yBot),
+            width: plotWidth,
+          });
+        } else {
+          setEmChannel(null);
+        }
+      } else {
+        setEmChannel(null);
+      }
+
+      // 3. Rectangular Liquidity Pockets
       const computedPockets: any[] = [];
       const levelsForPockets: any[] = [];
 
       supports.forEach((s) => {
         const rel = s.strength / maxSupportAbs;
-        if (rel >= 0.4) levelsForPockets.push({ ...s, type: "support", rel });
+        if (rel >= 0.4 || s.is_confluence) levelsForPockets.push({ ...s, type: "support", rel });
       });
 
       resistances.forEach((r) => {
         const rel = r.strength / maxResistanceAbs;
-        if (rel >= 0.4) levelsForPockets.push({ ...r, type: "resistance", rel });
+        if (rel >= 0.4 || r.is_confluence) levelsForPockets.push({ ...r, type: "resistance", rel });
       });
 
-      if (maxPain > 0) {
-        levelsForPockets.push({ price: maxPain, strength: 50, type: "maxpain", rel: 0.8, dte: 0 });
+      if (effectiveWeeklyMaxPain > 0) {
+        levelsForPockets.push({ price: effectiveWeeklyMaxPain, strength: 50, type: "maxpain", rel: 0.8, dte: 7 });
       }
 
       levelsForPockets.forEach((lvl, idx) => {
-        const spreadPct = lvl.rel >= 0.75 ? 0.0035 : 0.0025;
+        const spreadPct = lvl.is_confluence ? 0.004 : lvl.rel >= 0.75 ? 0.0035 : 0.0025;
         const pTop = lvl.price * (1 + spreadPct);
         const pBot = lvl.price * (1 - spreadPct);
         const yTop = candleSeries.priceToCoordinate(pTop);
@@ -470,43 +583,54 @@ export default function TradingViewChart({
           const h = Math.max(16, Math.abs(yBot - yTop));
           const isWeekly = lvl.dte !== null && lvl.dte !== undefined && lvl.dte <= 7;
 
+          let title = "";
+          let fill = "";
+          let stroke = "";
+
+          if (lvl.is_confluence) {
+            title = `L3 CONFLUENCE ZONE · $${lvl.price.toFixed(2)}`;
+            fill = "rgba(245, 158, 11, 0.09)";
+            stroke = "rgba(245, 158, 11, 0.55)";
+          } else if (lvl.type === "support") {
+            title = `PUT LIQUIDITY POCKET · $${lvl.price.toFixed(2)}`;
+            fill = "rgba(0, 255, 136, 0.07)";
+            stroke = "rgba(0, 255, 136, 0.35)";
+          } else if (lvl.type === "resistance") {
+            title = `CALL LIQUIDITY POCKET · $${lvl.price.toFixed(2)}`;
+            fill = "rgba(255, 51, 85, 0.07)";
+            stroke = "rgba(255, 51, 85, 0.35)";
+          } else {
+            title = `MAX PAIN GAMMA PIN · $${lvl.price.toFixed(2)}`;
+            fill = "rgba(186, 104, 200, 0.08)";
+            stroke = "rgba(186, 104, 200, 0.4)";
+          }
+
           computedPockets.push({
             id: `pocket-${idx}-${lvl.price}`,
             price: lvl.price,
             type: lvl.type,
+            isConfluence: lvl.is_confluence,
             y,
             height: h,
             width: plotWidth,
             isWeekly,
             dte: lvl.dte,
-            title: lvl.type === "support"
-              ? `PUT LIQUIDITY POCKET · $${lvl.price.toFixed(2)}`
-              : lvl.type === "resistance"
-              ? `CALL LIQUIDITY POCKET · $${lvl.price.toFixed(2)}`
-              : `MAX PAIN GAMMA PIN · $${lvl.price.toFixed(2)}`,
-            fill: lvl.type === "support"
-              ? "rgba(0, 255, 136, 0.07)"
-              : lvl.type === "resistance"
-              ? "rgba(255, 51, 85, 0.07)"
-              : "rgba(186, 104, 200, 0.08)",
-            stroke: lvl.type === "support"
-              ? "rgba(0, 255, 136, 0.35)"
-              : lvl.type === "resistance"
-              ? "rgba(255, 51, 85, 0.35)"
-              : "rgba(186, 104, 200, 0.4)",
+            title,
+            fill,
+            stroke,
           });
         }
       });
       setPockets(computedPockets);
 
-      // 3. Right-Axis Horizontal Gamma Profile Histogram (Volume Profile Style)
+      // 4. Right-Axis Horizontal Gamma Profile Histogram (Volume Profile Style)
       const computedGex: any[] = [];
       const allLevels = [
         ...supports.map((s) => ({ ...s, type: "support" })),
         ...resistances.map((r) => ({ ...r, type: "resistance" })),
       ];
-      if (maxPain > 0) {
-        allLevels.push({ price: maxPain, strength: maxSupportAbs * 0.75, type: "maxpain" } as any);
+      if (effectiveWeeklyMaxPain > 0) {
+        allLevels.push({ price: effectiveWeeklyMaxPain, strength: maxSupportAbs * 0.75, type: "maxpain" } as any);
       }
 
       const peakStrength = Math.max(
@@ -521,6 +645,29 @@ export default function TradingViewChart({
           const barWidth = Math.round(norm * 115) + 20;
           const isCall = lvl.type === "resistance";
           const isPut = lvl.type === "support";
+          const isConf = (lvl as any).is_confluence;
+
+          let color = "#ba68c8";
+          let bgColor = "rgba(186, 104, 200, 0.25)";
+          let borderColor = "rgba(186, 104, 200, 0.5)";
+          let label = `PIN ${Math.round(lvl.strength)}k`;
+
+          if (isConf) {
+            color = "#f59e0b";
+            bgColor = "rgba(245, 158, 11, 0.25)";
+            borderColor = "rgba(245, 158, 11, 0.6)";
+            label = `CONF ${Math.round(lvl.strength)}k`;
+          } else if (isCall) {
+            color = "#00e5ff";
+            bgColor = "rgba(0, 229, 255, 0.22)";
+            borderColor = "rgba(0, 229, 255, 0.45)";
+            label = `+${Math.round(lvl.strength)}k GEX`;
+          } else if (isPut) {
+            color = "#00ff88";
+            bgColor = "rgba(0, 255, 136, 0.22)";
+            borderColor = "rgba(0, 255, 136, 0.45)";
+            label = `-${Math.round(lvl.strength)}k GEX`;
+          }
 
           computedGex.push({
             id: `gex-${idx}-${lvl.price}`,
@@ -529,22 +676,10 @@ export default function TradingViewChart({
             width: barWidth,
             height: 14,
             price: lvl.price,
-            label: isCall
-              ? `+${Math.round(lvl.strength)}k GEX`
-              : isPut
-              ? `-${Math.round(lvl.strength)}k GEX`
-              : `PIN ${Math.round(lvl.strength)}k`,
-            color: isCall ? "#00e5ff" : isPut ? "#00ff88" : "#ba68c8",
-            bgColor: isCall
-              ? "rgba(0, 229, 255, 0.22)"
-              : isPut
-              ? "rgba(0, 255, 136, 0.22)"
-              : "rgba(186, 104, 200, 0.25)",
-            borderColor: isCall
-              ? "rgba(0, 229, 255, 0.45)"
-              : isPut
-              ? "rgba(0, 255, 136, 0.45)"
-              : "rgba(186, 104, 200, 0.5)",
+            label,
+            color,
+            bgColor,
+            borderColor,
           });
         }
       });
@@ -565,7 +700,7 @@ export default function TradingViewChart({
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(rangeSubscription);
     };
 
-  }, [maxPain, supports, resistances, isHovered, weeklyGaps, showGammaFlip, gammaFlipPrice, maxSupportAbs, maxResistanceAbs]);
+  }, [effectiveWeeklyMaxPain, effectiveMonthlyMaxPain, supports, resistances, isHovered, weeklyGaps, showGammaFlip, gammaFlipPrice, showExpectedMove, emUpper, emLower, maxSupportAbs, maxResistanceAbs]);
 
   return (
     <div className="w-full bg-neutral-950 rounded-lg p-2 border border-neutral-900 overflow-hidden relative">
@@ -630,6 +765,17 @@ export default function TradingViewChart({
           >
             Gamma Flip: {showGammaFlip ? "ON" : "OFF"}
           </button>
+
+          <button
+            onClick={() => setShowExpectedMove(!showExpectedMove)}
+            className={`px-2 py-0.5 rounded border transition-all ${
+              showExpectedMove
+                ? "bg-sky-500/15 text-sky-300 border-sky-500/40 font-bold"
+                : "bg-[#11111d] text-neutral-500 border-[#222234] hover:text-neutral-300"
+            }`}
+          >
+            Expected Move: {showExpectedMove ? "ON" : "OFF"}
+          </button>
         </div>
       </div>
 
@@ -650,7 +796,37 @@ export default function TradingViewChart({
             />
           ))}
 
-          {/* 2. Liquidity Pockets (Horizontal Channels) */}
+          {/* 2. Expected Move Corridor */}
+          {showExpectedMove && emChannel && (
+            <g>
+              <rect
+                x={0}
+                y={emChannel.yTop}
+                width={emChannel.width}
+                height={Math.max(2, emChannel.yBot - emChannel.yTop)}
+                fill="rgba(56, 189, 248, 0.035)"
+                stroke="rgba(56, 189, 248, 0.2)"
+                strokeWidth={1}
+                strokeDasharray="3 3"
+              />
+              <text
+                x={8}
+                y={emChannel.yTop + 12}
+                style={{
+                  fontSize: "8.5px",
+                  fontFamily: "monospace",
+                  fontWeight: "bold",
+                  fill: "#38bdf8",
+                  opacity: 0.75,
+                  pointerEvents: "none",
+                }}
+              >
+                ±1σ EXPECTED MOVE VOLATILITY CORRIDOR (${emLower} – ${emUpper})
+              </text>
+            </g>
+          )}
+
+          {/* 3. Liquidity Pockets (Horizontal Channels) */}
           {showPockets &&
             pockets.map((pkt) => (
               <g key={pkt.id}>
@@ -671,7 +847,7 @@ export default function TradingViewChart({
                     fontSize: "9px",
                     fontFamily: "monospace",
                     fontWeight: "bold",
-                    fill: pkt.type === "support" ? "#00ff88" : pkt.type === "resistance" ? "#ff4d6d" : "#ba68c8",
+                    fill: pkt.isConfluence ? "#f59e0b" : pkt.type === "support" ? "#00ff88" : pkt.type === "resistance" ? "#ff4d6d" : "#ba68c8",
                     opacity: 0.85,
                     pointerEvents: "none",
                   }}
@@ -681,7 +857,7 @@ export default function TradingViewChart({
               </g>
             ))}
 
-          {/* 3. Right-Axis Horizontal Gamma Profile Histogram (Volume Profile Style) */}
+          {/* 4. Right-Axis Horizontal Gamma Profile Histogram */}
           {showGexProfile &&
             gexBars.map((bar) => (
               <g key={bar.id}>
