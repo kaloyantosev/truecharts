@@ -181,7 +181,12 @@ export default function TradingViewChart({
       let data: any[] = [];
       try {
         const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-        const res = await fetch(`${apiBaseUrl}/api/history/${ticker}?timeframe=${encodeURIComponent(timeframe)}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4500);
+        const res = await fetch(`${apiBaseUrl}/api/history/${ticker}?timeframe=${encodeURIComponent(timeframe)}`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
         if (res.ok) {
           data = await res.json();
         }

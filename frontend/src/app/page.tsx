@@ -204,9 +204,13 @@ export default function Home() {
     setInstError(null);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
       const res = await fetch(
-        `${API_URL}/api/analyze/${cleanSym}?timeframe=${encodeURIComponent(tf)}`
+        `${API_URL}/api/analyze/${cleanSym}?timeframe=${encodeURIComponent(tf)}`,
+        { signal: controller.signal }
       );
+      clearTimeout(timeoutId);
       if (!res.ok) throw new Error("Ticker not supported or API offline");
       const result = await res.json();
       setData(result);
@@ -214,7 +218,12 @@ export default function Home() {
       try {
         let loadedInst = false;
         try {
-          const instRes = await fetch(`${API_URL}/api/institutional/${cleanSym}`);
+          const instController = new AbortController();
+          const instTimeoutId = setTimeout(() => instController.abort(), 5000);
+          const instRes = await fetch(`${API_URL}/api/institutional/${cleanSym}`, {
+            signal: instController.signal
+          });
+          clearTimeout(instTimeoutId);
           if (instRes.ok) {
             const iData = await instRes.json();
             setInstData(iData);

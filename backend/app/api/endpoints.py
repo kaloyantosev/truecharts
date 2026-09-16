@@ -106,6 +106,12 @@ def get_quarter_prices(hist, q_labels):
             "current": {"start": round(base*1.12, 2), "end": round(base*1.20, 2), "pct": 7.1},
         }
 
+import time
+
+_OPTIONS_CACHE: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
+_HISTORY_CACHE: Dict[str, Tuple[float, pd.DataFrame]] = {}
+_ANALYZE_CACHE: Dict[str, Tuple[float, dict]] = {}
+
 session = requests.Session()
 session.headers.update({
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -114,8 +120,15 @@ session.headers.update({
 def fetch_live_options_chain(ticker: str, spot: float) -> List[Dict[str, Any]]:
     """
     Fetches real-time options chain from Yahoo Finance using yfinance.
-    Finds the closest contracts around 7, 14, 30, 60, and 90 DTE to keep it fast.
+    Uses in-memory caching with 90s TTL to prevent rate limits, server hangs, and OOM crashes.
     """
+    now = time.time()
+    cache_key = f"{ticker.upper()}_{round(spot, 1)}"
+    if cache_key in _OPTIONS_CACHE:
+        cached_time, cached_data = _OPTIONS_CACHE[cache_key]
+        if now - cached_time < 90.0:
+            return cached_data
+
     try:
         tk = yf.Ticker(ticker)
         expirations = tk.options
@@ -171,16 +184,29 @@ def fetch_live_options_chain(ticker: str, spot: float) -> List[Dict[str, Any]]:
                         "iv": iv,
                         "dte": float(dte)
                     })
+        if chain:
+            _OPTIONS_CACHE[cache_key] = (now, chain)
         return chain
     except Exception as e:
         print(f"Failed to fetch live options chain from yfinance: {e}")
+        # Return stale cache if available
+        if cache_key in _OPTIONS_CACHE:
+            return _OPTIONS_CACHE[cache_key][1]
         return []
 
 def fetch_live_price_history(ticker: str, timeframe: str = "1d") -> pd.DataFrame:
     """
     Fetches stock prices from Yahoo Finance using raw requests v8 chart API.
     Supports timeframes: 5 min, 15 min, 1h, 4h, 1d
+    Uses in-memory caching with 60s TTL to prevent rate-limits and timeouts.
     """
+    now = time.time()
+    cache_key = f"{ticker.upper()}_{timeframe}"
+    if cache_key in _HISTORY_CACHE:
+        cached_time, cached_df = _HISTORY_CACHE[cache_key]
+        if now - cached_time < 60.0:
+            return cached_df
+
     interval = "1d"
     period_range = "1y"
     
@@ -211,9 +237,11 @@ def fetch_live_price_history(ticker: str, timeframe: str = "1d") -> pd.DataFrame
         
     try:
         url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?range={period_range}&interval={interval}"
-        res = session.get(url)
+        res = session.get(url, timeout=5)
         if res.status_code != 200:
             print(f"Yahoo history endpoint returned status {res.status_code} for {ticker}")
+            if cache_key in _HISTORY_CACHE:
+                return _HISTORY_CACHE[cache_key][1]
             return pd.DataFrame()
             
         data = res.json()
@@ -242,9 +270,13 @@ def fetch_live_price_history(ticker: str, timeframe: str = "1d") -> pd.DataFrame
             })
             df = resampled.dropna()
             
+        if not df.empty:
+            _HISTORY_CACHE[cache_key] = (now, df)
         return df
     except Exception as e:
         print(f"Failed to fetch live price history for {ticker}: {e}")
+        if cache_key in _HISTORY_CACHE:
+            return _HISTORY_CACHE[cache_key][1]
         return pd.DataFrame()
 
 @router.get("/history/{ticker}")
@@ -687,6 +719,12 @@ def get_db():
 @router.get("/analyze/{ticker}")
 def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get_db)) -> Dict[str, Any]:
     ticker = ticker.upper()
+    now = time.time()
+    cache_key = f"{ticker}_{timeframe}"
+    if cache_key in _ANALYZE_CACHE:
+        cached_time, cached_result = _ANALYZE_CACHE[cache_key]
+        if now - cached_time < 45.0:
+            return cached_result
     
     try:
         tk_info = yf.Ticker(ticker).info
@@ -971,7 +1009,7 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
         print(f"Database logging failed: {e}")
         db.rollback()
     
-    return {
+    res_payload = {
         "ticker": ticker,
         "name": asset_name,
         "spot": spot,
@@ -990,6 +1028,8 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
         "trend_phase": trend_phase,
         "iv_regime": iv_regime
     }
+    _ANALYZE_CACHE[cache_key] = (now, res_payload)
+    return res_payload
 
 def fetch_live_etf_change(ticker: str) -> float:
     """
