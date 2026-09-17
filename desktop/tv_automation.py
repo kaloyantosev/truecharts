@@ -265,10 +265,11 @@ class TradingViewAutomatorApp:
 
     def start_backend_health_check(self):
         def check():
+            backend_root = self.api_url.replace("/api/analyze", "")
             while True:
                 try:
-                    req = urllib.request.Request(f"{self.api_url}/AAPL", headers={'User-Agent': 'Mozilla'})
-                    with urllib.request.urlopen(req, timeout=5) as res:
+                    req = urllib.request.Request(f"{backend_root}/", headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=8) as res:
                         if res.status == 200:
                             self.root.after(0, lambda: self.update_api_status("Active", "green"))
                         else:
@@ -287,10 +288,11 @@ class TradingViewAutomatorApp:
     def wake_up_backend(self):
         self.log("Sending ping to wake up Render backend...")
         self.update_api_status("Waking up...", "yellow")
+        backend_root = self.api_url.replace("/api/analyze", "")
         
         def ping():
             try:
-                req = urllib.request.Request(f"{self.api_url}/AAPL", headers={'User-Agent': 'Mozilla'})
+                req = urllib.request.Request(f"{backend_root}/", headers={'User-Agent': 'Mozilla/5.0'})
                 with urllib.request.urlopen(req, timeout=60) as res:
                     if res.status == 200:
                         self.log("Backend server woke up successfully!")
