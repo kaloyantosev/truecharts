@@ -8,6 +8,7 @@ import InstitutionalSectorFlow from "@/components/InstitutionalSectorFlow";
 import MacroNarrativeDashboard from "@/components/MacroNarrativeDashboard";
 import MultiAssetWatchlist from "@/components/MultiAssetWatchlist";
 import LiveMarketTickerBar from "@/components/LiveMarketTickerBar";
+import SinclairVolBox, { SinclairVolatility } from "@/components/SinclairVolBox";
 import { REAL_TOP_20_CONVICTION } from "@/data/realInstitutionalData";
 
 interface Level {
@@ -41,6 +42,7 @@ interface AnalyticsData {
   sentiment: string;
   trend_phase: string;
   iv_regime: string;
+  sinclair_volatility?: SinclairVolatility;
 }
 
 interface InstData {
@@ -359,6 +361,19 @@ export default function Home() {
         sentiment: fallbackSpot > wMaxPain ? "Bullish" : "Bearish",
         trend_phase: "Accumulation",
         iv_regime: "Low (17.2%)",
+        sinclair_volatility: {
+          rv_yang_zhang: 15.1,
+          implied_volatility: 17.2,
+          vrp_spread: 2.1,
+          vrp_pct: 13.9,
+          iv_rank: 35.0,
+          ivts: 0.94,
+          term_structure_regime: "Contango (Normal Upward Term)",
+          skew_slope: 1.18,
+          skew_bias: "Put Hedging",
+          regime_verdict: "Overpriced Vol (Short Vol Edge)",
+          vol_edge: "Credit Spreads / Condors",
+        },
       });
 
       const realStock = REAL_TOP_20_CONVICTION.find((s) => s.symbol === cleanSym);
@@ -581,6 +596,13 @@ export default function Home() {
                 )}
               </div>
             </div>
+
+            {/* SINCLAIR VOLATILITY & FLOW INTELLIGENCE BOX */}
+            <SinclairVolBox
+              volData={data?.sinclair_volatility}
+              spot={data?.spot}
+              ticker={data?.ticker || ticker}
+            />
           </div>
 
         </div>

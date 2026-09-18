@@ -321,11 +321,11 @@ export default function TradingViewChart({
       priceLinesRef.current.push(line);
     }
 
-    // 3. Gamma Flip Benchmark Line (#fbbf24 Amber Gold, 2px Dashed)
+    // 3. Gamma Flip Benchmark Line (#facc15 Canary Yellow, 2px Dashed)
     if (gammaFlipPrice > 0) {
       const line = candleSeries.createPriceLine({
         price: gammaFlipPrice,
-        color: "#fbbf24",
+        color: "#facc15",
         lineWidth: 2,
         lineStyle: 2,
         axisLabelVisible: true,
@@ -363,17 +363,25 @@ export default function TradingViewChart({
 
     // 5. Plot Supports (Confluence / Put Walls / Technical)
     supports.forEach((sup) => {
+      if (sup.source === "technical" && !sup.is_confluence && (!sup.tests || sup.tests <= 0)) {
+        return;
+      }
       let color = "rgba(16, 185, 129, 0.55)";
       let lineWidth: any = 1;
       let lineStyle: any = 1;
       let title = `SUP · $${sup.price.toFixed(2)}`;
 
       if (sup.is_confluence) {
-        color = "#f59e0b"; // Amber Gold for high conviction confluence
+        color = "#f97316"; // Vivid Orange for high conviction confluence
         lineWidth = 3;
         lineStyle = 0;
+        const cleanSub = (sup.sublabel || 'Multi-Factor')
+          .split('+')
+          .map((s: string) => s.trim())
+          .filter((s: string) => !s.toLowerCase().includes('confluence'))
+          .join(' + ') || 'Multi-Factor';
         title = isHovered
-          ? `CONFLUENCE FORTRESS: $${sup.price.toFixed(2)} [${sup.sublabel || 'Multi-Factor'}]`
+          ? `CONFLUENCE FORTRESS: $${sup.price.toFixed(2)} [${cleanSub}]`
           : `CONFLUENCE · $${sup.price.toFixed(2)}`;
       } else {
         const rel = sup.strength / maxSupportAbs;
@@ -411,17 +419,25 @@ export default function TradingViewChart({
 
     // 6. Plot Resistances (Confluence / Call Walls / Technical)
     resistances.forEach((res) => {
+      if (res.source === "technical" && !res.is_confluence && (!res.tests || res.tests <= 0)) {
+        return;
+      }
       let color = "rgba(239, 68, 68, 0.55)";
       let lineWidth: any = 1;
       let lineStyle: any = 1;
       let title = `RES · $${res.price.toFixed(2)}`;
 
       if (res.is_confluence) {
-        color = "#f59e0b";
+        color = "#f97316"; // Vivid Orange
         lineWidth = 3;
         lineStyle = 0;
+        const cleanSub = (res.sublabel || 'Multi-Factor')
+          .split('+')
+          .map((s: string) => s.trim())
+          .filter((s: string) => !s.toLowerCase().includes('confluence'))
+          .join(' + ') || 'Multi-Factor';
         title = isHovered
-          ? `CONFLUENCE CEILING: $${res.price.toFixed(2)} [${res.sublabel || 'Multi-Factor'}]`
+          ? `CONFLUENCE CEILING: $${res.price.toFixed(2)} [${cleanSub}]`
           : `CONFLUENCE · $${res.price.toFixed(2)}`;
       } else {
         const rel = res.strength / maxResistanceAbs;

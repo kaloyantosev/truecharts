@@ -299,6 +299,9 @@ export default function TradingViewChart({
 
     // 3. Plot Support Levels (classified into Minor, Intermediate, and Major)
     supports.forEach((sup) => {
+      if (sup.source === "technical" && (!sup.tests || sup.tests <= 0)) {
+        return;
+      }
       let color = "rgba(16, 185, 129, 0.5)"; // Minor Support: Light Green
       let lineWidth: any = 1;
       let lineStyle: any = 1; // Dotted
@@ -336,6 +339,9 @@ export default function TradingViewChart({
 
     // 4. Plot Resistance Levels (classified into Minor, Intermediate, and Major)
     resistances.forEach((res) => {
+      if (res.source === "technical" && (!res.tests || res.tests <= 0)) {
+        return;
+      }
       let color = "rgba(239, 68, 68, 0.5)"; // Minor Resistance
       let lineWidth: any = 1;
       let lineStyle: any = 1; // Dotted

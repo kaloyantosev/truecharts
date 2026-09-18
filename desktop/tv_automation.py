@@ -3,6 +3,8 @@ import os
 import sys
 import json
 import time
+import datetime
+import calendar
 import urllib.request
 import threading
 import subprocess
@@ -443,81 +445,364 @@ class TradingViewAutomatorApp:
         resistances = data.get("resistances", [])
         max_pain = float(data.get("max_pain", 0))
 
+        weekly_max_pain = float(data.get("weekly_max_pain") or data.get("max_pain") or 0)
+        monthly_max_pain = float(data.get("monthly_max_pain") or 0)
+        gamma_flip = float(data.get("gamma_flip", 0) or 0)
+
+        em_up = float(data.get("expected_move_upper", 0) or 0)
+        em_dn = float(data.get("expected_move_lower", 0) or 0)
+        if em_up <= 0 or em_dn <= 0:
+            exp_move = data.get("expected_move")
+            if isinstance(exp_move, dict):
+                em_up = em_up or float(exp_move.get("upper", 0) or 0)
+                em_dn = em_dn or float(exp_move.get("lower", 0) or 0)
+
         max_sup_abs = max([float(s.get("strength", 0)) for s in supports], default=1.0)
         max_res_abs = max([float(r.get("strength", 0)) for r in resistances], default=1.0)
 
-        levels_to_draw = []
+        # Calculate DTE indicators for options expiration cycles
+        today = datetime.date.today()
+        days_to_fri = (4 - today.weekday()) % 7
+        weekly_dte_str = f"{days_to_fri}d DTE" if days_to_fri > 0 else "0DTE"
 
-        # 1. Plot Resistances
+        def get_monthly_opex_dte(d):
+            c = calendar.monthcalendar(d.year, d.month)
+            fris = [w[4] for w in c if w[4] != 0]
+            tf = datetime.date(d.year, d.month, fris[2])
+            if tf < d:
+                m = 1 if d.month == 12 else d.month + 1
+                y = d.year + 1 if d.month == 12 else d.year
+                c = calendar.monthcalendar(y, m)
+                fris = [w[4] for w in c if w[4] != 0]
+                tf = datetime.date(y, m, fris[2])
+            diff = (tf - d).days
+            return f"{diff}d DTE" if diff > 0 else "0DTE"
+
+        monthly_dte_str = get_monthly_opex_dte(today)
+
+        def extract_dte_tag(item, fallback_dte_str=""):
+            d_val = item.get("dte")
+            if d_val is not None and str(d_val).strip() and str(d_val).lower() != "none":
+                try:
+                    d_num = int(float(d_val))
+                    return f"{d_num}d DTE" if d_num > 0 else "0DTE"
+                except:
+                    return f"{d_val}d DTE"
+            m = re.search(r"\((\d+)d\s*DTE\)", str(item.get("sublabel", "")), re.IGNORECASE)
+            if m:
+                d_num = int(m.group(1))
+                return f"{d_num}d DTE" if d_num > 0 else "0DTE"
+            return fallback_dte_str
+
+        raw_items = []
+
+        # 1. Weekly Pin (Weekly Max Pain)
+        if weekly_max_pain > 0:
+            raw_items.append({
+                "price": weekly_max_pain,
+                "title": "WEEKLY PIN",
+                "dte_tag": weekly_dte_str,
+                "label": f"WEEKLY PIN · ${weekly_max_pain:.2f} ({weekly_dte_str})",
+                "color": "#ba68c8",
+                "priority": 90
+            })
+
+        # 2. Monthly OPEX Anchor Pin
+        if monthly_max_pain > 0:
+            raw_items.append({
+                "price": monthly_max_pain,
+                "title": "OPEX ANCHOR",
+                "dte_tag": monthly_dte_str,
+                "label": f"OPEX ANCHOR · ${monthly_max_pain:.2f} ({monthly_dte_str})",
+                "color": "#a855f7",
+                "priority": 85
+            })
+
+        # 3. Gamma Flip (Zero-GEX Regime Pivot)
+        if gamma_flip > 0:
+            raw_items.append({
+                "price": gamma_flip,
+                "title": "GAMMA FLIP",
+                "dte_tag": "",
+                "label": f"GAMMA FLIP · ${gamma_flip:.2f} (Regime Pivot)",
+                "color": "#facc15",
+                "priority": 95
+            })
+
+        # 3b. Weekly Expected Move Envelope (+- 1-Standard Deviation, 68% Containment)
+        em_upper = float(data.get("expected_move_upper") or 0.0)
+        em_lower = float(data.get("expected_move_lower") or 0.0)
+        if em_upper > 0 and em_lower > 0:
+            raw_items.append({
+                "price": em_upper,
+                "title": "+1σ EXP MOVE",
+                "dte_tag": "Weekly",
+                "label": f"+1σ EXP MOVE · ${em_upper:.2f} (Weekly Upper 68% Band)",
+                "color": "#38bdf8",
+                "priority": 70
+            })
+            raw_items.append({
+                "price": em_lower,
+                "title": "-1σ EXP MOVE",
+                "dte_tag": "Weekly",
+                "label": f"-1σ EXP MOVE · ${em_lower:.2f} (Weekly Lower 68% Band)",
+                "color": "#38bdf8",
+                "priority": 70
+            })
+
+        # 4. Resistances (Confluence / Call Walls / Technical)
         for res in resistances:
             try:
                 p = float(res.get("price", 0))
                 st = float(res.get("strength", 0))
-                rel = st / max_res_abs if max_res_abs > 0 else 0
-                
-                if rel >= 0.75:
-                    title = "Major Res"
-                    color = "#ff3333"
-                elif rel >= 0.4:
-                    title = "Int Res"
-                    color = "#d32f2f"
-                else:
-                    title = "Minor Res"
-                    color = "#f87171"
-                    
                 src = str(res.get("source", "")).lower()
-                if src == "options":
-                    detail = f"(Absorption: {round(st)} — Options {res.get('dte', '')}d DTE)"
+                tests = int(res.get("tests", 0) or 0)
+                is_conf = bool(res.get("is_confluence"))
+
+                # Filter out technical levels with 0 tests
+                if src != "options" and not is_conf and tests <= 0:
+                    continue
+
+                dte_tag = extract_dte_tag(res)
+
+                if is_conf:
+                    sub = res.get("sublabel") or "Multi-Factor"
+                    clean_sub_parts = [part.strip() for part in sub.split("+") if "confluence" not in part.lower()]
+                    clean_sub = " + ".join(clean_sub_parts) if clean_sub_parts else "Multi-Factor"
+                    if dte_tag and dte_tag not in clean_sub:
+                        clean_sub = f"{dte_tag} · {clean_sub}"
+                    raw_items.append({
+                        "price": p,
+                        "title": "CONFLUENCE",
+                        "is_confluence": True,
+                        "sublabel": clean_sub,
+                        "confluence_factors": res.get("confluence_factors") or clean_sub_parts,
+                        "dte_tag": dte_tag,
+                        "label": f"CONFLUENCE · ${p:.2f} [{clean_sub}]",
+                        "color": "#f97316",
+                        "priority": 100
+                    })
+                elif src == "options":
+                    rel = st / max_res_abs if max_res_abs > 0 else 0
+                    if rel >= 0.75:
+                        d_part = f" ({dte_tag} · Gamma Ceiling)" if dte_tag else f" (Gamma Ceiling: {round(st)})"
+                        raw_items.append({
+                            "price": p,
+                            "title": "CALL WALL",
+                            "dte_tag": dte_tag,
+                            "label": f"CALL WALL · ${p:.2f}{d_part}",
+                            "color": "#dc2626",
+                            "priority": 75
+                        })
+                    elif rel >= 0.4:
+                        d_part = f" ({dte_tag} · Absorption: {round(st)})" if dte_tag else f" (Absorption: {round(st)})"
+                        raw_items.append({
+                            "price": p,
+                            "title": "INT RES",
+                            "dte_tag": dte_tag,
+                            "label": f"INT CALL RES · ${p:.2f}{d_part}",
+                            "color": "#ef4444",
+                            "priority": 60
+                        })
+                    else:
+                        d_part = f" ({dte_tag})" if dte_tag else ""
+                        raw_items.append({
+                            "price": p,
+                            "title": "CALL RES",
+                            "dte_tag": dte_tag,
+                            "label": f"CALL RES · ${p:.2f}{d_part}",
+                            "color": "#f87171",
+                            "priority": 40
+                        })
                 else:
-                    detail = f"(Tests: {res.get('tests', 0)} — Technical)"
-                    
-                label = f"{title}: ${p:.2f} {detail}".strip()
-                levels_to_draw.append({"price": p, "label": label, "color": color})
+                    raw_items.append({
+                        "price": p,
+                        "title": "TECH RES",
+                        "dte_tag": "",
+                        "tests": tests,
+                        "label": f"TECH RES · ${p:.2f} ({tests} swing tests)",
+                        "color": "#ef4444",
+                        "priority": 50
+                    })
             except Exception:
                 pass
 
-        # 2. Plot Max Pain Level
-        if max_pain > 0:
-            levels_to_draw.append({"price": max_pain, "label": f"Max Pain: ${max_pain:.2f}", "color": "#ba68c8"})
-
-        # 3. Plot Supports
+        # 6. Supports (Confluence / Put Walls / Technical)
         for sup in supports:
             try:
                 p = float(sup.get("price", 0))
                 st = float(sup.get("strength", 0))
-                rel = st / max_sup_abs if max_sup_abs > 0 else 0
-                
-                if rel >= 0.75:
-                    title = "Major Sup"
-                    color = "#047857"
-                elif rel >= 0.4:
-                    title = "Int Sup"
-                    color = "#059669"
-                else:
-                    title = "Minor Sup"
-                    color = "#10b981"
-                    
                 src = str(sup.get("source", "")).lower()
-                if src == "options":
-                    detail = f"(Absorption: {round(st)} — Options {sup.get('dte', '')}d DTE)"
+                tests = int(sup.get("tests", 0) or 0)
+                is_conf = bool(sup.get("is_confluence"))
+
+                # Filter out technical levels with 0 tests
+                if src != "options" and not is_conf and tests <= 0:
+                    continue
+
+                dte_tag = extract_dte_tag(sup)
+
+                if is_conf:
+                    sub = sup.get("sublabel") or "Multi-Factor"
+                    clean_sub_parts = [part.strip() for part in sub.split("+") if "confluence" not in part.lower()]
+                    clean_sub = " + ".join(clean_sub_parts) if clean_sub_parts else "Multi-Factor"
+                    if dte_tag and dte_tag not in clean_sub:
+                        clean_sub = f"{dte_tag} · {clean_sub}"
+                    raw_items.append({
+                        "price": p,
+                        "title": "CONFLUENCE",
+                        "is_confluence": True,
+                        "sublabel": clean_sub,
+                        "confluence_factors": sup.get("confluence_factors") or clean_sub_parts,
+                        "dte_tag": dte_tag,
+                        "label": f"CONFLUENCE · ${p:.2f} [{clean_sub}]",
+                        "color": "#f97316",
+                        "priority": 100
+                    })
+                elif src == "options":
+                    rel = st / max_sup_abs if max_sup_abs > 0 else 0
+                    if rel >= 0.75:
+                        d_part = f" ({dte_tag} · OI Absorption: {round(st)})" if dte_tag else f" (OI Absorption: {round(st)})"
+                        raw_items.append({
+                            "price": p,
+                            "title": "PUT WALL",
+                            "dte_tag": dte_tag,
+                            "label": f"PUT WALL · ${p:.2f}{d_part}",
+                            "color": "#047857",
+                            "priority": 75
+                        })
+                    elif rel >= 0.4:
+                        d_part = f" ({dte_tag} · Absorption: {round(st)})" if dte_tag else f" (Absorption: {round(st)})"
+                        raw_items.append({
+                            "price": p,
+                            "title": "INT SUP",
+                            "dte_tag": dte_tag,
+                            "label": f"INT PUT SUP · ${p:.2f}{d_part}",
+                            "color": "#059669",
+                            "priority": 60
+                        })
+                    else:
+                        d_part = f" ({dte_tag})" if dte_tag else ""
+                        raw_items.append({
+                            "price": p,
+                            "title": "PUT SUP",
+                            "dte_tag": dte_tag,
+                            "label": f"PUT SUP · ${p:.2f}{d_part}",
+                            "color": "#10b981",
+                            "priority": 40
+                        })
                 else:
-                    detail = f"(Tests: {sup.get('tests', 0)} — Technical)"
-                    
-                label = f"{title}: ${p:.2f} {detail}".strip()
-                levels_to_draw.append({"price": p, "label": label, "color": color})
+                    raw_items.append({
+                        "price": p,
+                        "title": "TECH SUP",
+                        "dte_tag": "",
+                        "tests": tests,
+                        "label": f"TECH SUP · ${p:.2f} ({tests} swing tests)",
+                        "color": "#10b981",
+                        "priority": 50
+                    })
             except Exception:
                 pass
+
+        # --- DEDUPLICATION & OVERLAY MERGE ENGINE ---
+        # Cluster levels that fall on the exact same price or within a 0.2% threshold
+        # into a single line with a unified label (like the site) to eliminate text collisions
+        levels_to_draw = []
+        if raw_items:
+            sorted_items = sorted(raw_items, key=lambda x: x["price"])
+            clusters = []
+            curr_cluster = [sorted_items[0]]
+            for itm in sorted_items[1:]:
+                prev_p = curr_cluster[-1]["price"]
+                curr_p = itm["price"]
+                # Group if exact same rounded cent or within 0.2% price threshold
+                if abs(curr_p - prev_p) <= max(0.05, prev_p * 0.002):
+                    curr_cluster.append(itm)
+                else:
+                    clusters.append(curr_cluster)
+                    curr_cluster = [itm]
+            if curr_cluster:
+                clusters.append(curr_cluster)
+
+            for cl in clusters:
+                if len(cl) == 1:
+                    levels_to_draw.append({
+                        "price": cl[0]["price"],
+                        "label": cl[0]["label"],
+                        "color": cl[0]["color"]
+                    })
+                else:
+                    # Multiple levels colliding: sort by priority descending
+                    cl.sort(key=lambda x: x.get("priority", 0), reverse=True)
+                    rep_price = cl[0]["price"]
+                    factor_list = []
+                    for itm in cl:
+                        c_factors = itm.get("confluence_factors")
+                        sub = itm.get("sublabel")
+                        t = itm.get("title") or itm.get("label", "").split("·")[0].split(":")[0].strip()
+                        d_tag = itm.get("dte_tag")
+                        tests = itm.get("tests")
+
+                        # If this item was already a confluence, unpack its underlying factors
+                        if itm.get("is_confluence") or t.upper() == "CONFLUENCE":
+                            if c_factors and isinstance(c_factors, list):
+                                for f in c_factors:
+                                    f_clean = str(f).strip()
+                                    if f_clean.upper() != "CONFLUENCE" and f_clean not in factor_list:
+                                        factor_list.append(f_clean)
+                            elif sub and "multi-factor" not in sub.lower():
+                                parts = [p.strip() for p in sub.split("+")]
+                                for p in parts:
+                                    clean_p = p.split("·")[-1].strip() if "·" in p else p
+                                    if clean_p.upper() != "CONFLUENCE" and clean_p not in factor_list:
+                                        factor_list.append(clean_p)
+                        else:
+                            if d_tag and d_tag not in t:
+                                tag = f"{t} ({d_tag})"
+                            elif tests and "test" not in t.lower():
+                                tag = f"{t} ({tests} tests)"
+                            else:
+                                tag = t
+                            if tag.upper() != "CONFLUENCE" and tag not in factor_list:
+                                factor_list.append(tag)
+
+                    final_factors = [f for f in factor_list if "confluence" not in f.lower()]
+                    if not final_factors:
+                        final_factors = ["Multi-Factor S/R"]
+
+                    if set([itm.get("title") for itm in cl]) == {"WEEKLY PIN", "OPEX ANCHOR"}:
+                        lbl = f"WEEKLY PIN ({weekly_dte_str}) & OPEX ANCHOR ({monthly_dte_str}) · ${rep_price:.2f}"
+                        clr = "#ba68c8"
+                    else:
+                        lbl = f"CONFLUENCE · ${rep_price:.2f} [{' + '.join(final_factors)}]"
+                        clr = "#f97316"
+
+                    levels_to_draw.append({
+                        "price": rep_price,
+                        "label": lbl,
+                        "color": clr
+                    })
 
         if not levels_to_draw:
             self.log(f"No options levels in API payload for {ticker}. Generating key technical levels...")
             curr_price = float(data.get("current_price") or 100.0)
             levels_to_draw = [
-                {"price": curr_price * 1.05, "label": f"Major Res: ${curr_price * 1.05:.2f} (Technical R2)", "color": "#ff3333"},
-                {"price": curr_price * 1.02, "label": f"Int Res: ${curr_price * 1.02:.2f} (Technical R1)", "color": "#d32f2f"},
-                {"price": curr_price, "label": f"Pivot Price: ${curr_price:.2f}", "color": "#ba68c8"},
-                {"price": curr_price * 0.98, "label": f"Int Sup: ${curr_price * 0.98:.2f} (Technical S1)", "color": "#059669"},
-                {"price": curr_price * 0.95, "label": f"Major Sup: ${curr_price * 0.95:.2f} (Technical S2)", "color": "#047857"}
+                {"price": curr_price * 1.05, "label": f"CALL WALL · ${curr_price * 1.05:.2f} (Technical R2)", "color": "#dc2626"},
+                {"price": curr_price * 1.02, "label": f"INT RES · ${curr_price * 1.02:.2f} (Technical R1)", "color": "#ef4444"},
+                {"price": curr_price, "label": f"PIVOT PRICE · ${curr_price:.2f}", "color": "#ba68c8"},
+                {"price": curr_price * 0.98, "label": f"INT SUP · ${curr_price * 0.98:.2f} (Technical S1)", "color": "#059669"},
+                {"price": curr_price * 0.95, "label": f"PUT WALL · ${curr_price * 0.95:.2f} (Technical S2)", "color": "#047857"}
             ]
+
+        sinclair_vol = data.get("sinclair_volatility") or {}
+        if sinclair_vol:
+            self.log(f"─── SINCLAIR VOLATILITY REGIME ({ticker}) ───")
+            self.log(f"  Regime: {sinclair_vol.get('regime_verdict')}")
+            self.log(f"  IV: {sinclair_vol.get('implied_volatility')}% vs YZ-RV: {sinclair_vol.get('rv_yang_zhang')}% (VRP: {sinclair_vol.get('vrp_spread'):+0.1f} pts)")
+            if sinclair_vol.get('weekly_expected_move_dollars'):
+                self.log(f"  Weekly Move: ±${sinclair_vol.get('weekly_expected_move_dollars')} (±{sinclair_vol.get('weekly_expected_move_pct')}%)")
+            self.log(f"  Term: {sinclair_vol.get('term_structure_regime', '').split('(')[0].strip()} ({sinclair_vol.get('ivts')}x) | Skew: {sinclair_vol.get('skew_bias')}")
+            self.log(f"────────────────────────────────────────────")
 
         self.log(f"Injecting {len(levels_to_draw)} exact site levels for {ticker} into TradingView...")
         
@@ -526,12 +811,31 @@ class TradingViewAutomatorApp:
             try {{
                 let toolMod = null;
                 if (window.webpackChunktradingview) {{
-                    window.webpackChunktradingview.push([[999995], {{}}, function(req) {{
-                        toolMod = req(512582);
-                    }}]);
+                    try {{
+                        window.webpackChunktradingview.push([[999995], {{}}, function(req) {{
+                            if (req && req.m) {{
+                                if (req.m[512582]) {{
+                                    try {{ toolMod = req(512582); }} catch(e) {{}}
+                                }}
+                                if (!toolMod || !toolMod.ensureLineToolLoaded) {{
+                                    for (let id in req.m) {{
+                                        try {{
+                                            let exp = req(id);
+                                            if (exp && typeof exp.ensureLineToolLoaded === 'function') {{
+                                                toolMod = exp;
+                                                break;
+                                            }}
+                                        }} catch(e) {{}}
+                                    }}
+                                }}
+                            }}
+                        }}]);
+                    }} catch(e) {{}}
                 }}
-                if (toolMod && toolMod.ensureLineToolLoaded) {{
-                    await toolMod.ensureLineToolLoaded('LineToolHorzLine');
+                if (toolMod && typeof toolMod.ensureLineToolLoaded === 'function') {{
+                    try {{
+                        await toolMod.ensureLineToolLoaded('LineToolHorzLine');
+                    }} catch(e) {{}}
                 }}
                 
                 function getCwc() {{
@@ -580,8 +884,15 @@ class TradingViewAutomatorApp:
                             let isScriptLine = 
                                 txt.includes('Major Res') || txt.includes('Int Res') || txt.includes('Minor Res') ||
                                 txt.includes('Major Sup') || txt.includes('Int Sup') || txt.includes('Minor Sup') ||
-                                txt.includes('Max Pain') || txt.includes('Pivot Price') || txt.includes('Technical') ||
-                                txt.includes('Absorption') || txt.includes('Target Level');
+                                txt.includes('Max Pain') || txt.includes('WEEKLY PIN') || txt.includes('Weekly Pin') ||
+                                txt.includes('OPEX ANCHOR') || txt.includes('Opex Anchor') ||
+                                txt.includes('GAMMA FLIP') || txt.includes('Gamma Flip') ||
+                                txt.includes('EXP MOVE') || txt.includes('Expected Move') ||
+                                txt.includes('CALL WALL') || txt.includes('PUT WALL') ||
+                                txt.includes('CALL RES') || txt.includes('PUT SUP') ||
+                                txt.includes('CONFLUENCE') || txt.includes('TECH') ||
+                                txt.includes('PIVOT') || txt.includes('Pivot Price') || txt.includes('Technical') ||
+                                txt.includes('Absorption') || txt.includes('Target Level') || txt.includes('DTE');
                             if (isScriptLine) {{
                                 toRemove.push(s);
                             }}
@@ -665,12 +976,41 @@ class TradingViewAutomatorApp:
                     }}
                 }}
                 
-                // 4. Also trigger chart save
-                let svc = cwc._saveChartService;
-                if (svc) {{
-                    if (svc.markContentAsChanged) svc.markContentAsChanged();
-                    if (svc.saveChartSilently) svc.saveChartSilently();
-                }}
+                // 5. Render or Update On-Chart Sinclair Volatility HUD Box
+                try {{
+                    const sVol = {json.dumps(sinclair_vol)};
+                    if (sVol && sVol.regime_verdict) {{
+                        let hud = document.getElementById('tc-sinclair-hud');
+                        if (!hud) {{
+                            hud = document.createElement('div');
+                            hud.id = 'tc-sinclair-hud';
+                            hud.style.cssText = 'position:fixed;top:55px;right:80px;z-index:99999;background:rgba(10,12,20,0.92);border:1px solid #1e293b;border-top:2px solid #00e5ff;border-radius:6px;padding:8px 12px;color:#f8fafc;font-family:Consolas,monospace;font-size:10.5px;line-height:1.4;box-shadow:0 8px 20px rgba(0,0,0,0.6);pointer-events:auto;user-select:none;backdrop-filter:blur(8px);min-width:260px;';
+                            document.body.appendChild(hud);
+                        }}
+                        
+                        let vrpColor = sVol.vrp_spread >= 0 ? '#10b981' : '#38bdf8';
+                        let vrpSign = sVol.vrp_spread >= 0 ? '+' : '';
+                        let termStr = sVol.term_structure_regime ? sVol.term_structure_regime.split('(')[0].trim() : 'Contango';
+                        let weeklyMoveStr = sVol.weekly_expected_move_dollars ? ('±$' + sVol.weekly_expected_move_dollars) : '';
+                        
+                        hud.innerHTML = `
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;border-bottom:1px solid #1e293b;padding-bottom:3px;">
+                                <span style="font-weight:bold;color:#00e5ff;">⚡ SINCLAIR VOL MODEL</span>
+                                <span style="font-weight:bold;color:#fff;background:#1e293b;padding:1px 5px;border-radius:3px;">{ticker}</span>
+                            </div>
+                            <div style="font-size:9.5px;font-weight:bold;color:#e2e8f0;background:rgba(30,41,59,0.6);padding:3px 5px;border-radius:3px;margin-bottom:5px;">
+                                ${{sVol.regime_verdict}}
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9.5px;">
+                                <div><span style="color:#94a3b8;">IV / RV:</span> <span style="color:#fff;font-weight:bold;">${{sVol.implied_volatility}}% / ${{sVol.rv_yang_zhang}}%</span></div>
+                                <div><span style="color:#94a3b8;">VRP Edge:</span> <span style="color:${{vrpColor}};font-weight:bold;">${{vrpSign}}${{sVol.vrp_spread}} pts</span></div>
+                                <div><span style="color:#94a3b8;">Weekly:</span> <span style="color:#38bdf8;font-weight:bold;">${{weeklyMoveStr || '±1σ Range'}}</span></div>
+                                <div><span style="color:#94a3b8;">Term:</span> <span style="color:#c084fc;font-weight:bold;">${{termStr}}</span></div>
+                                <div><span style="color:#94a3b8;">IV Rank:</span> <span style="color:#fff;font-weight:bold;">${{sVol.iv_rank}}%</span></div>
+                            </div>
+                        `;
+                    }}
+                }} catch(e) {{}}
                 
                 return "PERSISTED_AND_DRAWN_" + count;
             }} catch(e) {{

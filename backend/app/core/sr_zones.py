@@ -96,6 +96,8 @@ def calculate_sr_levels(
     for price_level, weight in density_peaks:
         # Count how many historical pivots (peaks/troughs) tested this level within a 1.5% range
         touches = sum(1 for pivot in all_pivots if abs(pivot - price_level) <= 0.015 * price_level)
+        if touches <= 0:
+            continue
         
         # Check volume concentration near this level (High Volume Nodes)
         volume_mask = (closes >= price_level * 0.985) & (closes <= price_level * 1.015)
