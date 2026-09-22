@@ -30,6 +30,7 @@ export interface TradingViewChartProps {
   supports: Level[];
   resistances: Level[];
   timeframe: string;
+  sinclairVolatility?: any;
 }
 
 export default function TradingViewChart({
@@ -45,6 +46,7 @@ export default function TradingViewChart({
   supports,
   resistances,
   timeframe,
+  sinclairVolatility,
 }: TradingViewChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -169,9 +171,9 @@ export default function TradingViewChart({
     const loadData = async () => {
       let data: any[] = [];
       try {
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://truecharts.onrender.com";
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4500);
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
         const res = await fetch(`${apiBaseUrl}/api/history/${ticker}?timeframe=${encodeURIComponent(timeframe)}`, {
           signal: controller.signal,
         });
@@ -291,37 +293,8 @@ export default function TradingViewChart({
     });
     priceLinesRef.current = [];
 
-    // 1. Weekly Max Pain Line (#ba68c8 Orchid Purple, 2px Solid)
-    if (effectiveWeeklyMaxPain > 0) {
-      const line = candleSeries.createPriceLine({
-        price: effectiveWeeklyMaxPain,
-        color: "#ba68c8",
-        lineWidth: 2,
-        lineStyle: 0,
-        axisLabelVisible: true,
-        title: isHovered
-          ? `WEEKLY MAX PAIN: $${effectiveWeeklyMaxPain.toFixed(2)} (Near-Term Pin Magnet)`
-          : `WEEKLY PIN · $${effectiveWeeklyMaxPain.toFixed(2)}`,
-      });
-      priceLinesRef.current.push(line);
-    }
-
-    // 2. Monthly OPEX Anchor Pin (if distinct from weekly pin)
-    if (effectiveMonthlyMaxPain > 0 && Math.abs(effectiveMonthlyMaxPain - effectiveWeeklyMaxPain) > 0.003 * effectiveWeeklyMaxPain) {
-      const line = candleSeries.createPriceLine({
-        price: effectiveMonthlyMaxPain,
-        color: "#a855f7",
-        lineWidth: 1,
-        lineStyle: 2,
-        axisLabelVisible: true,
-        title: isHovered
-          ? `MONTHLY OPEX PIN: $${effectiveMonthlyMaxPain.toFixed(2)} (Institutional Balance Anchor)`
-          : `OPEX ANCHOR · $${effectiveMonthlyMaxPain.toFixed(2)}`,
-      });
-      priceLinesRef.current.push(line);
-    }
-
-    // 3. Gamma Flip Benchmark Line (#facc15 Canary Yellow, 2px Dashed)
+    // 1. Weekly & Monthly Pins (Hidden per user request to eliminate moving targets & maintain clean narrative)
+    // 2. Gamma Flip Benchmark Line (#facc15 Canary Yellow, 2px Dashed)
     if (gammaFlipPrice > 0) {
       const line = candleSeries.createPriceLine({
         price: gammaFlipPrice,
@@ -336,7 +309,7 @@ export default function TradingViewChart({
       priceLinesRef.current.push(line);
     }
 
-    // 4. Expected Move Envelope (+- 1-Standard Deviation, Sky Blue)
+    // 3. Expected Move Envelope (+- 1-Standard Deviation, Sky Blue)
     if (emUpper > 0 && emLower > 0) {
       const upperLine = candleSeries.createPriceLine({
         price: emUpper,
@@ -361,15 +334,12 @@ export default function TradingViewChart({
       priceLinesRef.current.push(upperLine, lowerLine);
     }
 
-    // 5. Plot Supports (Confluence / Put Walls / Technical)
+    // 4. Plot Supports (Confluence & Major Put Walls Only)
     supports.forEach((sup) => {
-      if (sup.source === "technical" && !sup.is_confluence && (!sup.tests || sup.tests <= 0)) {
-        return;
-      }
-      let color = "rgba(16, 185, 129, 0.55)";
-      let lineWidth: any = 1;
-      let lineStyle: any = 1;
-      let title = `SUP · $${sup.price.toFixed(2)}`;
+      let color = "rgba(4, 120, 87, 0.9)";
+      let lineWidth: any = 3;
+      let lineStyle: any = 0;
+      let title = `PUT WALL · $${sup.price.toFixed(2)}`;
 
       if (sup.is_confluence) {
         color = "#f97316"; // Vivid Orange for high conviction confluence
@@ -385,24 +355,12 @@ export default function TradingViewChart({
           : `CONFLUENCE · $${sup.price.toFixed(2)}`;
       } else {
         const rel = sup.strength / maxSupportAbs;
-        if (rel >= 0.75) {
-          color = "rgba(4, 120, 87, 0.9)";
-          lineWidth = 3;
-          lineStyle = 0;
+        if (rel >= 0.70) {
           title = isHovered
             ? `MAJOR PUT WALL: $${sup.price.toFixed(2)} (${sup.sublabel || 'OI Absorption: ' + Math.round(sup.strength)})`
             : `PUT WALL · $${sup.price.toFixed(2)}`;
-        } else if (rel >= 0.4) {
-          color = "rgba(5, 150, 105, 0.85)";
-          lineWidth = 2;
-          lineStyle = 0;
-          title = isHovered
-            ? `INT PUT SUPPORT: $${sup.price.toFixed(2)} (${sup.sublabel || 'Options Floor'})`
-            : `INT SUP · $${sup.price.toFixed(2)}`;
         } else {
-          title = isHovered
-            ? `MINOR SUPPORT: $${sup.price.toFixed(2)} (${sup.sublabel || 'Technical/Minor'})`
-            : `SUP · $${sup.price.toFixed(2)}`;
+          return; // Skip minor/intermediate supports to keep chart uncluttered
         }
       }
 
@@ -417,15 +375,12 @@ export default function TradingViewChart({
       priceLinesRef.current.push(supportLine);
     });
 
-    // 6. Plot Resistances (Confluence / Call Walls / Technical)
+    // 5. Plot Resistances (Confluence & Major Call Walls Only)
     resistances.forEach((res) => {
-      if (res.source === "technical" && !res.is_confluence && (!res.tests || res.tests <= 0)) {
-        return;
-      }
-      let color = "rgba(239, 68, 68, 0.55)";
-      let lineWidth: any = 1;
-      let lineStyle: any = 1;
-      let title = `RES · $${res.price.toFixed(2)}`;
+      let color = "rgba(220, 38, 38, 0.9)";
+      let lineWidth: any = 3;
+      let lineStyle: any = 0;
+      let title = `CALL WALL · $${res.price.toFixed(2)}`;
 
       if (res.is_confluence) {
         color = "#f97316"; // Vivid Orange
@@ -441,24 +396,12 @@ export default function TradingViewChart({
           : `CONFLUENCE · $${res.price.toFixed(2)}`;
       } else {
         const rel = res.strength / maxResistanceAbs;
-        if (rel >= 0.75) {
-          color = "rgba(220, 38, 38, 0.9)";
-          lineWidth = 3;
-          lineStyle = 0;
+        if (rel >= 0.70) {
           title = isHovered
             ? `MAJOR CALL WALL: $${res.price.toFixed(2)} (${res.sublabel || 'Gamma Ceiling: ' + Math.round(res.strength)})`
             : `CALL WALL · $${res.price.toFixed(2)}`;
-        } else if (rel >= 0.4) {
-          color = "rgba(239, 68, 68, 0.85)";
-          lineWidth = 2;
-          lineStyle = 0;
-          title = isHovered
-            ? `INT CALL RESISTANCE: $${res.price.toFixed(2)} (${res.sublabel || 'Options Ceiling'})`
-            : `INT RES · $${res.price.toFixed(2)}`;
         } else {
-          title = isHovered
-            ? `MINOR RESISTANCE: $${res.price.toFixed(2)} (${res.sublabel || 'Technical/Minor'})`
-            : `RES · $${res.price.toFixed(2)}`;
+          return; // Skip minor/intermediate resistances to keep chart uncluttered
         }
       }
 
@@ -558,8 +501,29 @@ export default function TradingViewChart({
         </div>
       </div>
 
-      {/* Chart Canvas */}
-      <div ref={chartContainerRef} className="w-full relative" />
+      {/* Chart Canvas & Sinclair On-Chart HUD */}
+      <div className="relative w-full">
+        <div ref={chartContainerRef} className="w-full relative" />
+
+        {sinclairVolatility && sinclairVolatility.regime_verdict && (
+          <div className="absolute top-2 right-2 z-20 bg-[#0a0c14]/92 border border-[#1e293b] border-t-2 border-t-[#00e5ff] rounded-md p-2.5 font-mono text-[10.5px] leading-tight shadow-2xl backdrop-blur-md pointer-events-auto select-none min-w-[250px]">
+            <div className="flex justify-between items-center mb-1 pb-1 border-b border-[#1e293b]">
+              <span className="font-bold text-[#00e5ff]">⚡ SINCLAIR VOL MODEL</span>
+              <span className="font-bold text-white bg-[#1e293b] px-1.5 py-0.5 rounded text-[9.5px]">{ticker}</span>
+            </div>
+            <div className="text-[9.5px] font-bold text-[#e2e8f0] bg-[#1e293b]/60 px-1.5 py-0.5 rounded mb-1.5">
+              {sinclairVolatility.regime_verdict}
+            </div>
+            <div className="grid grid-cols-2 gap-1 text-[9.5px]">
+              <div><span className="text-[#94a3b8]">IV / RV:</span> <span className="text-white font-bold">{sinclairVolatility.implied_volatility}% / {sinclairVolatility.rv_yang_zhang}%</span></div>
+              <div><span className="text-[#94a3b8]">VRP Edge:</span> <span className={`font-bold ${sinclairVolatility.vrp_spread >= 0 ? "text-[#10b981]" : "text-[#38bdf8]"}`}>{sinclairVolatility.vrp_spread >= 0 ? "+" : ""}{sinclairVolatility.vrp_spread} pts</span></div>
+              <div><span className="text-[#94a3b8]">Weekly:</span> <span className="text-[#38bdf8] font-bold">{sinclairVolatility.weekly_expected_move_dollars ? `±$${sinclairVolatility.weekly_expected_move_dollars}` : (expectedMoveRange ? `±$${expectedMoveRange.toFixed(2)}` : "±1σ")}</span></div>
+              <div><span className="text-[#94a3b8]">Term:</span> <span className="text-[#c084fc] font-bold">{sinclairVolatility.term_structure_regime ? sinclairVolatility.term_structure_regime.split("(")[0].trim() : "Contango"}</span></div>
+              <div><span className="text-[#94a3b8]">IV Rank:</span> <span className="text-white font-bold">{sinclairVolatility.iv_rank}%</span></div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

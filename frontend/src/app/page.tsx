@@ -84,7 +84,7 @@ interface InstData {
   };
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://truecharts.onrender.com";
 
 function Top5Panel({
   transactions,
@@ -207,7 +207,7 @@ export default function Home() {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
       const res = await fetch(
         `${API_URL}/api/analyze/${cleanSym}?timeframe=${encodeURIComponent(tf)}`,
         { signal: controller.signal }
@@ -221,7 +221,7 @@ export default function Home() {
         let loadedInst = false;
         try {
           const instController = new AbortController();
-          const instTimeoutId = setTimeout(() => instController.abort(), 5000);
+          const instTimeoutId = setTimeout(() => instController.abort(), 15000);
           const instRes = await fetch(`${API_URL}/api/institutional/${cleanSym}`, {
             signal: instController.signal
           });
@@ -267,140 +267,9 @@ export default function Home() {
         console.error("Failed to fetch institutional data", e);
       }
     } catch (err: unknown) {
-      console.warn("API offline or error, generating resilient quant fallback", err);
-      const knownPrices: Record<string, number> = {
-        SPY: 761.22,
-        QQQ: 709.84,
-        IWM: 288.23,
-        NVDA: 211.71,
-        AAPL: 334.23,
-        MSFT: 505.33,
-        META: 659.64,
-        TSLA: 363.36,
-        AMZN: 248.50,
-        GOOGL: 214.60,
-      };
-      const fallbackSpot = knownPrices[cleanSym] || 500.0;
-      const step = fallbackSpot > 500 ? 5.0 : fallbackSpot > 100 ? 2.5 : 1.0;
-      const baseRound = Math.round(fallbackSpot / step) * step;
-      const wMaxPain = baseRound - step;
-      const mMaxPain = baseRound - 2 * step;
-      const gFlip = Number((fallbackSpot * 0.992).toFixed(2));
-      const emVal = Number((fallbackSpot * 0.22 * Math.sqrt(7 / 365)).toFixed(2));
-      const emUp = Number((fallbackSpot + emVal).toFixed(2));
-      const emDn = Number((fallbackSpot - emVal).toFixed(2));
-
-      setData({
-        ticker: cleanSym,
-        name: cleanSym,
-        spot: fallbackSpot,
-        max_pain: wMaxPain,
-        weekly_max_pain: wMaxPain,
-        monthly_max_pain: mMaxPain,
-        gamma_flip: gFlip,
-        expected_move_upper: emUp,
-        expected_move_lower: emDn,
-        expected_move_range: emVal,
-        supports: [
-          {
-            price: baseRound - step,
-            strength: 135,
-            is_confluence: true,
-            source: "confluence",
-            dte: 7,
-            confluence_factors: ["Put Wall", "Weekly Max Pain", "Daily Pivot"],
-            title: `CONFLUENCE · $${(baseRound - step).toFixed(2)}`,
-            sublabel: "Put Wall + Weekly Max Pain + Daily Pivot",
-          },
-          {
-            price: baseRound - 2 * step,
-            strength: 95,
-            source: "options",
-            dte: 28,
-            title: `PUT WALL · $${(baseRound - 2 * step).toFixed(2)}`,
-            sublabel: "OI Absorption: 95 (28d DTE)",
-          },
-          {
-            price: baseRound - 3 * step,
-            strength: 65,
-            source: "options",
-            dte: 60,
-            title: `INT PUT SUPPORT · $${(baseRound - 3 * step).toFixed(2)}`,
-            sublabel: "Options Floor (60d DTE)",
-          },
-        ],
-        resistances: [
-          {
-            price: baseRound + step,
-            strength: 125,
-            is_confluence: true,
-            source: "confluence",
-            dte: 7,
-            confluence_factors: ["Call Wall", "Daily Swing High"],
-            title: `CONFLUENCE · $${(baseRound + step).toFixed(2)}`,
-            sublabel: "Call Wall + Daily Swing High",
-          },
-          {
-            price: baseRound + 2 * step,
-            strength: 90,
-            source: "options",
-            dte: 28,
-            title: `CALL WALL · $${(baseRound + 2 * step).toFixed(2)}`,
-            sublabel: "Gamma Ceiling: 90 (28d DTE)",
-          },
-          {
-            price: baseRound + 3 * step,
-            strength: 60,
-            source: "options",
-            dte: 60,
-            title: `INT CALL RESISTANCE · $${(baseRound + 3 * step).toFixed(2)}`,
-            sublabel: "Options Ceiling (60d DTE)",
-          },
-        ],
-        put_call_ratio: 0.82,
-        sentiment: fallbackSpot > wMaxPain ? "Bullish" : "Bearish",
-        trend_phase: "Accumulation",
-        iv_regime: "Low (17.2%)",
-        sinclair_volatility: {
-          rv_yang_zhang: 15.1,
-          implied_volatility: 17.2,
-          vrp_spread: 2.1,
-          vrp_pct: 13.9,
-          iv_rank: 35.0,
-          ivts: 0.94,
-          term_structure_regime: "Contango (Normal Upward Term)",
-          skew_slope: 1.18,
-          skew_bias: "Put Hedging",
-          regime_verdict: "Overpriced Vol (Short Vol Edge)",
-          vol_edge: "Credit Spreads / Condors",
-        },
-      });
-
-      const realStock = REAL_TOP_20_CONVICTION.find((s) => s.symbol === cleanSym);
-      if (realStock && realStock.topHolders && realStock.topHolders.length > 0) {
-        setInstData({
-          source: "Official SEC 13F-HR Filing (EDGAR)",
-          quarters: {
-            current: "Q2 2026",
-            q1: "Q1 2026",
-            q2: "Q4 2025",
-          },
-          totalSharesOutstanding: 10000000000,
-          ownershipSummary: {
-            SharesOutstandingPCT: { label: "% Held by Institutions", value: `${realStock.instPct}%` },
-            TotalHoldingsValue: { label: "Total Institutional Holdings", value: realStock.valB },
-          },
-          holdingsTransactions: realStock.topHolders.map((th: any) => ({
-            ownerName: th.holder,
-            sharesHeld: th.shares,
-            marketValue: th.val,
-            sharesChangePCT: th.pct,
-            sharesChange: th.pct,
-          })),
-        });
-        setInstError(null);
-      }
-      setError("");
+      console.warn("API offline or error", err);
+      setError("Unable to connect to live options backend (https://truecharts.onrender.com). The free server may be spinning up. Please click 'Analyze' again in 15 seconds.");
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -586,12 +455,21 @@ export default function Home() {
                     supports={data.supports}
                     resistances={data.resistances}
                     timeframe={timeframe}
+                    sinclairVolatility={data.sinclair_volatility}
                   />
                 ) : (
-                  <div className="flex-1 w-full bg-[#06060a] rounded flex items-center justify-center border border-[#181827]">
-                    <span className="text-xs text-neutral-500 font-mono">
-                      {loading ? "Loading TradingView chart data..." : "Select a symbol to view interactive chart"}
+                  <div className="flex-1 w-full bg-[#06060a] rounded flex flex-col items-center justify-center border border-[#181827] p-6 text-center">
+                    <span className="text-xs text-neutral-400 font-mono mb-2">
+                      {loading ? "Connecting to live options engine (waking up server)..." : (error || "Select a symbol to view interactive chart")}
                     </span>
+                    {error && (
+                      <button
+                        onClick={() => fetchAnalysis(ticker, timeframe)}
+                        className="mt-2 bg-[#00e5ff]/10 hover:bg-[#00e5ff]/20 text-[#00e5ff] border border-[#00e5ff]/30 px-3 py-1.5 rounded text-xs font-mono font-bold"
+                      >
+                        ⚡ Retry Live Connection
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

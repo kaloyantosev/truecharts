@@ -29,15 +29,35 @@ export default function SinclairVolBox({ volData, spot, ticker }: Props) {
     return null;
   }
 
-  const isOverpriced = volData.vrp_spread >= 3.0;
-  const isSqueeze = volData.vrp_spread <= -2.0 || volData.iv_rank <= 25.0;
-  const isBackwardation = volData.ivts > 1.05;
+  const relPct = volData.vrp_pct !== undefined ? volData.vrp_pct : ((volData.vrp_spread / (volData.rv_yang_zhang || 15)) * 100);
+  const isChop = relPct >= 15.0 || volData.vrp_spread >= 2.5;
+  const isTrend = relPct <= -12.0 || volData.vrp_spread <= -2.0;
+  const isStress = volData.ivts > 1.05 || volData.term_structure_regime.toLowerCase().includes("backwardation");
 
-  let badgeColor = "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
-  if (isBackwardation) {
-    badgeColor = "bg-amber-500/10 border-amber-500/30 text-amber-400";
-  } else if (isSqueeze) {
-    badgeColor = "bg-cyan-500/10 border-cyan-500/30 text-cyan-400";
+  let simpleRegime = "Neutral";
+  let badgeColor = "bg-slate-500/10 border-slate-500/30 text-slate-300";
+  if (isStress) {
+    simpleRegime = "Event Shock";
+    badgeColor = "bg-rose-500/10 border-rose-500/30 text-rose-400";
+  } else if (isChop) {
+    simpleRegime = "Range-Bound (Chop)";
+    badgeColor = "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
+  } else if (isTrend) {
+    simpleRegime = "Trend (Breakout)";
+    badgeColor = "bg-sky-500/10 border-sky-500/30 text-sky-400";
+  }
+
+  const vrpLabel = isChop ? "Chop" : (isTrend ? "Trend" : "Neutral");
+  const vrpColor = isChop ? "text-[#00ff88]" : (isTrend ? "text-sky-400" : "text-neutral-300");
+
+  let simpleTerm = "Flat";
+  let termColor = "text-purple-400";
+  if (isStress) {
+    simpleTerm = "Stress";
+    termColor = "text-rose-400";
+  } else if (volData.ivts < 0.95 || volData.term_structure_regime.toLowerCase().includes("contango")) {
+    simpleTerm = "Normal";
+    termColor = "text-emerald-400";
   }
 
   return (
@@ -57,10 +77,10 @@ export default function SinclairVolBox({ volData, spot, ticker }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded border uppercase tracking-wider ${badgeColor}`}>
-            {volData.regime_verdict}
+            {simpleRegime}
           </span>
           <span className="text-[10px] text-neutral-400 bg-[#12121e] px-2 py-0.5 rounded border border-[#232338]">
-            Play: {volData.vol_edge}
+            {isChop ? "Fade Extremes (Buy Dips / Short Rips)" : (isTrend ? "Play Momentum (Buy Breakouts / Short Breaks)" : "Trade Levels")}
           </span>
         </div>
       </div>
@@ -86,20 +106,16 @@ export default function SinclairVolBox({ volData, spot, ticker }: Props) {
         <div className="bg-[#06060a] border border-[#181828] rounded p-2.5 flex flex-col justify-between">
           <span className="text-[10px] text-neutral-400 uppercase">Variance Risk Premium (VRP)</span>
           <div className="flex items-baseline gap-1 mt-1">
-            <span
-              className={`text-base font-black ${
-                volData.vrp_spread >= 0 ? "text-[#00ff88]" : "text-cyan-400"
-              }`}
-            >
+            <span className={`text-base font-black ${vrpColor}`}>
               {volData.vrp_spread >= 0 ? `+${volData.vrp_spread.toFixed(1)}` : volData.vrp_spread.toFixed(1)}
             </span>
             <span className="text-xs text-neutral-400">pts</span>
-            <span className="text-xs text-neutral-400 ml-1">
-              ({volData.vrp_pct >= 0 ? `+${volData.vrp_pct}% Rich` : `${volData.vrp_pct}% Cheap`})
+            <span className={`text-xs font-bold ml-1 ${vrpColor}`}>
+              ({vrpLabel})
             </span>
           </div>
           <span className="text-[10px] text-neutral-400 mt-1">
-            {volData.vrp_spread >= 0 ? "Option Sellers Hold Edge" : "Option Buyers Hold Edge"}
+            {isChop ? "Range Bound · Expect Choppy Reversals" : (isTrend ? "Coiled Spring · Expect Directional Breakouts" : "Fair Price Movement")}
           </span>
         </div>
 
@@ -109,8 +125,8 @@ export default function SinclairVolBox({ volData, spot, ticker }: Props) {
           <div className="flex items-baseline justify-between mt-1">
             <div>
               <span className="text-xs text-neutral-400">Term: </span>
-              <span className="text-xs font-bold text-[#a855f7]">
-                {volData.term_structure_regime.split("(")[0].trim()} ({volData.ivts}x)
+              <span className={`text-xs font-bold ${termColor}`}>
+                {simpleTerm}
               </span>
             </div>
             <div>

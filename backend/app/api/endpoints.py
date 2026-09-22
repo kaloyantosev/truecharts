@@ -479,8 +479,9 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
         })
         
     # Split rows by horizon (Natenberg minor, intermediate, major)
-    minor_rows = [r for r in unified_rows if r["dte"] <= 10]
-    inter_rows = [r for r in unified_rows if r["dte"] > 10 and r["dte"] <= 35]
+    # Minor widened to ≤14d (catches weekly expirations reliably on low-OI names)
+    minor_rows = [r for r in unified_rows if r["dte"] <= 14]
+    inter_rows = [r for r in unified_rows if r["dte"] > 14 and r["dte"] <= 35]
     major_rows = [r for r in unified_rows if r["dte"] > 35]
     
     # Helper to aggregate rows by strike within a horizon
@@ -1015,24 +1016,45 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
         db.rollback()
     
     # 6. Euan Sinclair Volatility & Flow Intelligence Model
+    # Engine now extracts real ATM IV from the chain internally (Fix 2).
+    # avg_iv is still passed as a fallback in case chain is empty.
     try:
         sinclair_vol = synthesize_sinclair_analysis(history, chain, avg_iv, spot)
     except Exception as e:
         print(f"Sinclair volatility analysis failed for {ticker}: {e}")
+        _rv_fallback = round(avg_iv * 0.85, 1)
         sinclair_vol = {
-            "rv_yang_zhang": round(avg_iv * 0.85, 1),
-            "implied_volatility": round(avg_iv, 1),
-            "vrp_spread": round(avg_iv * 0.15, 2),
-            "vrp_pct": 17.6,
-            "iv_rank": 45.0,
-            "ivts": 0.95,
+            "rv_yang_zhang":        _rv_fallback,
+            "rv_yang_zhang_5d":     _rv_fallback,
+            "rv_yang_zhang_10d":    _rv_fallback,
+            "rv_yang_zhang_30d":    _rv_fallback,
+            "rv_confidence":        "Low",
+            "implied_volatility":   round(avg_iv, 1),
+            "vrp_spread":           round(avg_iv * 0.15, 2),
+            "vrp_pct":              17.6,
+            "vrp_5d":               round(avg_iv * 0.15, 2),
+            "vrp_10d":              round(avg_iv * 0.15, 2),
+            "vrp_30d":              round(avg_iv * 0.12, 2),
+            "rv_rank":              50.0,
+            "iv_rank":              50.0,
+            "rank_alert":           "",
+            "ivts":                 0.95,
             "term_structure_regime": "Contango (Normal Upward Term)",
-            "skew_slope": 1.15,
-            "skew_bias": "Put Hedging",
+            "term_curve_shape":     "Normal Contango",
+            "front_iv":             round(avg_iv, 1),
+            "back_iv":              round(avg_iv * 0.95, 1),
+            "iv_7d":                round(avg_iv * 1.02, 1),
+            "iv_21d":               round(avg_iv, 1),
+            "iv_45d":               round(avg_iv * 0.97, 1),
+            "iv_90d":               round(avg_iv * 0.95, 1),
+            "skew_slope":           1.15,
+            "skew_bias":            "Put Hedging",
+            "regime_score":         25.0,
+            "regime_confidence":    "Low",
+            "regime_verdict":       "Overpriced Vol (Short Premium Edge)",
+            "vol_edge":             "Fade extremes — fade rallies at Call Wall, fade drops at Put Wall",
             "weekly_expected_move_dollars": round(spot * (avg_iv / 100.0) * math.sqrt(5.0 / 252.0), 2),
-            "weekly_expected_move_pct": round(((spot * (avg_iv / 100.0) * math.sqrt(5.0 / 252.0)) / spot) * 100.0, 2) if spot > 0 else 0.0,
-            "regime_verdict": "Overpriced Vol (Short Vol Edge)",
-            "vol_edge": "Credit Spreads / Condors"
+            "weekly_expected_move_pct":     round(((spot * (avg_iv / 100.0) * math.sqrt(5.0 / 252.0)) / spot) * 100.0, 2) if spot > 0 else 0.0,
         }
 
     res_payload = {
