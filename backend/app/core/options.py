@@ -63,6 +63,83 @@ def calculate_gex_profile(spot: float, option_chain: List[Dict[str, Any]], r: fl
         "spot": spot
     }
 
+def calculate_spatial_gex_velocity(spot: float, option_chain: List[Dict[str, Any]], r: float = 0.05) -> Dict[str, Any]:
+    """
+    Calculates Spatial GEX Velocity: the directional rate of change / gradient (dGEX / dSpot).
+    Evaluates net GEX across spot * 0.99 and spot * 1.01.
+    
+    Returns:
+      - velocity_slope: raw derivative value
+      - velocity_regime: 'Sticky' (cushioned/chop), 'Air Pocket' (vacuum/fast candles), or 'Accelerating'
+      - dominance_0dte_pct: % of total absolute gamma expiring in <= 1 DTE
+    """
+    if not option_chain or spot <= 0:
+        return {
+            "velocity_slope": 0.0,
+            "velocity_regime": "Sticky",
+            "dominance_0dte_pct": 0.0
+        }
+
+    def _eval_net_gex(s_price: float):
+        net = 0.0
+        for c in option_chain:
+            strike = c["strike"]
+            oi = c.get("open_interest", 0)
+            iv = c.get("iv", 0.25)
+            dte = max(c.get("dte", 0.5), 0.5)
+            t = dte / 365.0
+            g = black_scholes_gamma(s_price, strike, t, iv, r)
+            if c.get("type", "").lower() == "call":
+                net += oi * g * 100 * s_price
+            else:
+                net -= oi * g * 100 * s_price
+        return net
+
+    s_up = spot * 1.01
+    s_dn = spot * 0.99
+    delta_s = s_up - s_dn
+
+    gex_up = _eval_net_gex(s_up)
+    gex_dn = _eval_net_gex(s_dn)
+    gex_center = _eval_net_gex(spot)
+
+    slope = (gex_up - gex_dn) / delta_s if delta_s > 0 else 0.0
+
+    # Calculate 0DTE (Front-Day) Gamma Dominance
+    total_abs_gamma = 0.0
+    zero_dte_gamma = 0.0
+    for c in option_chain:
+        strike = c["strike"]
+        oi = c.get("open_interest", 0)
+        iv = c.get("iv", 0.25)
+        dte = c.get("dte", 0.0)
+        t = max(dte, 0.5) / 365.0
+        g = black_scholes_gamma(spot, strike, t, iv, r)
+        gamma_weight = oi * g * 100 * spot
+        total_abs_gamma += abs(gamma_weight)
+        if dte <= 1.5:
+            zero_dte_gamma += abs(gamma_weight)
+
+    dominance_0dte = round((zero_dte_gamma / total_abs_gamma) * 100.0, 1) if total_abs_gamma > 0 else 0.0
+
+    # Spatial Regime determination:
+    # If Net GEX is negative or slope is flat/negative in positive territory -> Air Pocket
+    # If slope is thick positive -> Sticky cushion
+    if gex_center < 0:
+        regime = "Air Pocket"
+    elif abs(slope) < 0.15 * (abs(gex_center) / (spot * 0.01) if gex_center != 0 else 1.0):
+        regime = "Sticky"
+    elif slope > 0:
+        regime = "Accelerating"
+    else:
+        regime = "Air Pocket"
+
+    return {
+        "velocity_slope": round(float(slope), 2),
+        "velocity_regime": regime,
+        "dominance_0dte_pct": dominance_0dte
+    }
+
 def calculate_max_pain(option_chain: List[Dict[str, Any]], max_dte: Optional[float] = None, min_dte: Optional[float] = None) -> float:
     """
     Finds the Max Pain strike price (where option buyers lose the most money).

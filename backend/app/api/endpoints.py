@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.models import OptionMetricsRecord, TechnicalLevelRecord
-from app.core.options import calculate_gex_profile, calculate_max_pain, calculate_gamma_flip, calculate_expected_move
+from app.core.options import calculate_gex_profile, calculate_max_pain, calculate_gamma_flip, calculate_expected_move, calculate_spatial_gex_velocity
 from app.core.sr_zones import calculate_sr_levels
 from app.core.backtest import run_historical_backtest
 from app.core.volatility_engine import synthesize_sinclair_analysis
@@ -163,12 +163,14 @@ def fetch_live_options_chain(ticker: str, spot: float) -> List[Dict[str, Any]]:
             for _, row in opt.calls.iterrows():
                 strike = float(row["strike"])
                 oi = int(row["openInterest"]) if not pd.isna(row["openInterest"]) else 0
+                vol = int(row["volume"]) if "volume" in row and not pd.isna(row["volume"]) else 0
                 iv = float(row["impliedVolatility"]) if not pd.isna(row["impliedVolatility"]) else 0.2
-                if oi > 0:
+                if oi > 0 or vol > 0:
                     chain.append({
                         "strike": strike,
                         "type": "call",
                         "open_interest": oi,
+                        "volume": vol,
                         "iv": iv,
                         "dte": float(dte)
                     })
@@ -176,12 +178,14 @@ def fetch_live_options_chain(ticker: str, spot: float) -> List[Dict[str, Any]]:
             for _, row in opt.puts.iterrows():
                 strike = float(row["strike"])
                 oi = int(row["openInterest"]) if not pd.isna(row["openInterest"]) else 0
+                vol = int(row["volume"]) if "volume" in row and not pd.isna(row["volume"]) else 0
                 iv = float(row["impliedVolatility"]) if not pd.isna(row["impliedVolatility"]) else 0.2
-                if oi > 0:
+                if oi > 0 or vol > 0:
                     chain.append({
                         "strike": strike,
                         "type": "put",
                         "open_interest": oi,
+                        "volume": vol,
                         "iv": iv,
                         "dte": float(dte)
                     })
@@ -449,18 +453,28 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
                 "dte": dte,
                 "callVol": 0.0,
                 "putVol": 0.0,
+                "callTradeVol": 0.0,
+                "putTradeVol": 0.0,
+                "callOI": 0.0,
+                "putOI": 0.0,
                 "callIv": 0.0,
                 "putIv": 0.0,
                 "hasCall": False,
                 "hasPut": False
             }
         g = grouped[key]
+        trade_vol = float(c.get("volume", 0.0))
+        oi = float(c.get("open_interest", 0.0))
         if c["type"].lower() == "call":
-            g["callVol"] = float(c["open_interest"])
+            g["callVol"] = oi
+            g["callOI"] = oi
+            g["callTradeVol"] = trade_vol
             g["callIv"] = float(c["iv"]) * 100.0
             g["hasCall"] = True
         else:
-            g["putVol"] = float(c["open_interest"])
+            g["putVol"] = oi
+            g["putOI"] = oi
+            g["putTradeVol"] = trade_vol
             g["putIv"] = float(c["iv"]) * 100.0
             g["hasPut"] = True
             
@@ -473,6 +487,10 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
             "dte": g["dte"],
             "callVol": g["callVol"],
             "putVol": g["putVol"],
+            "callTradeVol": g["callTradeVol"],
+            "putTradeVol": g["putTradeVol"],
+            "callOI": g["callOI"],
+            "putOI": g["putOI"],
             "callIv": c_iv,
             "putIv": p_iv,
             "spot": spot
@@ -504,10 +522,19 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
             net_gex = call_gex + put_gex
             
             strike = row["strike"]
+            c_trade = row.get("callTradeVol", 0.0)
+            p_trade = row.get("putTradeVol", 0.0)
+            c_oi = row.get("callOI", 0.0)
+            p_oi = row.get("putOI", 0.0)
+
             if strike in option_data_map:
                 existing = option_data_map[strike]
                 existing["callVol"] += weighted_call_vol
                 existing["putVol"] += weighted_put_vol
+                existing["callTradeVol"] += c_trade
+                existing["putTradeVol"] += p_trade
+                existing["callOI"] += c_oi
+                existing["putOI"] += p_oi
                 existing["netGex"] += net_gex
                 existing["callGammaSum"] += call_gamma
                 existing["putGammaSum"] += put_gamma
@@ -521,6 +548,10 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
                     "strike": strike,
                     "callVol": weighted_call_vol,
                     "putVol": weighted_put_vol,
+                    "callTradeVol": c_trade,
+                    "putTradeVol": p_trade,
+                    "callOI": c_oi,
+                    "putOI": p_oi,
                     "netGex": net_gex,
                     "callGammaSum": call_gamma,
                     "putGammaSum": put_gamma,
@@ -542,11 +573,21 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
             
             call_delta = calculate_delta(spot, o["strike"], avg_call_iv, avg_dte, True)
             put_delta = calculate_delta(spot, o["strike"], avg_put_iv, avg_dte, False)
+
+            # Detect Volume > OI Surge (Unusual institutional positioning)
+            c_surge = o["callTradeVol"] > 0 and o["callTradeVol"] >= max(50.0, o["callOI"] * 1.0)
+            p_surge = o["putTradeVol"] > 0 and o["putTradeVol"] >= max(50.0, o["putOI"] * 1.0)
             
             aggregated.append({
                 "strike": o["strike"],
                 "callVol": o["callVol"],
                 "putVol": o["putVol"],
+                "callTradeVol": o["callTradeVol"],
+                "putTradeVol": o["putTradeVol"],
+                "callOI": o["callOI"],
+                "putOI": o["putOI"],
+                "hasCallSurge": c_surge,
+                "hasPutSurge": p_surge,
                 "netGex": o["netGex"],
                 "avgCallIv": avg_call_iv,
                 "avgPutIv": avg_put_iv,
@@ -636,20 +677,23 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
             # Geographic Orientation: Below spot = Support, Above spot = Resistance
             is_support = curr["strike"] <= spot
             
+            has_surge = curr.get("hasPutSurge", False) if is_support else curr.get("hasCallSurge", False)
+            surge_suffix = " · Surge Vol" if has_surge else ""
+
             if is_support:
                 if curr["putVol"] >= curr["callVol"]:
                     level_name = "PUT WALL"
-                    sublabel = f"OI Absorption: {round(significance_score * 100)} ({int(curr['avgDte'])}d DTE)"
+                    sublabel = f"OI Absorption: {round(significance_score * 100)} ({int(curr['avgDte'])}d DTE{surge_suffix})"
                 else:
                     level_name = "ITM CALL DELTA FLOOR"
-                    sublabel = f"Synthetic Long Delta ({int(curr['avgDte'])}d DTE)"
+                    sublabel = f"Synthetic Long Delta ({int(curr['avgDte'])}d DTE{surge_suffix})"
             else:
                 if curr["callVol"] >= curr["putVol"]:
                     level_name = "CALL WALL"
-                    sublabel = f"Gamma Ceiling: {round(significance_score * 100)} ({int(curr['avgDte'])}d DTE)"
+                    sublabel = f"Gamma Ceiling: {round(significance_score * 100)} ({int(curr['avgDte'])}d DTE{surge_suffix})"
                 else:
                     level_name = "ITM PUT COLLAR CEILING"
-                    sublabel = f"Protective Hedge Ceiling ({int(curr['avgDte'])}d DTE)"
+                    sublabel = f"Protective Hedge Ceiling ({int(curr['avgDte'])}d DTE{surge_suffix})"
             
             candidates.append({
                 **curr,
@@ -658,6 +702,7 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
                 "isSupport": is_support,
                 "levelName": level_name,
                 "sublabel": sublabel,
+                "hasSurge": has_surge,
                 "totalVol": total_strike_vol
             })
         return candidates
@@ -691,7 +736,8 @@ def calculate_options_levels(chain: List[Dict[str, Any]], spot: float) -> Dict[s
                 "horizon": cand["horizonName"].lower(),
                 "title_prefix": cand["levelName"],
                 "title": f"{cand['levelName']} · ${cand['strike']:.2f}",
-                "sublabel": cand["sublabel"]
+                "sublabel": cand["sublabel"],
+                "has_surge": cand.get("hasSurge", False)
             }
             
             if cand["isSupport"]:
@@ -1056,6 +1102,17 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
             "weekly_expected_move_dollars": round(spot * (avg_iv / 100.0) * math.sqrt(5.0 / 252.0), 2),
             "weekly_expected_move_pct":     round(((spot * (avg_iv / 100.0) * math.sqrt(5.0 / 252.0)) / spot) * 100.0, 2) if spot > 0 else 0.0,
         }
+
+    # 6.5 Calculate Spatial GEX Velocity & 0DTE Concentration
+    try:
+        spatial_gex = calculate_spatial_gex_velocity(spot, chain)
+        sinclair_vol["spatial_gex_regime"] = spatial_gex["velocity_regime"]
+        sinclair_vol["spatial_gex_slope"] = spatial_gex["velocity_slope"]
+        sinclair_vol["dominance_0dte_pct"] = spatial_gex["dominance_0dte_pct"]
+    except Exception as e:
+        sinclair_vol["spatial_gex_regime"] = "Sticky"
+        sinclair_vol["spatial_gex_slope"] = 0.0
+        sinclair_vol["dominance_0dte_pct"] = 0.0
 
     res_payload = {
         "ticker": ticker,
