@@ -246,3 +246,67 @@ def calculate_expected_move(spot: float, atm_iv: float, dte: float = 7.0) -> Dic
         "upper": round(float(spot + move), 2),
         "lower": round(float(spot - move), 2)
     }
+
+def calculate_weekly_options_dom(spot: float, option_chain: List[Dict[str, Any]], max_dte: float = 7.0) -> List[Dict[str, Any]]:
+    """
+    Extracts Depth of Market (DOM) capped to the Weekly Expiry (DTE <= 7) around spot (+- 4%).
+    Aggregates Call OI (Ask/Res) and Put OI (Bid/Sup) per strike with proportional bar depths.
+    """
+    if not option_chain or spot <= 0:
+        return []
+
+    weekly_opts = [c for c in option_chain if 0 < c.get("dte", 0) <= max_dte and c.get("strike", 0) > 0]
+    if not weekly_opts:
+        # Fallback to shortest available DTE if strict <= 7 is empty
+        min_dte = min([c.get("dte", 999) for c in option_chain if c.get("dte", 0) > 0], default=7.0)
+        weekly_opts = [c for c in option_chain if c.get("dte", 0) <= max(min_dte + 2, 7.0)]
+
+    # Limit strikes to within +- 4% of current spot
+    lower_bound = spot * 0.96
+    upper_bound = spot * 1.04
+
+    by_strike = {}
+    for c in weekly_opts:
+        k = float(c["strike"])
+        if k < lower_bound or k > upper_bound:
+            continue
+        if k not in by_strike:
+            by_strike[k] = {"strike": k, "call_oi": 0, "put_oi": 0, "call_vol": 0, "put_vol": 0}
+        
+        oi = int(c.get("open_interest", 0))
+        vol = int(c.get("volume", 0))
+        if c.get("type", "").lower() == "call":
+            by_strike[k]["call_oi"] += oi
+            by_strike[k]["call_vol"] += vol
+        else:
+            by_strike[k]["put_oi"] += oi
+            by_strike[k]["put_vol"] += vol
+
+    if not by_strike:
+        return []
+
+    # Sort strikes descending (highest strike at top, like a real DOM ladder)
+    sorted_strikes = sorted(by_strike.values(), key=lambda x: x["strike"], reverse=True)
+
+    # Calculate max OI for CSS width normalization (max 100%)
+    max_call_oi = max([s["call_oi"] for s in sorted_strikes], default=1) or 1
+    max_put_oi = max([s["put_oi"] for s in sorted_strikes], default=1) or 1
+
+    dom_ladder = []
+    for s in sorted_strikes:
+        c_oi = s["call_oi"]
+        p_oi = s["put_oi"]
+        c_pct = min(100, int((c_oi / max_call_oi) * 100))
+        p_pct = min(100, int((p_oi / max_put_oi) * 100))
+        dom_ladder.append({
+            "strike": s["strike"],
+            "call_oi": c_oi,
+            "put_oi": p_oi,
+            "call_vol": s["call_vol"],
+            "put_vol": s["put_vol"],
+            "call_bar_pct": c_pct,
+            "put_bar_pct": p_pct,
+            "is_spot": abs(s["strike"] - spot) <= (spot * 0.003)
+        })
+
+    return dom_ladder[:12]  # return top 12 strikes around spot for clean display

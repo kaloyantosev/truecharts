@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.models import OptionMetricsRecord, TechnicalLevelRecord
-from app.core.options import calculate_gex_profile, calculate_max_pain, calculate_gamma_flip, calculate_expected_move, calculate_spatial_gex_velocity
+from app.core.options import calculate_gex_profile, calculate_max_pain, calculate_gamma_flip, calculate_expected_move, calculate_spatial_gex_velocity, calculate_weekly_options_dom
 from app.core.sr_zones import calculate_sr_levels
 from app.core.backtest import run_historical_backtest
 from app.core.volatility_engine import synthesize_sinclair_analysis
@@ -1112,7 +1112,11 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
     except Exception as e:
         sinclair_vol["spatial_gex_regime"] = "Sticky"
         sinclair_vol["spatial_gex_slope"] = 0.0
-        sinclair_vol["dominance_0dte_pct"] = 0.0
+    # 6.6 Calculate Weekly Capped Options DOM (Depth of Market)
+    try:
+        weekly_dom = calculate_weekly_options_dom(spot, chain, max_dte=7.0)
+    except Exception as e:
+        weekly_dom = []
 
     res_payload = {
         "ticker": ticker,
@@ -1132,7 +1136,8 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
         "sentiment": sentiment,
         "trend_phase": trend_phase,
         "iv_regime": iv_regime,
-        "sinclair_volatility": sinclair_vol
+        "sinclair_volatility": sinclair_vol,
+        "weekly_options_dom": weekly_dom
     }
     _ANALYZE_CACHE[cache_key] = (now, res_payload)
     return res_payload
