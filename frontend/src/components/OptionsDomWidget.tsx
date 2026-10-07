@@ -68,44 +68,17 @@ export default function OptionsDomWidget({
   spot,
 }: OptionsDomWidgetProps) {
   const [mode, setMode] = useState<"0dte" | "weekly">("weekly");
-  const [pos, setPos] = useState({ top: 16, left: 16 });
-  const isDragging = useRef(false);
-  const dragStart = useRef({ x: 0, y: 0, startLeft: 16, startTop: 16 });
-
-  // Drag support exempting buttons
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest("#tc-dom-mode-pill") || (e.target as HTMLElement).tagName === "BUTTON") {
-      return;
-    }
-    if (e.button !== 0) return;
-    isDragging.current = true;
-    dragStart.current = {
-      x: e.clientX,
-      y: e.clientY,
-      startLeft: pos.left,
-      startTop: pos.top,
-    };
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      if (!isDragging.current) return;
-      setPos({
-        left: dragStart.current.startLeft + moveEvent.clientX - dragStart.current.x,
-        top: dragStart.current.startTop + moveEvent.clientY - dragStart.current.y,
-      });
-    };
-
-    const onMouseUp = () => {
-      isDragging.current = false;
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-  };
+  const spotRef = useRef<HTMLDivElement>(null);
 
   const isWeekly = mode === "weekly";
   const ladder = domData?.[mode] || [];
+
+  // Auto-scroll spot strike to center of ladder on data/mode change
+  useEffect(() => {
+    if (spotRef.current) {
+      spotRef.current.scrollIntoView({ block: "center" });
+    }
+  }, [ladder, mode]);
 
   // Sinclair metrics extraction matching tv_automation.py lines 548-558
   let vrpVal = "—";
@@ -127,35 +100,22 @@ export default function OptionsDomWidget({
   return (
     <div
       id="tc-options-dom"
-      onMouseDown={handleMouseDown}
       style={{
-        position: "absolute",
-        zIndex: 40,
-        left: `${pos.left}px`,
-        top: `${pos.top}px`,
-        background: "rgba(10,12,20,0.96)",
-        border: "1px solid #1e293b",
-        borderLeft: "3px solid #0d9488",
-        borderRadius: "6px",
-        padding: "9px 12px",
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        background: "transparent",
         color: "#f8fafc",
         fontFamily: "Consolas, monospace",
         fontSize: "10.5px",
         lineHeight: 1.3,
-        boxShadow: "0 10px 30px rgba(0,0,0,0.75)",
-        pointerEvents: "auto",
         userSelect: "none",
-        backdropFilter: "blur(10px)",
-        width: "300px",
-        height: "auto",
-        maxHeight: "calc(100% - 32px)",
-        overflow: "visible",
-        cursor: "move",
+        overflow: "hidden",
       }}
-      className="flex flex-col"
+      className="flex flex-col h-full"
     >
       {/* 1. Sinclair Metrics mounted directly on top of DOM (Exact HTML from tv_automation.py lines 561-579) */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px", marginBottom: "7px", fontSize: "10px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px", marginBottom: "7px", fontSize: "10px", flexShrink: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(15,23,42,0.7)", padding: "4px 7px", borderRadius: "3px", border: "1px solid #1e293b" }}>
           <span style={{ color: "#94a3b8" }}>VRP:</span>
           <span style={{ color: vrpColor, fontWeight: "bold" }}>{vrpVal}</span>
@@ -184,9 +144,7 @@ export default function OptionsDomWidget({
           borderTop: "1px solid #1e293b",
           borderBottom: "1px solid #1e293b",
           padding: "5px 0",
-          cursor: "move",
         }}
-        title="Drag to reposition"
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <span style={{ fontWeight: 900, color: "#14b8a6", fontSize: "12px", letterSpacing: "0.5px" }}>📊 DOM</span>
@@ -266,7 +224,10 @@ export default function OptionsDomWidget({
       </div>
 
       {/* 4. ROWS (Exact row rendering loop matching tv_automation.py lines 614-672) */}
-      <div style={{ display: "flex", flexDirection: "column", overflowY: "auto", maxHeight: "380px" }}>
+      <div
+        className="flex-1 overflow-y-auto flex flex-col pr-0.5"
+        style={{ display: "flex", flexDirection: "column", overflowY: "auto", flex: "1 1 0%", minHeight: 0 }}
+      >
         {ladder.length === 0 ? (
           <div style={{ color: "#64748b", fontSize: "10px", textAlign: "center", padding: "12px 0" }}>
             Real options chain not available for {ticker}.
@@ -310,6 +271,7 @@ export default function OptionsDomWidget({
             return (
               <div
                 key={row.strike}
+                ref={isSpot ? spotRef : undefined}
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 64px 1fr",

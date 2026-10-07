@@ -28,7 +28,6 @@ const TIMEFRAMES = [
   { label: "5m", value: "5m" },
   { label: "15m", value: "15m" },
   { label: "1h", value: "1h" },
-  { label: "4h", value: "4h" },
   { label: "Daily", value: "1D" },
 ];
 
@@ -64,8 +63,6 @@ export default function PureTraderChart({
         remaining = 900 - (nowSec % 900);
       } else if (timeframe === "1h") {
         remaining = 3600 - (nowSec % 3600);
-      } else if (timeframe === "4h") {
-        remaining = 14400 - (nowSec % 14400);
       } else if (timeframe === "1D" || timeframe === "D") {
         // Market close for US regular session: 16:00:00 US Eastern Time (America/New_York)
         try {
@@ -117,6 +114,7 @@ export default function PureTraderChart({
 
   // Fetch live market data (Candles, Options Model Levels, DOM, Sinclair)
   const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await fetch(`/api/trader-panel?ticker=${ticker}&timeframe=${timeframe}`);
       if (!res.ok) return;
@@ -162,6 +160,17 @@ export default function PureTraderChart({
             priceLinesRef.current.push(pl);
           }
         });
+
+        // Update timeScale options for daily vs intraday format
+        chartRef.current?.applyOptions({
+          timeScale: {
+            timeVisible: timeframe !== "1D",
+            secondsVisible: false,
+          },
+        });
+
+        // Fit all candles into view automatically on timeframe switch
+        chartRef.current?.timeScale().fitContent();
       }
     } catch (err) {
       console.error(`Error loading trader data for ${ticker}:`, err);
@@ -201,7 +210,7 @@ export default function PureTraderChart({
       autoSize: true,
     });
 
-    // 2. Add Candlestick Series matching user screenshot (Golden Amber candles on Black)
+    // 2. Add Candlestick Series (Golden Amber candles on pure black background)
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#f59e0b",
       downColor: "#f59e0b",
@@ -214,19 +223,19 @@ export default function PureTraderChart({
     chartRef.current = chart;
     seriesRef.current = candleSeries;
 
-    // Handle Window Resize
-    const handleResize = () => {
-      if (containerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        });
+    // ResizeObserver ensures chart canvas cleanly resizes with container
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (!entries || entries.length === 0) return;
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) {
+        chart.applyOptions({ width, height });
       }
-    };
-    window.addEventListener("resize", handleResize);
+    });
+
+    resizeObserver.observe(containerRef.current);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
+      resizeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
@@ -247,9 +256,9 @@ export default function PureTraderChart({
   }, [fetchData]);
 
   return (
-    <div className="relative w-full h-[460px] bg-black border border-[#1e293b] rounded-lg overflow-hidden flex flex-col shadow-2xl">
+    <div className="relative w-full h-[480px] bg-black border border-[#1e293b] rounded-lg overflow-hidden flex flex-col shadow-2xl">
       {/* Top Header Strip: Symbol, Timeframes, Live Badge */}
-      <div className="h-9 px-3 bg-[#05070e] border-b border-[#1e293b] flex items-center justify-between text-xs font-mono select-none z-20">
+      <div className="h-9 px-3 bg-[#05070e] border-b border-[#1e293b] flex items-center justify-between text-xs font-mono select-none z-20 flex-shrink-0">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse" />
           <span className="font-bold text-white tracking-wide">{chartTitle}</span>
@@ -274,7 +283,7 @@ export default function PureTraderChart({
           </div>
         </div>
 
-        {/* Timeframe Selectors */}
+        {/* Timeframe Selectors (5m, 15m, 1h, Daily - 4h removed) */}
         <div className="flex items-center gap-1 bg-[#0b0f19] p-0.5 rounded border border-[#1e293b]">
           {TIMEFRAMES.map((tf) => (
             <button
@@ -292,25 +301,30 @@ export default function PureTraderChart({
         </div>
       </div>
 
-      {/* Chart Canvas & Options DOM Overlay */}
-      <div className="relative flex-1 w-full h-full bg-black">
-        {/* Floating Options DOM from Injector */}
-        <OptionsDomWidget
-          ticker={ticker}
-          sinclair={sinclair}
-          domData={domData}
-          spot={spotPrice}
-        />
+      {/* Main Body: 2-Column Side-by-Side Flex Layout */}
+      <div className="relative flex-1 w-full flex flex-row min-h-0 bg-black overflow-hidden">
+        {/* Left Column: Dedicated Fixed Space for Options DOM & Sinclair Stats */}
+        {/* Cut cleanly from the chart by the right vertical border (as indicated in screenshot) */}
+        <div className="w-[316px] min-w-[316px] max-w-[316px] h-full bg-[#080a14] border-r border-[#1e293b] p-2 flex flex-col z-10 overflow-hidden">
+          <OptionsDomWidget
+            ticker={ticker}
+            sinclair={sinclair}
+            domData={domData}
+            spot={spotPrice}
+          />
+        </div>
 
-        {/* Pure Black Lightweight Chart Container */}
-        <div ref={containerRef} className="w-full h-full" />
+        {/* Right Column: Candlestick Chart Canvas (starts right after the vertical line) */}
+        <div className="relative flex-1 h-full min-w-0 bg-black">
+          <div ref={containerRef} className="w-full h-full" />
 
-        {/* Loading Spinner */}
-        {loading && (
-          <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none z-10 font-mono text-xs text-neutral-400">
-            <span className="animate-pulse">Loading {ticker} market candles...</span>
-          </div>
-        )}
+          {/* Loading Spinner */}
+          {loading && (
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none z-10 font-mono text-xs text-neutral-400">
+              <span className="animate-pulse">Loading {ticker} {timeframe} candles...</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

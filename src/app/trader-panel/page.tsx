@@ -37,7 +37,7 @@ export default function TraderPanelPage() {
       {/* Main Container: Centered, Big but not too wide, stacked vertically */}
       <div className="flex-1 w-full max-w-[1420px] mx-auto px-3 py-2 flex flex-col gap-3">
         {/* Top Chart: SPY AMEX */}
-        <div className="w-full flex-1 min-h-[460px]">
+        <div className="w-full flex-1 min-h-[480px]">
           <PureTraderChart
             ticker="SPY"
             exchangeName="AMEX"
@@ -47,7 +47,7 @@ export default function TraderPanelPage() {
         </div>
 
         {/* Bottom Chart: QQQ NASDAQ */}
-        <div className="w-full flex-1 min-h-[460px]">
+        <div className="w-full flex-1 min-h-[480px]">
           <PureTraderChart
             ticker="QQQ"
             exchangeName="NASDAQ"

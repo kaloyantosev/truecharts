@@ -93,10 +93,7 @@ export async function GET(req: NextRequest) {
     } else if (timeframe === "1h") {
       interval = "60m";
       range = "1mo";
-    } else if (timeframe === "4h") {
-      interval = "60m";
-      range = "3mo";
-    } else if (timeframe === "1D" || timeframe === "D") {
+    } else if (timeframe === "1D" || timeframe === "D" || timeframe === "Daily") {
       interval = "1d";
       range = "1y";
     }
@@ -144,52 +141,19 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Aggregate 60m into 4h if 4h is selected
-    if (timeframe === "4h" && candles.length > 0) {
-      const aggCandles: Candle[] = [];
-      const FOUR_HOURS = 4 * 3600;
-      let currentBucket = Math.floor(candles[0].time / FOUR_HOURS) * FOUR_HOURS;
-      let aggOpen = candles[0].open;
-      let aggHigh = candles[0].high;
-      let aggLow = candles[0].low;
-      let aggClose = candles[0].close;
-      let aggVol = candles[0].volume;
-
-      for (let i = 1; i < candles.length; i++) {
-        const c = candles[i];
-        const bucket = Math.floor(c.time / FOUR_HOURS) * FOUR_HOURS;
-        if (bucket === currentBucket) {
-          aggHigh = Math.max(aggHigh, c.high);
-          aggLow = Math.min(aggLow, c.low);
-          aggClose = c.close;
-          aggVol += c.volume;
-        } else {
-          aggCandles.push({
-            time: currentBucket,
-            open: aggOpen,
-            high: aggHigh,
-            low: aggLow,
-            close: aggClose,
-            volume: aggVol,
-          });
-          currentBucket = bucket;
-          aggOpen = c.open;
-          aggHigh = c.high;
-          aggLow = c.low;
-          aggClose = c.close;
-          aggVol = c.volume;
-        }
+    // Strictly sort ascending and deduplicate timestamps for lightweight-charts
+    candles.sort((a, b) => a.time - b.time);
+    const uniqueCandles: Candle[] = [];
+    let lastTime = 0;
+    for (const c of candles) {
+      if (c.time > lastTime) {
+        uniqueCandles.push(c);
+        lastTime = c.time;
+      } else if (c.time === lastTime && uniqueCandles.length > 0) {
+        uniqueCandles[uniqueCandles.length - 1] = c;
       }
-      aggCandles.push({
-        time: currentBucket,
-        open: aggOpen,
-        high: aggHigh,
-        low: aggLow,
-        close: aggClose,
-        volume: aggVol,
-      });
-      candles = aggCandles;
     }
+    candles = uniqueCandles;
 
     if (spotPrice <= 0 && candles.length > 0) {
       spotPrice = candles[candles.length - 1].close;
@@ -278,19 +242,43 @@ export async function GET(req: NextRequest) {
             });
           }
 
-          // Gather nearest weekly expirations (<= 7 DTE)
+          // Gather nearest weekly expirations (<= 7 DTE) matching python tv_automation.py
           const today = new Date();
-          const targetExps: number[] = [];
-          for (let i = 0; i < Math.min(6, exps.length); i++) {
+          const todayDateOnly = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+
+          // 1. Include Exp 0 (nearest / 0DTE) into weekly total
+          if (opt0) {
+            (opt0.calls || []).forEach((c: any) => {
+              const k = Number(c.strike);
+              const oi = parseInt(c.openInterest) || 0;
+              const vol = parseInt(c.volume) || 0;
+              by_strike_weekly[k] = by_strike_weekly[k] || { strike: k, call_oi: 0, put_oi: 0, call_vol: 0, put_vol: 0 };
+              by_strike_weekly[k].call_oi += oi;
+              by_strike_weekly[k].call_vol += vol;
+            });
+            (opt0.puts || []).forEach((p: any) => {
+              const k = Number(p.strike);
+              const oi = parseInt(p.openInterest) || 0;
+              const vol = parseInt(p.volume) || 0;
+              by_strike_weekly[k] = by_strike_weekly[k] || { strike: k, call_oi: 0, put_oi: 0, call_vol: 0, put_vol: 0 };
+              by_strike_weekly[k].put_oi += oi;
+              by_strike_weekly[k].put_vol += vol;
+            });
+          }
+
+          // 2. Identify remaining weekly expirations <= 7 DTE
+          const otherWeeklyExps: number[] = [];
+          for (let i = 1; i < Math.min(6, exps.length); i++) {
             const expDate = new Date(exps[i] * 1000);
-            const dte = Math.floor((expDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
+            const expDateOnly = new Date(Date.UTC(expDate.getUTCFullYear(), expDate.getUTCMonth(), expDate.getUTCDate()));
+            const dte = Math.round((expDateOnly.getTime() - todayDateOnly.getTime()) / (1000 * 3600 * 24));
             if (dte >= 0 && dte <= 7) {
-              targetExps.push(exps[i]);
+              otherWeeklyExps.push(exps[i]);
             }
           }
 
-          // Fetch target weekly expiration chains concurrently
-          const expFetches = targetExps.map(async (expTs) => {
+          // Fetch remaining weekly expiration chains concurrently
+          const expFetches = otherWeeklyExps.map(async (expTs) => {
             try {
               const expUrl = `https://query2.finance.yahoo.com/v7/finance/options/${ticker}?date=${expTs}&crumb=${encodeURIComponent(crumb)}`;
               const r = await fetch(expUrl, {
