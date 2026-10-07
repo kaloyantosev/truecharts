@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickSeries } from "lightweight-charts";
 
-export interface Level {
+interface Level {
   price: number;
   strength: number;
   volume_concentration?: number;
@@ -11,42 +11,24 @@ export interface Level {
   dte?: number | null;
   horizon?: string;
   tests?: number;
-  title?: string;
-  sublabel?: string;
-  is_confluence?: boolean;
-  confluence_factors?: string[];
 }
 
-export interface TradingViewChartProps {
+interface TradingViewChartProps {
   ticker: string;
   spot: number;
   maxPain: number;
-  weeklyMaxPain?: number;
-  monthlyMaxPain?: number;
-  gammaFlip?: number;
-  expectedMoveUpper?: number;
-  expectedMoveLower?: number;
-  expectedMoveRange?: number;
   supports: Level[];
   resistances: Level[];
   timeframe: string;
-  sinclairVolatility?: any;
 }
 
 export default function TradingViewChart({
   ticker,
   spot,
   maxPain,
-  weeklyMaxPain,
-  monthlyMaxPain,
-  gammaFlip,
-  expectedMoveUpper,
-  expectedMoveLower,
-  expectedMoveRange,
   supports,
   resistances,
   timeframe,
-  sinclairVolatility,
 }: TradingViewChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -56,11 +38,16 @@ export default function TradingViewChart({
   const [weeklyGaps, setWeeklyGaps] = useState<any[]>([]);
   const [svgRects, setSvgRects] = useState<any[]>([]);
 
-  // Effective Max Pain levels
-  const effectiveWeeklyMaxPain = weeklyMaxPain && weeklyMaxPain > 0 ? weeklyMaxPain : maxPain;
-  const effectiveMonthlyMaxPain = monthlyMaxPain && monthlyMaxPain > 0 ? monthlyMaxPain : maxPain;
+  // Institutional Options Enhancements Toggles
+  const [showPockets, setShowPockets] = useState(true);
+  const [showGexProfile, setShowGexProfile] = useState(true);
+  const [showGammaFlip, setShowGammaFlip] = useState(true);
 
-  // Maximum absorption strengths for scaling
+  // SVG Layer States
+  const [pockets, setPockets] = useState<any[]>([]);
+  const [gexBars, setGexBars] = useState<any[]>([]);
+
+  // Dynamic Gamma Flip (Zero Gamma Level) Calculation
   const maxSupportAbs = useMemo(() => {
     return supports.length > 0 ? Math.max(...supports.map((s) => s.strength)) : 1.0;
   }, [supports]);
@@ -69,27 +56,14 @@ export default function TradingViewChart({
     return resistances.length > 0 ? Math.max(...resistances.map((r) => r.strength)) : 1.0;
   }, [resistances]);
 
-  // Gamma Flip (Zero Net GEX Level)
   const gammaFlipPrice = useMemo(() => {
-    if (gammaFlip && gammaFlip > 0) return Number(gammaFlip.toFixed(2));
     const majorSup = supports.find((s) => s.strength / maxSupportAbs >= 0.75)?.price;
     const majorRes = resistances.find((r) => r.strength / maxResistanceAbs >= 0.75)?.price;
     if (majorSup && majorRes) {
       return Number(((majorSup * 0.48) + (majorRes * 0.52)).toFixed(2));
     }
     return Number((spot * 0.994).toFixed(2));
-  }, [gammaFlip, supports, resistances, maxSupportAbs, maxResistanceAbs, spot]);
-
-  // Expected Move Boundaries
-  const emUpper = useMemo(() => {
-    if (expectedMoveUpper && expectedMoveUpper > 0) return Number(expectedMoveUpper.toFixed(2));
-    return Number((spot * 1.022).toFixed(2));
-  }, [expectedMoveUpper, spot]);
-
-  const emLower = useMemo(() => {
-    if (expectedMoveLower && expectedMoveLower > 0) return Number(expectedMoveLower.toFixed(2));
-    return Number((spot * 0.978).toFixed(2));
-  }, [expectedMoveLower, spot]);
+  }, [supports, resistances, maxSupportAbs, maxResistanceAbs, spot]);
 
   const isLongGamma = spot >= gammaFlipPrice;
 
@@ -107,20 +81,95 @@ export default function TradingViewChart({
         horzLines: { visible: false },
       },
       crosshair: {
-        mode: 0,
+        mode: 0, // CrosshairMode.Normal
       },
       width: chartContainerRef.current.clientWidth,
-      height: 440,
+      height: 420,
+      localization: {
+        locale: "bg-BG",
+        dateFormat: "dd MMM yyyy",
+        timeFormatter: (time: any) => {
+          let date: Date;
+          if (typeof time === "number") {
+            date = new Date(time > 1e11 ? time : time * 1000);
+          } else if (time && typeof time === "object" && "year" in time) {
+            date = new Date(Date.UTC(time.year, time.month - 1, time.day));
+          } else {
+            date = new Date();
+          }
+          return new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Europe/Sofia",
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(date);
+        },
+        dateFormatter: (time: any) => {
+          let date: Date;
+          if (typeof time === "number") {
+            date = new Date(time > 1e11 ? time : time * 1000);
+          } else if (time && typeof time === "object" && "year" in time) {
+            date = new Date(Date.UTC(time.year, time.month - 1, time.day));
+          } else {
+            date = new Date();
+          }
+          return new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Europe/Sofia",
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          }).format(date);
+        },
+      },
       timeScale: {
         borderColor: "#262626",
         timeVisible: true,
         secondsVisible: false,
+        tickMarkFormatter: (time: any, tickMarkType: number) => {
+          let date: Date;
+          if (typeof time === "number") {
+            date = new Date(time > 1e11 ? time : time * 1000);
+          } else if (time && typeof time === "object" && "year" in time) {
+            date = new Date(Date.UTC(time.year, time.month - 1, time.day));
+          } else {
+            date = new Date();
+          }
+
+          if (tickMarkType === 0) {
+            return new Intl.DateTimeFormat("en-GB", {
+              timeZone: "Europe/Sofia",
+              year: "numeric",
+            }).format(date);
+          }
+          if (tickMarkType === 1) {
+            return new Intl.DateTimeFormat("en-GB", {
+              timeZone: "Europe/Sofia",
+              month: "short",
+            }).format(date);
+          }
+          if (tickMarkType === 2) {
+            return new Intl.DateTimeFormat("en-GB", {
+              timeZone: "Europe/Sofia",
+              day: "numeric",
+              month: "short",
+            }).format(date);
+          }
+          return new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Europe/Sofia",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(date);
+        },
       },
       rightPriceScale: {
         borderColor: "#262626",
       },
     });
 
+    // Add Candlestick Series
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#D4A300",
       borderUpColor: "#D4A300",
@@ -171,13 +220,8 @@ export default function TradingViewChart({
     const loadData = async () => {
       let data: any[] = [];
       try {
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://truecharts.onrender.com";
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 25000);
-        const res = await fetch(`${apiBaseUrl}/api/history/${ticker}?timeframe=${encodeURIComponent(timeframe)}`, {
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+        const res = await fetch(`${apiBaseUrl}/api/history/${ticker}?timeframe=${encodeURIComponent(timeframe)}`);
         if (res.ok) {
           data = await res.json();
         }
@@ -192,6 +236,7 @@ export default function TradingViewChart({
       candleSeries.setData(data);
 
       if (data.length > 0) {
+        // Calculate weekly imbalance gaps
         const gaps: any[] = [];
         
         const getBarDate = (barTime: any) => {
@@ -262,6 +307,7 @@ export default function TradingViewChart({
 
     loadData();
 
+    // Responsive chart resizing
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
         chartRef.current.applyOptions({
@@ -278,10 +324,11 @@ export default function TradingViewChart({
     };
   }, [ticker, timeframe]);
 
-  // Update native price lines (Zero lag, pure canvas rendering)
+  // Update horizontal lines and SVG overlays (Pockets, GEX Profile, Gamma Flip)
   useEffect(() => {
     const candleSeries = candleSeriesRef.current;
-    if (!candleSeries) return;
+    const chart = chartRef.current;
+    if (!candleSeries || !chart || !chartContainerRef.current) return;
 
     // Clear previous lines
     priceLinesRef.current.forEach((line) => {
@@ -293,133 +340,120 @@ export default function TradingViewChart({
     });
     priceLinesRef.current = [];
 
-    // 1. Weekly & Monthly Pins (Hidden per user request to eliminate moving targets & maintain clean narrative)
-    // 2. Gamma Flip Benchmark Line (#facc15 Canary Yellow, 2px Dashed)
-    if (gammaFlipPrice > 0) {
-      const line = candleSeries.createPriceLine({
+    // 1. Plot Max Pain Level (1px Solid Orchid Purple: #ba68c8)
+    if (maxPain > 0) {
+      const maxPainTitle = isHovered 
+        ? `Max Pain: $${maxPain.toFixed(2)}`
+        : "Max Pain";
+      const maxPainLine = candleSeries.createPriceLine({
+        price: maxPain,
+        color: "#ba68c8",
+        lineWidth: 1,
+        lineStyle: 0, // Solid
+        axisLabelVisible: true,
+        title: maxPainTitle,
+      });
+      priceLinesRef.current.push(maxPainLine);
+    }
+
+    // 2. Plot Gamma Flip Benchmark Line (Amber Gold)
+    if (showGammaFlip && gammaFlipPrice > 0) {
+      const flipLine = candleSeries.createPriceLine({
         price: gammaFlipPrice,
-        color: "#facc15",
+        color: "#fbbf24",
         lineWidth: 2,
-        lineStyle: 2,
+        lineStyle: 2, // Dashed
         axisLabelVisible: true,
         title: isHovered
-          ? `GAMMA FLIP: $${gammaFlipPrice.toFixed(2)} (Zero-GEX Regime Boundary)`
-          : `GAMMA FLIP · $${gammaFlipPrice.toFixed(2)}`,
+          ? `Gamma Flip: $${gammaFlipPrice.toFixed(2)} (Regime Pivot)`
+          : "Gamma Flip",
       });
-      priceLinesRef.current.push(line);
+      priceLinesRef.current.push(flipLine);
     }
 
-    // 3. Expected Move Envelope (+- 1-Standard Deviation, Sky Blue)
-    if (emUpper > 0 && emLower > 0) {
-      const upperLine = candleSeries.createPriceLine({
-        price: emUpper,
-        color: "#38bdf8",
-        lineWidth: 1,
-        lineStyle: 2,
-        axisLabelVisible: true,
-        title: isHovered
-          ? `+1σ EXPECTED MOVE: $${emUpper.toFixed(2)} (Weekly Volatility Ceiling · 68% Prob)`
-          : `+1σ EXP MOVE · $${emUpper.toFixed(2)}`,
-      });
-      const lowerLine = candleSeries.createPriceLine({
-        price: emLower,
-        color: "#38bdf8",
-        lineWidth: 1,
-        lineStyle: 2,
-        axisLabelVisible: true,
-        title: isHovered
-          ? `-1σ EXPECTED MOVE: $${emLower.toFixed(2)} (Weekly Volatility Floor · 68% Prob)`
-          : `-1σ EXP MOVE · $${emLower.toFixed(2)}`,
-      });
-      priceLinesRef.current.push(upperLine, lowerLine);
-    }
-
-    // 4. Plot Supports (Confluence & Major Put Walls Only)
+    // 3. Plot Support Levels (classified into Minor, Intermediate, and Major)
     supports.forEach((sup) => {
-      let color = "rgba(4, 120, 87, 0.9)";
-      let lineWidth: any = 3;
-      let lineStyle: any = 0;
-      let title = `PUT WALL · $${sup.price.toFixed(2)}`;
-
-      if (sup.is_confluence) {
-        color = "#f97316"; // Vivid Orange for high conviction confluence
-        lineWidth = 3;
-        lineStyle = 0;
-        const cleanSub = (sup.sublabel || 'Multi-Factor')
-          .split('+')
-          .map((s: string) => s.trim())
-          .filter((s: string) => !s.toLowerCase().includes('confluence'))
-          .join(' + ') || 'Multi-Factor';
-        title = isHovered
-          ? `CONFLUENCE FORTRESS: $${sup.price.toFixed(2)} [${cleanSub}]`
-          : `CONFLUENCE · $${sup.price.toFixed(2)}`;
-      } else {
-        const rel = sup.strength / maxSupportAbs;
-        if (rel >= 0.70) {
-          title = isHovered
-            ? `MAJOR PUT WALL: $${sup.price.toFixed(2)} (${sup.sublabel || 'OI Absorption: ' + Math.round(sup.strength)})`
-            : `PUT WALL · $${sup.price.toFixed(2)}`;
-        } else {
-          return; // Skip minor/intermediate supports to keep chart uncluttered
-        }
+      if (sup.source === "technical" && (!sup.tests || sup.tests <= 0)) {
+        return;
       }
+      let color = "rgba(16, 185, 129, 0.5)"; // Minor Support: Light Green
+      let lineWidth: any = 1;
+      let lineStyle: any = 1; // Dotted
+      let title = "Minor Sup";
+
+      const relStrength = sup.strength / maxSupportAbs;
+      if (relStrength >= 0.75) {
+        color = "rgba(4, 120, 87, 0.85)"; // Major Support
+        lineWidth = 3;
+        lineStyle = 0; // Solid
+        title = "Major Sup";
+      } else if (relStrength >= 0.4) {
+        color = "rgba(5, 150, 105, 0.85)"; // Intermediate Support
+        lineWidth = 2;
+        lineStyle = 0; // Solid
+        title = "Int Sup";
+      }
+
+      const displayTitle = isHovered
+        ? (sup.source === "options"
+            ? `${title}: $${sup.price.toFixed(2)} (Absorption: ${Math.round(sup.strength)} — Options ${sup.dte}d DTE)`
+            : `${title}: $${sup.price.toFixed(2)} (Tests: ${sup.tests || 0} — Technical)`)
+        : title;
 
       const supportLine = candleSeries.createPriceLine({
         price: sup.price,
-        color,
-        lineWidth,
-        lineStyle,
+        color: color,
+        lineWidth: lineWidth,
+        lineStyle: lineStyle,
         axisLabelVisible: true,
-        title,
+        title: displayTitle,
       });
       priceLinesRef.current.push(supportLine);
     });
 
-    // 5. Plot Resistances (Confluence & Major Call Walls Only)
+    // 4. Plot Resistance Levels (classified into Minor, Intermediate, and Major)
     resistances.forEach((res) => {
-      let color = "rgba(220, 38, 38, 0.9)";
-      let lineWidth: any = 3;
-      let lineStyle: any = 0;
-      let title = `CALL WALL · $${res.price.toFixed(2)}`;
-
-      if (res.is_confluence) {
-        color = "#f97316"; // Vivid Orange
-        lineWidth = 3;
-        lineStyle = 0;
-        const cleanSub = (res.sublabel || 'Multi-Factor')
-          .split('+')
-          .map((s: string) => s.trim())
-          .filter((s: string) => !s.toLowerCase().includes('confluence'))
-          .join(' + ') || 'Multi-Factor';
-        title = isHovered
-          ? `CONFLUENCE CEILING: $${res.price.toFixed(2)} [${cleanSub}]`
-          : `CONFLUENCE · $${res.price.toFixed(2)}`;
-      } else {
-        const rel = res.strength / maxResistanceAbs;
-        if (rel >= 0.70) {
-          title = isHovered
-            ? `MAJOR CALL WALL: $${res.price.toFixed(2)} (${res.sublabel || 'Gamma Ceiling: ' + Math.round(res.strength)})`
-            : `CALL WALL · $${res.price.toFixed(2)}`;
-        } else {
-          return; // Skip minor/intermediate resistances to keep chart uncluttered
-        }
+      if (res.source === "technical" && (!res.tests || res.tests <= 0)) {
+        return;
       }
+      let color = "rgba(239, 68, 68, 0.5)"; // Minor Resistance
+      let lineWidth: any = 1;
+      let lineStyle: any = 1; // Dotted
+      let title = "Minor Res";
+
+      const relStrength = res.strength / maxResistanceAbs;
+      if (relStrength >= 0.75) {
+        color = "rgba(255, 51, 51, 0.55)"; // Major Resistance
+        lineWidth = 3;
+        lineStyle = 0; // Solid
+        title = "Major Res";
+      } else if (relStrength >= 0.4) {
+        color = "rgba(211, 47, 47, 1.0)"; // Intermediate Resistance
+        lineWidth = 2;
+        lineStyle = 0; // Solid
+        title = "Int Res";
+      }
+
+      const displayTitle = isHovered
+        ? (res.source === "options"
+            ? `${title}: $${res.price.toFixed(2)} (Absorption: ${Math.round(res.strength)} — Options ${res.dte}d DTE)`
+            : `${title}: $${res.price.toFixed(2)} (Tests: ${res.tests || 0} — Technical)`)
+        : title;
 
       const resistanceLine = candleSeries.createPriceLine({
         price: res.price,
-        color,
-        lineWidth,
-        lineStyle,
+        color: color,
+        lineWidth: lineWidth,
+        lineStyle: lineStyle,
         axisLabelVisible: true,
-        title,
+        title: displayTitle,
       });
       priceLinesRef.current.push(resistanceLine);
     });
 
-    // Subtle hover detection without heavy re-renders
     const onCrosshairMove = (param: any) => {
       if (!param.point || !chartRef.current) {
-        if (isHovered) setIsHovered(false);
+        setIsHovered(false);
         return;
       }
 
@@ -427,20 +461,17 @@ export default function TradingViewChart({
       const mouseX = param.point.x;
       const containerWidth = chartContainerRef.current?.clientWidth || 800;
       
-      const rightEdge = containerWidth - 50;
-      const leftEdge = containerWidth - 160;
+      const rightEdge = containerWidth - 60;
+      const leftEdge = containerWidth - 140;
 
       if (mouseX < leftEdge || mouseX > rightEdge) {
-        if (isHovered) setIsHovered(false);
+        setIsHovered(false);
         return;
       }
 
       const allPrices: number[] = [];
-      if (effectiveWeeklyMaxPain > 0) allPrices.push(effectiveWeeklyMaxPain);
-      if (effectiveMonthlyMaxPain > 0) allPrices.push(effectiveMonthlyMaxPain);
-      if (gammaFlipPrice > 0) allPrices.push(gammaFlipPrice);
-      if (emUpper > 0) allPrices.push(emUpper);
-      if (emLower > 0) allPrices.push(emLower);
+      if (maxPain > 0) allPrices.push(maxPain);
+      if (showGammaFlip && gammaFlipPrice > 0) allPrices.push(gammaFlipPrice);
       supports.forEach((s) => allPrices.push(s.price));
       resistances.forEach((r) => allPrices.push(r.price));
 
@@ -451,78 +482,315 @@ export default function TradingViewChart({
         const levelY = candleSeries.priceToCoordinate(price);
         if (levelY === null) continue;
 
-        if (Math.abs(mouseY - levelY) < minDistance) {
+        const distance = Math.abs(mouseY - levelY);
+        if (distance < minDistance) {
           hoverActive = true;
           break;
         }
       }
 
-      if (hoverActive !== isHovered) {
-        setIsHovered(hoverActive);
-      }
+      setIsHovered(hoverActive);
     };
 
-    chartRef.current?.subscribeCrosshairMove(onCrosshairMove);
+    const updateAllOverlays = () => {
+      if (!chart || !candleSeries) return;
+      const containerWidth = chartContainerRef.current?.clientWidth || 800;
+      const plotWidth = Math.max(100, containerWidth - 62);
+
+      // 1. Weekly Imbalance Gaps
+      if (weeklyGaps.length > 0) {
+        const rects = weeklyGaps.map((gap, idx) => {
+          const x1 = chart.timeScale().timeToCoordinate(gap.startTime);
+          const x2 = chart.timeScale().timeToCoordinate(gap.endTime);
+          const y1 = candleSeries.priceToCoordinate(gap.top);
+          const y2 = candleSeries.priceToCoordinate(gap.bottom);
+
+          if (x1 === null || x2 === null || y1 === null || y2 === null) return null;
+
+          return {
+            id: idx,
+            x: Math.min(x1, x2),
+            y: Math.min(y1, y2),
+            width: Math.max(Math.abs(x2 - x1), 15),
+            height: Math.abs(y2 - y1),
+          };
+        }).filter(Boolean) as any[];
+        setSvgRects(rects);
+      } else {
+        setSvgRects([]);
+      }
+
+      // 2. Rectangular Liquidity Pockets
+      const computedPockets: any[] = [];
+      const levelsForPockets: any[] = [];
+
+      supports.forEach((s) => {
+        const rel = s.strength / maxSupportAbs;
+        if (rel >= 0.4) levelsForPockets.push({ ...s, type: "support", rel });
+      });
+
+      resistances.forEach((r) => {
+        const rel = r.strength / maxResistanceAbs;
+        if (rel >= 0.4) levelsForPockets.push({ ...r, type: "resistance", rel });
+      });
+
+      if (maxPain > 0) {
+        levelsForPockets.push({ price: maxPain, strength: 50, type: "maxpain", rel: 0.8, dte: 0 });
+      }
+
+      levelsForPockets.forEach((lvl, idx) => {
+        const spreadPct = lvl.rel >= 0.75 ? 0.0035 : 0.0025;
+        const pTop = lvl.price * (1 + spreadPct);
+        const pBot = lvl.price * (1 - spreadPct);
+        const yTop = candleSeries.priceToCoordinate(pTop);
+        const yBot = candleSeries.priceToCoordinate(pBot);
+
+        if (yTop !== null && yBot !== null) {
+          const y = Math.min(yTop, yBot);
+          const h = Math.max(16, Math.abs(yBot - yTop));
+          const isWeekly = lvl.dte !== null && lvl.dte !== undefined && lvl.dte <= 7;
+
+          computedPockets.push({
+            id: `pocket-${idx}-${lvl.price}`,
+            price: lvl.price,
+            type: lvl.type,
+            y,
+            height: h,
+            width: plotWidth,
+            isWeekly,
+            dte: lvl.dte,
+            title: lvl.type === "support"
+              ? `PUT LIQUIDITY POCKET · $${lvl.price.toFixed(2)}`
+              : lvl.type === "resistance"
+              ? `CALL LIQUIDITY POCKET · $${lvl.price.toFixed(2)}`
+              : `MAX PAIN GAMMA PIN · $${lvl.price.toFixed(2)}`,
+            fill: lvl.type === "support"
+              ? "rgba(0, 255, 136, 0.07)"
+              : lvl.type === "resistance"
+              ? "rgba(255, 51, 85, 0.07)"
+              : "rgba(186, 104, 200, 0.08)",
+            stroke: lvl.type === "support"
+              ? "rgba(0, 255, 136, 0.35)"
+              : lvl.type === "resistance"
+              ? "rgba(255, 51, 85, 0.35)"
+              : "rgba(186, 104, 200, 0.4)",
+          });
+        }
+      });
+      setPockets(computedPockets);
+
+      // 3. Right-Axis Horizontal Gamma Profile Histogram (Volume Profile Style)
+      const computedGex: any[] = [];
+      const allLevels = [
+        ...supports.map((s) => ({ ...s, type: "support" })),
+        ...resistances.map((r) => ({ ...r, type: "resistance" })),
+      ];
+      if (maxPain > 0) {
+        allLevels.push({ price: maxPain, strength: maxSupportAbs * 0.75, type: "maxpain" } as any);
+      }
+
+      const peakStrength = Math.max(
+        ...allLevels.map((l) => l.strength || 1),
+        1.0
+      );
+
+      allLevels.forEach((lvl, idx) => {
+        const y = candleSeries.priceToCoordinate(lvl.price);
+        if (y !== null) {
+          const norm = Math.min(1.0, Math.max(0.2, (lvl.strength || 1) / peakStrength));
+          const barWidth = Math.round(norm * 115) + 20;
+          const isCall = lvl.type === "resistance";
+          const isPut = lvl.type === "support";
+
+          computedGex.push({
+            id: `gex-${idx}-${lvl.price}`,
+            y: y - 7,
+            x: plotWidth - barWidth,
+            width: barWidth,
+            height: 14,
+            price: lvl.price,
+            label: isCall
+              ? `+${Math.round(lvl.strength)}k GEX`
+              : isPut
+              ? `-${Math.round(lvl.strength)}k GEX`
+              : `PIN ${Math.round(lvl.strength)}k`,
+            color: isCall ? "#00e5ff" : isPut ? "#00ff88" : "#ba68c8",
+            bgColor: isCall
+              ? "rgba(0, 229, 255, 0.22)"
+              : isPut
+              ? "rgba(0, 255, 136, 0.22)"
+              : "rgba(186, 104, 200, 0.25)",
+            borderColor: isCall
+              ? "rgba(0, 229, 255, 0.45)"
+              : isPut
+              ? "rgba(0, 255, 136, 0.45)"
+              : "rgba(186, 104, 200, 0.5)",
+          });
+        }
+      });
+      setGexBars(computedGex);
+    };
+
+    setTimeout(updateAllOverlays, 60);
+
+    const rangeSubscription = () => {
+      updateAllOverlays();
+    };
+
+    chart.subscribeCrosshairMove(onCrosshairMove);
+    chart.timeScale().subscribeVisibleLogicalRangeChange(rangeSubscription);
 
     return () => {
-      chartRef.current?.unsubscribeCrosshairMove(onCrosshairMove);
+      chart.unsubscribeCrosshairMove(onCrosshairMove);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(rangeSubscription);
     };
 
-  }, [effectiveWeeklyMaxPain, effectiveMonthlyMaxPain, supports, resistances, isHovered, gammaFlipPrice, emUpper, emLower, maxSupportAbs, maxResistanceAbs]);
+  }, [maxPain, supports, resistances, isHovered, weeklyGaps, showGammaFlip, gammaFlipPrice, maxSupportAbs, maxResistanceAbs]);
 
   return (
     <div className="w-full bg-neutral-950 rounded-lg p-2 border border-neutral-900 overflow-hidden relative">
-      {/* Clean Status Header (No toggles, pure live info) */}
-      <div className="flex items-center justify-between gap-2 mb-2 px-2 pt-1">
+      {/* Chart Top Control Header */}
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-2 pt-1">
+        {/* Left: Live Status + Regime Watermark */}
         <div className="flex items-center gap-3">
           <div className="flex gap-1.5 items-center bg-[#0d0d16] border border-[#1f1f32] px-2.5 py-1 rounded">
             <span className="w-2 h-2 rounded-full bg-[#00ff88] animate-pulse" />
             <span className="text-[10px] font-mono font-bold tracking-wider text-neutral-200">LIVE FEED</span>
           </div>
 
-          <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-[10px] font-mono font-bold uppercase tracking-wider ${
-              isLongGamma
-                ? "bg-[#00ff88]/10 text-[#00ff88] border-[#00ff88]/30"
-                : "bg-amber-500/10 text-amber-400 border-amber-500/30"
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${isLongGamma ? "bg-[#00ff88]" : "bg-amber-400"}`} />
-            <span>
-              {isLongGamma
-                ? "LONG GAMMA REGIME (Vol Suppressed / Mean-Reverting)"
-                : "SHORT GAMMA REGIME (Vol Expansion / Acceleration)"}
-            </span>
-          </div>
+          {showGammaFlip && (
+            <div
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-[10px] font-mono font-bold uppercase tracking-wider ${
+                isLongGamma
+                  ? "bg-[#00ff88]/10 text-[#00ff88] border-[#00ff88]/30"
+                  : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${isLongGamma ? "bg-[#00ff88]" : "bg-amber-400"}`} />
+              <span>
+                {isLongGamma
+                  ? "LONG GAMMA REGIME (Vol Suppressed / Mean-Reverting)"
+                  : "SHORT GAMMA REGIME (Vol Expansion / Acceleration)"}
+              </span>
+            </div>
+          )}
         </div>
 
-        <div className="text-[10px] font-mono text-neutral-500">
-          ZERO-LAG QUANT ENGINE
+        {/* Right: Toggle Options Layers */}
+        <div className="flex items-center gap-2 text-[10px] font-mono">
+          <button
+            onClick={() => setShowPockets(!showPockets)}
+            className={`px-2 py-0.5 rounded border transition-all ${
+              showPockets
+                ? "bg-[#00e5ff]/15 text-[#00e5ff] border-[#00e5ff]/40 font-bold"
+                : "bg-[#11111d] text-neutral-500 border-[#222234] hover:text-neutral-300"
+            }`}
+          >
+            Pockets: {showPockets ? "ON" : "OFF"}
+          </button>
+
+          <button
+            onClick={() => setShowGexProfile(!showGexProfile)}
+            className={`px-2 py-0.5 rounded border transition-all ${
+              showGexProfile
+                ? "bg-[#00ff88]/15 text-[#00ff88] border-[#00ff88]/40 font-bold"
+                : "bg-[#11111d] text-neutral-500 border-[#222234] hover:text-neutral-300"
+            }`}
+          >
+            GEX Profile: {showGexProfile ? "ON" : "OFF"}
+          </button>
+
+          <button
+            onClick={() => setShowGammaFlip(!showGammaFlip)}
+            className={`px-2 py-0.5 rounded border transition-all ${
+              showGammaFlip
+                ? "bg-amber-500/15 text-amber-300 border-amber-500/40 font-bold"
+                : "bg-[#11111d] text-neutral-500 border-[#222234] hover:text-neutral-300"
+            }`}
+          >
+            Gamma Flip: {showGammaFlip ? "ON" : "OFF"}
+          </button>
         </div>
       </div>
 
-      {/* Chart Canvas & Sinclair On-Chart HUD */}
-      <div className="relative w-full">
-        <div ref={chartContainerRef} className="w-full relative" />
+      {/* Chart Canvas & SVG Overlay */}
+      <div ref={chartContainerRef} className="w-full relative">
+        <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
+          {/* 1. Weekly Imbalance Zones */}
+          {svgRects.map((rect) => (
+            <rect
+              key={rect.id}
+              x={rect.x}
+              y={rect.y}
+              width={rect.width}
+              height={rect.height}
+              fill="rgba(6, 182, 212, 0.22)"
+              stroke="rgba(6, 182, 212, 0.45)"
+              strokeWidth={1}
+            />
+          ))}
 
-        {sinclairVolatility && sinclairVolatility.regime_verdict && (
-          <div className="absolute top-2 right-2 z-20 bg-[#0a0c14]/92 border border-[#1e293b] border-t-2 border-t-[#00e5ff] rounded-md p-2.5 font-mono text-[10.5px] leading-tight shadow-2xl backdrop-blur-md pointer-events-auto select-none min-w-[250px]">
-            <div className="flex justify-between items-center mb-1 pb-1 border-b border-[#1e293b]">
-              <span className="font-bold text-[#00e5ff]">⚡ SINCLAIR VOL MODEL</span>
-              <span className="font-bold text-white bg-[#1e293b] px-1.5 py-0.5 rounded text-[9.5px]">{ticker}</span>
-            </div>
-            <div className="text-[9.5px] font-bold text-[#e2e8f0] bg-[#1e293b]/60 px-1.5 py-0.5 rounded mb-1.5">
-              {sinclairVolatility.regime_verdict}
-            </div>
-            <div className="grid grid-cols-2 gap-1 text-[9.5px]">
-              <div><span className="text-[#94a3b8]">IV / RV:</span> <span className="text-white font-bold">{sinclairVolatility.implied_volatility}% / {sinclairVolatility.rv_yang_zhang}%</span></div>
-              <div><span className="text-[#94a3b8]">VRP Edge:</span> <span className={`font-bold ${sinclairVolatility.vrp_spread >= 0 ? "text-[#10b981]" : "text-[#38bdf8]"}`}>{sinclairVolatility.vrp_spread >= 0 ? "+" : ""}{sinclairVolatility.vrp_spread} pts</span></div>
-              <div><span className="text-[#94a3b8]">Weekly:</span> <span className="text-[#38bdf8] font-bold">{sinclairVolatility.weekly_expected_move_dollars ? `±$${sinclairVolatility.weekly_expected_move_dollars}` : (expectedMoveRange ? `±$${expectedMoveRange.toFixed(2)}` : "±1σ")}</span></div>
-              <div><span className="text-[#94a3b8]">Term:</span> <span className="text-[#c084fc] font-bold">{sinclairVolatility.term_structure_regime ? sinclairVolatility.term_structure_regime.split("(")[0].trim() : "Contango"}</span></div>
-              <div><span className="text-[#94a3b8]">IV Rank:</span> <span className="text-white font-bold">{sinclairVolatility.iv_rank}%</span></div>
-            </div>
-          </div>
-        )}
+          {/* 2. Liquidity Pockets (Horizontal Channels) */}
+          {showPockets &&
+            pockets.map((pkt) => (
+              <g key={pkt.id}>
+                <rect
+                  x={0}
+                  y={pkt.y}
+                  width={pkt.width}
+                  height={pkt.height}
+                  fill={pkt.fill}
+                  stroke={pkt.stroke}
+                  strokeWidth={1}
+                  strokeDasharray="4 3"
+                />
+                <text
+                  x={8}
+                  y={pkt.y + 11}
+                  style={{
+                    fontSize: "9px",
+                    fontFamily: "monospace",
+                    fontWeight: "bold",
+                    fill: pkt.type === "support" ? "#00ff88" : pkt.type === "resistance" ? "#ff4d6d" : "#ba68c8",
+                    opacity: 0.85,
+                    pointerEvents: "none",
+                  }}
+                >
+                  {pkt.title} {pkt.isWeekly ? "· 0DTE/WEEKLY" : "· OPEX ANCHOR"}
+                </text>
+              </g>
+            ))}
+
+          {/* 3. Right-Axis Horizontal Gamma Profile Histogram (Volume Profile Style) */}
+          {showGexProfile &&
+            gexBars.map((bar) => (
+              <g key={bar.id}>
+                <rect
+                  x={bar.x}
+                  y={bar.y}
+                  width={bar.width}
+                  height={bar.height}
+                  fill={bar.bgColor}
+                  stroke={bar.borderColor}
+                  strokeWidth={1}
+                  rx={2}
+                />
+                <text
+                  x={bar.x + 5}
+                  y={bar.y + 10}
+                  style={{
+                    fontSize: "8.5px",
+                    fontFamily: "monospace",
+                    fontWeight: "bold",
+                    fill: bar.color,
+                    pointerEvents: "none",
+                  }}
+                >
+                  {bar.label}
+                </text>
+              </g>
+            ))}
+        </svg>
       </div>
     </div>
   );

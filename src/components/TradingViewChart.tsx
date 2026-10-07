@@ -85,10 +85,84 @@ export default function TradingViewChart({
       },
       width: chartContainerRef.current.clientWidth,
       height: 420,
+      localization: {
+        locale: "bg-BG",
+        dateFormat: "dd MMM yyyy",
+        timeFormatter: (time: any) => {
+          let date: Date;
+          if (typeof time === "number") {
+            date = new Date(time > 1e11 ? time : time * 1000);
+          } else if (time && typeof time === "object" && "year" in time) {
+            date = new Date(Date.UTC(time.year, time.month - 1, time.day));
+          } else {
+            date = new Date();
+          }
+          return new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Europe/Sofia",
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(date);
+        },
+        dateFormatter: (time: any) => {
+          let date: Date;
+          if (typeof time === "number") {
+            date = new Date(time > 1e11 ? time : time * 1000);
+          } else if (time && typeof time === "object" && "year" in time) {
+            date = new Date(Date.UTC(time.year, time.month - 1, time.day));
+          } else {
+            date = new Date();
+          }
+          return new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Europe/Sofia",
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          }).format(date);
+        },
+      },
       timeScale: {
         borderColor: "#262626",
         timeVisible: true,
         secondsVisible: false,
+        tickMarkFormatter: (time: any, tickMarkType: number) => {
+          let date: Date;
+          if (typeof time === "number") {
+            date = new Date(time > 1e11 ? time : time * 1000);
+          } else if (time && typeof time === "object" && "year" in time) {
+            date = new Date(Date.UTC(time.year, time.month - 1, time.day));
+          } else {
+            date = new Date();
+          }
+
+          if (tickMarkType === 0) {
+            return new Intl.DateTimeFormat("en-GB", {
+              timeZone: "Europe/Sofia",
+              year: "numeric",
+            }).format(date);
+          }
+          if (tickMarkType === 1) {
+            return new Intl.DateTimeFormat("en-GB", {
+              timeZone: "Europe/Sofia",
+              month: "short",
+            }).format(date);
+          }
+          if (tickMarkType === 2) {
+            return new Intl.DateTimeFormat("en-GB", {
+              timeZone: "Europe/Sofia",
+              day: "numeric",
+              month: "short",
+            }).format(date);
+          }
+          return new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Europe/Sofia",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(date);
+        },
       },
       rightPriceScale: {
         borderColor: "#262626",

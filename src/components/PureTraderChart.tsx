@@ -137,14 +137,14 @@ export default function PureTraderChart({
         });
         priceLinesRef.current = [];
 
-        // Draw Options Model Lines
-        const levels: PriceLevel[] = [];
-        if (data.modelLevels) {
-          if (data.modelLevels.gammaFlip) levels.push(data.modelLevels.gammaFlip);
-          if (data.modelLevels.confluencePut) levels.push(data.modelLevels.confluencePut);
-          if (data.modelLevels.confluenceCall) levels.push(data.modelLevels.confluenceCall);
-          if (data.modelLevels.expMoveLower) levels.push(data.modelLevels.expMoveLower);
-          if (data.modelLevels.expMoveUpper) levels.push(data.modelLevels.expMoveUpper);
+        // Draw Options Model Lines (Exact match to injector levels)
+        let levels: PriceLevel[] = [];
+        if (Array.isArray(data.levels) && data.levels.length > 0) {
+          levels = data.levels;
+        } else if (data.modelLevels) {
+          Object.values(data.modelLevels).forEach((lvl: any) => {
+            if (lvl && lvl.price > 0) levels.push(lvl);
+          });
         }
 
         levels.forEach((lvl) => {
@@ -198,10 +198,85 @@ export default function PureTraderChart({
         vertLine: { color: "rgba(255, 255, 255, 0.2)", width: 1, style: LineStyle.Dashed },
         horzLine: { color: "rgba(255, 255, 255, 0.2)", width: 1, style: LineStyle.Dashed },
       },
+      localization: {
+        locale: "bg-BG",
+        dateFormat: "dd MMM yyyy",
+        timeFormatter: (time: any) => {
+          let date: Date;
+          if (typeof time === "number") {
+            date = new Date(time > 1e11 ? time : time * 1000);
+          } else if (time && typeof time === "object" && "year" in time) {
+            date = new Date(Date.UTC(time.year, time.month - 1, time.day));
+          } else {
+            date = new Date();
+          }
+          return new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Europe/Sofia",
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(date);
+        },
+        dateFormatter: (time: any) => {
+          let date: Date;
+          if (typeof time === "number") {
+            date = new Date(time > 1e11 ? time : time * 1000);
+          } else if (time && typeof time === "object" && "year" in time) {
+            date = new Date(Date.UTC(time.year, time.month - 1, time.day));
+          } else {
+            date = new Date();
+          }
+          return new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Europe/Sofia",
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          }).format(date);
+        },
+      },
       timeScale: {
         borderColor: "#1e293b",
         timeVisible: true,
         secondsVisible: false,
+        tickMarkFormatter: (time: any, tickMarkType: number) => {
+          let date: Date;
+          if (typeof time === "number") {
+            date = new Date(time > 1e11 ? time : time * 1000);
+          } else if (time && typeof time === "object" && "year" in time) {
+            date = new Date(Date.UTC(time.year, time.month - 1, time.day));
+          } else {
+            date = new Date();
+          }
+
+          // TickMarkType: 0 = Year, 1 = Month, 2 = DayOfMonth, 3 = Time, 4 = TimeWithSeconds
+          if (tickMarkType === 0) {
+            return new Intl.DateTimeFormat("en-GB", {
+              timeZone: "Europe/Sofia",
+              year: "numeric",
+            }).format(date);
+          }
+          if (tickMarkType === 1) {
+            return new Intl.DateTimeFormat("en-GB", {
+              timeZone: "Europe/Sofia",
+              month: "short",
+            }).format(date);
+          }
+          if (tickMarkType === 2) {
+            return new Intl.DateTimeFormat("en-GB", {
+              timeZone: "Europe/Sofia",
+              day: "numeric",
+              month: "short",
+            }).format(date);
+          }
+          return new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Europe/Sofia",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(date);
+        },
       },
       rightPriceScale: {
         borderColor: "#1e293b",
@@ -210,14 +285,16 @@ export default function PureTraderChart({
       autoSize: true,
     });
 
-    // 2. Add Candlestick Series (Golden Amber candles on pure black background)
+    // 2. Add Candlestick Series:
+    // Up candles: Warm golden yellow (#fbc02d - distinct yellow, not orange, not neon bright)
+    // Down candles: Rich amber orange (#f57c00)
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#f59e0b",
-      downColor: "#f59e0b",
-      borderUpColor: "#f59e0b",
-      borderDownColor: "#f59e0b",
-      wickUpColor: "#f59e0b",
-      wickDownColor: "#f59e0b",
+      upColor: "#fbc02d",
+      downColor: "#f57c00",
+      borderUpColor: "#fbc02d",
+      borderDownColor: "#f57c00",
+      wickUpColor: "#fbc02d",
+      wickDownColor: "#f57c00",
     });
 
     chartRef.current = chart;
@@ -271,6 +348,14 @@ export default function PureTraderChart({
               ${spotPrice.toFixed(2)}
             </span>
           )}
+
+          {/* Bulgarian Timezone Badge */}
+          <span
+            className="px-1.5 py-0.5 bg-[#0b0f19] border border-[#334155] rounded text-neutral-300 text-[10px] font-bold"
+            title="Chart timescale displayed in Bulgarian Local Time (Europe/Sofia)"
+          >
+            🇧🇬 SOFIA
+          </span>
 
           {/* Real-time Candle Close Countdown */}
           <div
