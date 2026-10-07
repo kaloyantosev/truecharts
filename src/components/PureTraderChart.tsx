@@ -49,6 +49,71 @@ export default function PureTraderChart({
   const [domData, setDomData] = useState<{ "0dte": DomRow[]; weekly: DomRow[] } | undefined>();
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<string>("");
+  const [candleCountdown, setCandleCountdown] = useState<string>("--:--");
+
+  // Live Candle Close Countdown Timer (updates every second)
+  useEffect(() => {
+    const calcCountdown = () => {
+      const now = new Date();
+      const nowSec = Math.floor(now.getTime() / 1000);
+
+      let remaining = 0;
+      if (timeframe === "5m") {
+        remaining = 300 - (nowSec % 300);
+      } else if (timeframe === "15m") {
+        remaining = 900 - (nowSec % 900);
+      } else if (timeframe === "1h") {
+        remaining = 3600 - (nowSec % 3600);
+      } else if (timeframe === "4h") {
+        remaining = 14400 - (nowSec % 14400);
+      } else if (timeframe === "1D" || timeframe === "D") {
+        // Market close for US regular session: 16:00:00 US Eastern Time (America/New_York)
+        try {
+          const nyFormatter = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/New_York",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+          });
+          const parts = nyFormatter.formatToParts(now);
+          const getPart = (type: string) => parseInt(parts.find((p) => p.type === type)?.value || "0", 10);
+          const hour = getPart("hour");
+          const min = getPart("minute");
+          const sec = getPart("second");
+          const curNySec = hour * 3600 + min * 60 + sec;
+          const closeNySec = 16 * 3600; // 16:00 ET
+
+          if (curNySec < closeNySec) {
+            remaining = closeNySec - curNySec;
+          } else {
+            // Next trading day close
+            remaining = 86400 - curNySec + closeNySec;
+          }
+        } catch {
+          remaining = 86400 - (nowSec % 86400);
+        }
+      } else {
+        remaining = 60 - (nowSec % 60);
+      }
+
+      if (remaining < 0) remaining = 0;
+      const hours = Math.floor(remaining / 3600);
+      const minutes = Math.floor((remaining % 3600) / 60);
+      const seconds = remaining % 60;
+      const pad = (n: number) => n.toString().padStart(2, "0");
+
+      if (hours > 0) {
+        setCandleCountdown(`${pad(hours)}:${pad(minutes)}:${pad(seconds)}`);
+      } else {
+        setCandleCountdown(`${pad(minutes)}:${pad(seconds)}`);
+      }
+    };
+
+    calcCountdown();
+    const timer = setInterval(calcCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [timeframe]);
 
   // Fetch live market data (Candles, Options Model Levels, DOM, Sinclair)
   const fetchData = useCallback(async () => {
@@ -193,10 +258,20 @@ export default function PureTraderChart({
           <span className="text-neutral-500">·</span>
           <span className="text-[#38bdf8] font-bold">{exchangeName}</span>
           {spotPrice > 0 && (
-            <span className="ml-2 px-2 py-0.5 bg-[#0f172a] border border-[#334155] rounded text-white font-black text-[11px]">
+            <span className="ml-1 px-2 py-0.5 bg-[#0f172a] border border-[#334155] rounded text-white font-black text-[11px]">
               ${spotPrice.toFixed(2)}
             </span>
           )}
+
+          {/* Real-time Candle Close Countdown */}
+          <div
+            className="ml-2 flex items-center gap-1.5 px-2 py-0.5 bg-[#0b0f19] border border-[#f59e0b]/40 rounded text-[11px] font-mono shadow-sm"
+            title={`Time remaining until active ${timeframe} candle closes`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b] animate-ping" />
+            <span className="text-neutral-400 text-[10px] font-semibold">CLOSE IN</span>
+            <span className="text-[#f59e0b] font-black tracking-wider text-[11px]">{candleCountdown}</span>
+          </div>
         </div>
 
         {/* Timeframe Selectors */}

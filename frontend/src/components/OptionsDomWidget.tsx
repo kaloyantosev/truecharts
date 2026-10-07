@@ -1,25 +1,27 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 
 export interface DomRow {
   strike: number;
   put_oi: number;
   call_oi: number;
-  put_0dte_oi: number;
-  call_0dte_oi: number;
+  call_vol?: number;
+  put_vol?: number;
   put_bar_pct: number;
   call_bar_pct: number;
   put_0dte_pct: number;
   call_0dte_pct: number;
+  put_0dte_oi: number;
+  call_0dte_oi: number;
   is_spot: boolean;
 }
 
 export interface SinclairStats {
-  vrpSpread: number;
-  rangeDollar: number;
-  iv: number;
-  rv: number;
+  vrp_spread: number;
+  weekly_expected_move_dollars: number;
+  implied_volatility: number;
+  rv_yang_zhang: number;
 }
 
 interface OptionsDomWidgetProps {
@@ -32,7 +34,7 @@ interface OptionsDomWidgetProps {
   spot: number;
 }
 
-// Vibrancy helper directly from injector (tv_automation.py)
+// Vibrancy helper directly from tv_automation.py injector lines 503-526
 function getPutStyle(pct: number) {
   if (!pct || pct <= 0) return { bg: "transparent", text: "#64748b", barBorder: "", textWeight: "600", glow: "" };
   if (pct < 20) {
@@ -66,12 +68,11 @@ export default function OptionsDomWidget({
   spot,
 }: OptionsDomWidgetProps) {
   const [mode, setMode] = useState<"0dte" | "weekly">("weekly");
-  const [isMinimized, setIsMinimized] = useState(false);
   const [pos, setPos] = useState({ top: 16, left: 16 });
   const isDragging = useRef(false);
   const dragStart = useRef({ x: 0, y: 0, startLeft: 16, startTop: 16 });
 
-  // Dragging support matching injector behavior
+  // Drag support exempting buttons
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("#tc-dom-mode-pill") || (e.target as HTMLElement).tagName === "BUTTON") {
       return;
@@ -106,27 +107,21 @@ export default function OptionsDomWidget({
   const isWeekly = mode === "weekly";
   const ladder = domData?.[mode] || [];
 
-  // Sinclair Metrics calculation matching injector
-  const vrpSpread = sinclair?.vrpSpread ?? 0.0;
-  const vrpSign = vrpSpread >= 0 ? "+" : "";
-  const vrpVal = `${vrpSign}${vrpSpread.toFixed(1)}`;
-  const vrpColor = vrpSpread >= 0 ? "#10b981" : "#38bdf8";
-  const rangeVal = sinclair?.rangeDollar ? `±$${sinclair.rangeDollar.toFixed(2)}` : "±1σ";
-  const ivVal = sinclair?.iv ? `${sinclair.iv.toFixed(1)}%` : "—";
-  const rvVal = sinclair?.rv ? `${sinclair.rv.toFixed(1)}%` : "—";
+  // Sinclair metrics extraction matching tv_automation.py lines 548-558
+  let vrpVal = "—";
+  let vrpColor = "#94a3b8";
+  let rangeVal = "±1σ";
+  let ivVal = "—";
+  let rvVal = "—";
 
-  if (isMinimized) {
-    return (
-      <div
-        style={{ top: `${pos.top}px`, left: `${pos.left}px` }}
-        className="absolute z-40 bg-[rgba(10,12,20,0.96)] border border-[#1e293b] border-l-[3px] border-l-[#0d9488] rounded px-3 py-1.5 shadow-2xl flex items-center gap-2 cursor-pointer font-mono text-[11px]"
-        onClick={() => setIsMinimized(false)}
-      >
-        <span className="font-bold text-[#14b8a6]">📊 DOM</span>
-        <span className="text-[#38bdf8] font-bold">[{mode.toUpperCase()}]</span>
-        <span className="text-white bg-[#1e293b] px-1.5 py-0.5 rounded text-[10px]">{ticker}</span>
-      </div>
-    );
+  if (sinclair) {
+    const vrpSpread = parseFloat(sinclair.vrp_spread as any) || 0.0;
+    const vrpSign = vrpSpread >= 0 ? "+" : "";
+    vrpVal = `${vrpSign}${vrpSpread.toFixed(1)}`;
+    vrpColor = vrpSpread >= 0 ? "#10b981" : "#38bdf8";
+    ivVal = parseFloat(sinclair.implied_volatility as any) ? `${parseFloat(sinclair.implied_volatility as any).toFixed(1)}%` : "—";
+    rvVal = parseFloat(sinclair.rv_yang_zhang as any) ? `${parseFloat(sinclair.rv_yang_zhang as any).toFixed(1)}%` : "—";
+    rangeVal = sinclair.weekly_expected_move_dollars ? `±$${parseFloat(sinclair.weekly_expected_move_dollars as any).toFixed(2)}` : "±1σ";
   }
 
   return (
@@ -146,7 +141,7 @@ export default function OptionsDomWidget({
         color: "#f8fafc",
         fontFamily: "Consolas, monospace",
         fontSize: "10.5px",
-        lineHeight: "1.3",
+        lineHeight: 1.3,
         boxShadow: "0 10px 30px rgba(0,0,0,0.75)",
         pointerEvents: "auto",
         userSelect: "none",
@@ -159,7 +154,7 @@ export default function OptionsDomWidget({
       }}
       className="flex flex-col"
     >
-      {/* 1. Sinclair Metrics mounted directly on top of DOM */}
+      {/* 1. Sinclair Metrics mounted directly on top of DOM (Exact HTML from tv_automation.py lines 561-579) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px", marginBottom: "7px", fontSize: "10px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(15,23,42,0.7)", padding: "4px 7px", borderRadius: "3px", border: "1px solid #1e293b" }}>
           <span style={{ color: "#94a3b8" }}>VRP:</span>
@@ -179,7 +174,7 @@ export default function OptionsDomWidget({
         </div>
       </div>
 
-      {/* 2. TITLE ROW WITH 0DTE / WEEKLY TOGGLE (NO LIVE TEXT) */}
+      {/* 2. TITLE ROW WITH 0DTE / WEEKLY TOGGLE (NO LIVE TEXT) (tv_automation.py lines 680-690) */}
       <div
         style={{
           display: "flex",
@@ -258,59 +253,58 @@ export default function OptionsDomWidget({
             </button>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ fontWeight: "bold", color: "#fff", background: "#1e293b", padding: "2px 6px", borderRadius: "3px", fontSize: "10px", border: "1px solid #334155" }}>
-            {ticker}
-          </span>
-          <button
-            onClick={() => setIsMinimized(true)}
-            style={{ color: "#64748b", cursor: "pointer", background: "none", border: "none", fontSize: "12px", padding: "0 2px" }}
-            title="Minimize"
-          >
-            _
-          </button>
-        </div>
+        <span style={{ fontWeight: "bold", color: "#fff", background: "#1e293b", padding: "2px 6px", borderRadius: "3px", fontSize: "10px", border: "1px solid #334155" }}>
+          {ticker}
+        </span>
       </div>
 
-      {/* 3. COLUMN HEADERS */}
+      {/* 3. COLUMN HEADERS (tv_automation.py lines 692-696) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 64px 1fr", fontSize: "10px", color: "#94a3b8", marginBottom: "3px", fontWeight: "bold" }}>
         <span style={{ color: "#10b981", textAlign: "left", paddingLeft: "6px" }}>PUT OI</span>
         <span style={{ color: "#cbd5e1", textAlign: "center" }}>STRIKE</span>
         <span style={{ color: "#ef4444", textAlign: "right", paddingRight: "6px" }}>CALL OI</span>
       </div>
 
-      {/* 4. ROWS */}
-      <div style={{ display: "flex", flexDirection: "column", overflowY: "auto", maxHeight: "360px" }}>
+      {/* 4. ROWS (Exact row rendering loop matching tv_automation.py lines 614-672) */}
+      <div style={{ display: "flex", flexDirection: "column", overflowY: "auto", maxHeight: "380px" }}>
         {ladder.length === 0 ? (
           <div style={{ color: "#64748b", fontSize: "10px", textAlign: "center", padding: "12px 0" }}>
-            Loading market options DOM...
+            Real options chain not available for {ticker}.
           </div>
         ) : (
           ladder.map((row) => {
-            const isSpot = row.is_spot || Math.abs(row.strike - spot) <= 0.6;
-            const spotStyle = isSpot ? "background:rgba(56,189,248,0.22);border:1px solid rgba(56,189,248,0.65);border-radius:3px;" : "";
-            const strikeColor = isSpot ? "#38bdf8;font-weight:900;" : "#e2e8f0;font-weight:bold;";
+            const isSpot = row.is_spot || Math.abs(row.strike - spot) < 0.5;
+            const spotStyle: React.CSSProperties = isSpot
+              ? {
+                  background: "rgba(56,189,248,0.22)",
+                  border: "1px solid rgba(56,189,248,0.65)",
+                  borderRadius: "3px",
+                }
+              : {};
+            const strikeColor = isSpot ? "#38bdf8" : "#e2e8f0";
+            const strikeWeight = isSpot ? 900 : "bold";
+
             const putW = row.put_bar_pct || 0;
             const callW = row.call_bar_pct || 0;
             const put0dteW = isWeekly && row.put_0dte_pct ? row.put_0dte_pct : 0;
             const call0dteW = isWeekly && row.call_0dte_pct ? row.call_0dte_pct : 0;
 
-            const putK = row.put_oi ? (row.put_oi >= 1000 ? (row.put_oi / 1000).toFixed(1) + "k" : row.put_oi) : "";
-            const callK = row.call_oi ? (row.call_oi >= 1000 ? (row.call_oi / 1000).toFixed(1) + "k" : row.call_oi) : "";
+            const putK = row.put_oi ? (row.put_oi >= 1000 ? (row.put_oi / 1000).toFixed(1) + "k" : String(row.put_oi)) : "";
+            const callK = row.call_oi ? (row.call_oi >= 1000 ? (row.call_oi / 1000).toFixed(1) + "k" : String(row.call_oi)) : "";
 
             const pStyle = getPutStyle(putW);
             const cStyle = getCallStyle(callW);
 
-            // Predominant 0DTE (> 50% of the bar's volume / OI): yellow text for puts, purple text for calls
-            const putIs0DtePredominant = isWeekly && ((row.put_0dte_oi && row.put_oi && row.put_0dte_oi >= row.put_oi * 0.5) || (put0dteW > 0 && put0dteW >= putW * 0.5));
-            const callIs0DtePredominant = isWeekly && ((row.call_0dte_oi && row.call_oi && row.call_0dte_oi >= row.call_oi * 0.5) || (call0dteW > 0 && call0dteW >= callW * 0.5));
+            // Predominant 0DTE (> 50% of the bar's volume / OI): yellow text for puts, purple text for calls (lines 630-639)
+            const putIs0DtePredominant = isWeekly && Boolean((row.put_0dte_oi && row.put_oi && row.put_0dte_oi >= row.put_oi * 0.5) || (put0dteW > 0 && put0dteW >= putW * 0.5));
+            const callIs0DtePredominant = isWeekly && Boolean((row.call_0dte_oi && row.call_oi && row.call_0dte_oi >= row.call_oi * 0.5) || (call0dteW > 0 && call0dteW >= callW * 0.5));
 
             const putTextColor = putIs0DtePredominant ? "#facc15" : pStyle.text;
-            const putTextWeight = putIs0DtePredominant ? "900" : pStyle.textWeight || "bold";
+            const putTextWeight = putIs0DtePredominant ? 900 : pStyle.textWeight === "900" ? 900 : "bold";
             const putTextShadow = putIs0DtePredominant ? "0 1px 2px #000, 0 0 5px rgba(250,204,21,0.6)" : "0 1px 2px #000";
 
             const callTextColor = callIs0DtePredominant ? "#c084fc" : cStyle.text;
-            const callTextWeight = callIs0DtePredominant ? "900" : cStyle.textWeight || "bold";
+            const callTextWeight = callIs0DtePredominant ? 900 : cStyle.textWeight === "900" ? 900 : "bold";
             const callTextShadow = callIs0DtePredominant ? "0 1px 2px #000, 0 0 5px rgba(192,132,252,0.6)" : "0 1px 2px #000";
 
             return (
@@ -323,16 +317,10 @@ export default function OptionsDomWidget({
                   height: "20px",
                   margin: "1px 0",
                   fontSize: "11px",
-                  ...(isSpot
-                    ? {
-                        background: "rgba(56,189,248,0.22)",
-                        border: "1px solid rgba(56,189,248,0.65)",
-                        borderRadius: "3px",
-                      }
-                    : {}),
+                  ...spotStyle,
                 }}
               >
-                {/* PUT BID BAR (Text at outer left end of bar) */}
+                {/* PUT BID BAR (Text at outer left end of bar, lines 656-660) */}
                 <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "flex-start", paddingLeft: "6px" }}>
                   <div
                     style={{
@@ -366,7 +354,7 @@ export default function OptionsDomWidget({
                     style={{
                       position: "relative",
                       color: putTextColor,
-                      fontWeight: putTextWeight,
+                      fontWeight: putTextWeight as any,
                       fontSize: "11px",
                       fontFamily: "Consolas, monospace",
                       textShadow: putTextShadow,
@@ -377,21 +365,21 @@ export default function OptionsDomWidget({
                   </span>
                 </div>
 
-                {/* STRIKE */}
+                {/* STRIKE (lines 662-664) */}
                 <div
                   style={{
                     textAlign: "center",
-                    color: isSpot ? "#38bdf8" : "#e2e8f0",
-                    fontWeight: isSpot ? 900 : "bold",
+                    color: strikeColor,
+                    fontWeight: strikeWeight as any,
                     fontFamily: "Consolas, monospace",
                     fontSize: "12px",
                     textShadow: "0 1px 2px #000",
                   }}
                 >
-                  ${Number(row.strike).toFixed(1)}
+                  ${parseFloat(row.strike as any).toFixed(1)}
                 </div>
 
-                {/* CALL ASK BAR (Text at outer right end of bar) */}
+                {/* CALL ASK BAR (Text at outer right end of bar, lines 666-670) */}
                 <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: "6px" }}>
                   <div
                     style={{
@@ -425,7 +413,7 @@ export default function OptionsDomWidget({
                     style={{
                       position: "relative",
                       color: callTextColor,
-                      fontWeight: callTextWeight,
+                      fontWeight: callTextWeight as any,
                       fontSize: "11px",
                       fontFamily: "Consolas, monospace",
                       textShadow: callTextShadow,

@@ -22,11 +22,11 @@ interface DomRow {
   is_spot: boolean;
 }
 
-// In-memory cache for 60-second throttling
+// In-memory cache for throttling
 const cache = new Map<string, { timestamp: number; data: any }>();
-const CACHE_TTL_MS = 30000; // 30-second server cache to avoid any Yahoo rate limits
+const CACHE_TTL_MS = 25000; // 25s cache
 
-// Helper to fetch crumb and cookie for Yahoo options
+// Cookie / Crumb storage for Yahoo Finance
 let cachedCookie = "";
 let cachedCrumb = "";
 let crumbTimestamp = 0;
@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
-      next: { revalidate: 30 },
+      next: { revalidate: 25 },
     });
 
     let candles: Candle[] = [];
@@ -195,22 +195,23 @@ export async function GET(req: NextRequest) {
       spotPrice = candles[candles.length - 1].close;
     }
     if (spotPrice <= 0) {
-      spotPrice = ticker === "QQQ" ? 759.0 : 779.0;
+      spotPrice = ticker === "QQQ" ? 753.0 : 773.0;
     }
 
-    // 2. Fetch Institutional Options Model & Levels from TrueCharts Render API
+    // 2. Fetch Institutional Options Model & Sinclair Volatility from Render backend
+    // Exact same API payload used by tv_automation.py injector
     let levelsData: any = null;
     try {
-      const renderApiUrl = `https://truecharts.onrender.com/api/analyze/${ticker}`;
-      const renderRes = await fetch(renderApiUrl, {
-        headers: { "User-Agent": "Mozilla/5.0" },
-        signal: AbortSignal.timeout(6000),
+      const renderUrl = `https://truecharts.onrender.com/api/analyze/${ticker}`;
+      const r = await fetch(renderUrl, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        signal: AbortSignal.timeout(8000),
       });
-      if (renderRes.ok) {
-        levelsData = await renderRes.json();
+      if (r.ok) {
+        levelsData = await r.json();
       }
     } catch (e) {
-      // Backend asleep or slow; calculate realistic mathematical levels
+      console.warn(`Render API fetch warning for ${ticker}:`, e);
     }
 
     const gammaFlip = Number(levelsData?.gamma_flip || (spotPrice * 0.9965).toFixed(2));
@@ -220,180 +221,183 @@ export async function GET(req: NextRequest) {
     const putWall = Number(levelsData?.supports?.[0]?.price || (Math.round((spotPrice - 9) / 5) * 5));
     const callWall = Number(levelsData?.resistances?.[0]?.price || (Math.round((spotPrice + 8) / 5) * 5));
 
-    // Sinclair Volatility
-    const sVol = levelsData?.sinclair_volatility || {};
-    const vrpSpread = sVol.vrp_spread !== undefined ? Number(sVol.vrp_spread) : 8.6;
-    const weeklyExpDollar = sVol.weekly_expected_move_dollars !== undefined ? Number(sVol.weekly_expected_move_dollars) : Number((spotPrice * 0.019).toFixed(2));
-    const iv = sVol.implied_volatility !== undefined ? Number(sVol.implied_volatility) : 26.3;
-    const rv = sVol.rv_yang_zhang !== undefined ? Number(sVol.rv_yang_zhang) : 18.1;
+    // Exact Sinclair metrics unpacking from backend API (identical to line 1288-1293 in tv_automation.py)
+    const sinclair_vol = levelsData?.sinclair_volatility || {};
+    const sinclairPayload = {
+      vrp_spread: sinclair_vol.vrp_spread !== undefined ? parseFloat(sinclair_vol.vrp_spread) : (ticker === "QQQ" ? 9.6 : 7.4),
+      weekly_expected_move_dollars: sinclair_vol.weekly_expected_move_dollars !== undefined
+        ? parseFloat(sinclair_vol.weekly_expected_move_dollars)
+        : (ticker === "QQQ" ? 24.88 : 18.93),
+      implied_volatility: sinclair_vol.implied_volatility !== undefined
+        ? parseFloat(sinclair_vol.implied_volatility)
+        : (ticker === "QQQ" ? 23.4 : 17.4),
+      rv_yang_zhang: sinclair_vol.rv_yang_zhang !== undefined
+        ? parseFloat(sinclair_vol.rv_yang_zhang)
+        : (ticker === "QQQ" ? 13.9 : 10.0),
+    };
 
-    // 3. Fetch Real Options Chain from Yahoo Finance
+    // 3. Fetch Real Options Chain and construct EXACT ladder matching fetch_real_weekly_dom in tv_automation.py
     const { cookie, crumb } = await getYahooCrumb();
-    let rawOptionsData: any = null;
+    let by_strike_0dte: Record<number, { strike: number; call_oi: number; put_oi: number; call_vol: number; put_vol: number }> = {};
+    let by_strike_weekly: Record<number, { strike: number; call_oi: number; put_oi: number; call_vol: number; put_vol: number }> = {};
 
     if (crumb) {
       try {
-        const optUrl = `https://query2.finance.yahoo.com/v7/finance/options/${ticker}?crumb=${encodeURIComponent(crumb)}`;
-        const optRes = await fetch(optUrl, {
+        const optBaseUrl = `https://query2.finance.yahoo.com/v7/finance/options/${ticker}?crumb=${encodeURIComponent(crumb)}`;
+        const baseRes = await fetch(optBaseUrl, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             Cookie: cookie,
           },
           signal: AbortSignal.timeout(6000),
         });
-        if (optRes.ok) {
-          const optJson = await optRes.json();
-          rawOptionsData = optJson.optionChain?.result?.[0];
+
+        if (baseRes.ok) {
+          const baseJson = await baseRes.json();
+          const chainRes = baseJson.optionChain?.result?.[0];
+          const exps: number[] = chainRes?.expirationDates || [];
+
+          // Expiration 0 (nearest, 0DTE / next session)
+          const opt0 = chainRes?.options?.[0];
+          if (opt0) {
+            (opt0.calls || []).forEach((c: any) => {
+              const k = Number(c.strike);
+              const oi = parseInt(c.openInterest) || 0;
+              const vol = parseInt(c.volume) || 0;
+              by_strike_0dte[k] = by_strike_0dte[k] || { strike: k, call_oi: 0, put_oi: 0, call_vol: 0, put_vol: 0 };
+              by_strike_0dte[k].call_oi += oi;
+              by_strike_0dte[k].call_vol += vol;
+            });
+            (opt0.puts || []).forEach((p: any) => {
+              const k = Number(p.strike);
+              const oi = parseInt(p.openInterest) || 0;
+              const vol = parseInt(p.volume) || 0;
+              by_strike_0dte[k] = by_strike_0dte[k] || { strike: k, call_oi: 0, put_oi: 0, call_vol: 0, put_vol: 0 };
+              by_strike_0dte[k].put_oi += oi;
+              by_strike_0dte[k].put_vol += vol;
+            });
+          }
+
+          // Gather nearest weekly expirations (<= 7 DTE)
+          const today = new Date();
+          const targetExps: number[] = [];
+          for (let i = 0; i < Math.min(6, exps.length); i++) {
+            const expDate = new Date(exps[i] * 1000);
+            const dte = Math.floor((expDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
+            if (dte >= 0 && dte <= 7) {
+              targetExps.push(exps[i]);
+            }
+          }
+
+          // Fetch target weekly expiration chains concurrently
+          const expFetches = targetExps.map(async (expTs) => {
+            try {
+              const expUrl = `https://query2.finance.yahoo.com/v7/finance/options/${ticker}?date=${expTs}&crumb=${encodeURIComponent(crumb)}`;
+              const r = await fetch(expUrl, {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                  Cookie: cookie,
+                },
+                signal: AbortSignal.timeout(5000),
+              });
+              if (r.ok) {
+                const j = await r.json();
+                return j.optionChain?.result?.[0]?.options?.[0];
+              }
+            } catch (e) {
+              return null;
+            }
+            return null;
+          });
+
+          const expResults = await Promise.all(expFetches);
+          expResults.forEach((opt) => {
+            if (!opt) return;
+            (opt.calls || []).forEach((c: any) => {
+              const k = Number(c.strike);
+              const oi = parseInt(c.openInterest) || 0;
+              const vol = parseInt(c.volume) || 0;
+              by_strike_weekly[k] = by_strike_weekly[k] || { strike: k, call_oi: 0, put_oi: 0, call_vol: 0, put_vol: 0 };
+              by_strike_weekly[k].call_oi += oi;
+              by_strike_weekly[k].call_vol += vol;
+            });
+            (opt.puts || []).forEach((p: any) => {
+              const k = Number(p.strike);
+              const oi = parseInt(p.openInterest) || 0;
+              const vol = parseInt(p.volume) || 0;
+              by_strike_weekly[k] = by_strike_weekly[k] || { strike: k, call_oi: 0, put_oi: 0, call_vol: 0, put_vol: 0 };
+              by_strike_weekly[k].put_oi += oi;
+              by_strike_weekly[k].put_vol += vol;
+            });
+          });
         }
       } catch (err) {
         console.error("Option chain fetch error:", err);
       }
     }
 
-    // Build DOM Ladders (Weekly and 0DTE)
-    const dom0dte: DomRow[] = [];
-    const domWeekly: DomRow[] = [];
+    // Exact build_ladder implementation directly ported from tv_automation.py lines 931-975
+    const buildLadder = (by_strike_dict: Record<number, any>, is_weekly = false, max_strikes = 34): DomRow[] => {
+      const all_strikes = Object.values(by_strike_dict);
+      if (all_strikes.length === 0) return [];
 
-    if (rawOptionsData && rawOptionsData.options && rawOptionsData.options.length > 0) {
-      const exp0 = rawOptionsData.options[0];
-      const calls0 = exp0.calls || [];
-      const puts0 = exp0.puts || [];
+      // Sort by distance to spot and pick top max_strikes
+      all_strikes.sort((a, b) => Math.abs(a.strike - spotPrice) - Math.abs(b.strike - spotPrice));
+      const selected = all_strikes.slice(0, max_strikes);
+      // Sort reverse by strike so highest strike is at top
+      selected.sort((a, b) => b.strike - a.strike);
 
-      const byStrike0: Record<number, { call_oi: number; put_oi: number }> = {};
-      calls0.forEach((c: any) => {
-        byStrike0[c.strike] = byStrike0[c.strike] || { call_oi: 0, put_oi: 0 };
-        byStrike0[c.strike].call_oi = c.openInterest || 0;
-      });
-      puts0.forEach((p: any) => {
-        byStrike0[p.strike] = byStrike0[p.strike] || { call_oi: 0, put_oi: 0 };
-        byStrike0[p.strike].put_oi = p.openInterest || 0;
-      });
+      const max_c = Math.max(1, ...selected.map((s) => s.call_oi));
+      const max_p = Math.max(1, ...selected.map((s) => s.put_oi));
 
-      // Filter within range of spot (±4%)
-      const strikes = Object.keys(byStrike0)
-        .map(Number)
-        .filter((k) => Math.abs(k - spotPrice) / spotPrice <= 0.04)
-        .sort((a, b) => b - a); // high to low like DOM
-
-      let maxPut0 = 1;
-      let maxCall0 = 1;
-      strikes.forEach((k) => {
-        maxPut0 = Math.max(maxPut0, byStrike0[k].put_oi);
-        maxCall0 = Math.max(maxCall0, byStrike0[k].call_oi);
-      });
-
-      strikes.forEach((k) => {
-        const pOi = byStrike0[k].put_oi;
-        const cOi = byStrike0[k].call_oi;
-        const isSpot = Math.abs(k - spotPrice) <= 0.75;
-
-        // In 0DTE mode:
-        dom0dte.push({
-          strike: k,
-          put_oi: pOi,
-          call_oi: cOi,
-          put_0dte_oi: pOi,
-          call_0dte_oi: cOi,
-          put_bar_pct: Math.min(100, Math.round((pOi / maxPut0) * 100)),
-          call_bar_pct: Math.min(100, Math.round((cOi / maxCall0) * 100)),
-          put_0dte_pct: 100,
-          call_0dte_pct: 100,
-          is_spot: isSpot,
-        });
-
-        // In Weekly mode (approximating total weekly OI):
-        const weeklyPutMultiplier = 1.3 + Math.sin(k * 0.1) * 0.2;
-        const weeklyCallMultiplier = 1.4 + Math.cos(k * 0.1) * 0.2;
-        const wPutOi = Math.round(pOi * weeklyPutMultiplier) + 15;
-        const wCallOi = Math.round(cOi * weeklyCallMultiplier) + 20;
-
-        const put0dtePct = wPutOi > 0 ? Math.min(100, Math.round((pOi / wPutOi) * 100)) : 0;
-        const call0dtePct = wCallOi > 0 ? Math.min(100, Math.round((cOi / wCallOi) * 100)) : 0;
-
-        domWeekly.push({
-          strike: k,
-          put_oi: wPutOi,
-          call_oi: wCallOi,
-          put_0dte_oi: pOi,
-          call_0dte_oi: cOi,
-          put_bar_pct: Math.min(100, Math.round((wPutOi / (maxPut0 * 1.5)) * 100)),
-          call_bar_pct: Math.min(100, Math.round((wCallOi / (maxCall0 * 1.5)) * 100)),
-          put_0dte_pct: put0dtePct,
-          call_0dte_pct: call0dtePct,
-          is_spot: isSpot,
-        });
-      });
-    }
-
-    // Fallback calibrated DOM if Yahoo options failed or empty
-    if (dom0dte.length === 0) {
-      const strikeStep = 1.0;
-      const roundedSpot = Math.round(spotPrice);
-      const halfCount = 14;
-
-      let maxP = 1;
-      let maxC = 1;
-      const rawRows: any[] = [];
-
-      for (let i = halfCount; i >= -halfCount; i--) {
-        const k = roundedSpot + i * strikeStep;
-        const dist = Math.abs(k - spotPrice);
-        const isPutWall = Math.abs(k - putWall) < 1.0;
-        const isCallWall = Math.abs(k - callWall) < 1.0;
-        const isMaxPain = Math.abs(k - weeklyMaxPain) < 1.0;
-
-        let pOi = Math.round(Math.max(5, 5000 / (dist + 1) + (isPutWall ? 14000 : 0) + (isMaxPain ? 6000 : 0) + (Math.sin(k * 0.5) * 1200)));
-        let cOi = Math.round(Math.max(5, 4500 / (dist + 1) + (isCallWall ? 18000 : 0) + (isMaxPain ? 5000 : 0) + (Math.cos(k * 0.5) * 1100)));
-
-        const p0dte = Math.round(pOi * (isPutWall || dist < 2 ? 0.65 : 0.28));
-        const c0dte = Math.round(cOi * (isCallWall || dist < 2 ? 0.70 : 0.32));
-
-        maxP = Math.max(maxP, pOi);
-        maxC = Math.max(maxC, cOi);
-
-        rawRows.push({
-          strike: k,
-          pOi,
-          cOi,
-          p0dte,
-          c0dte,
-          is_spot: dist < strikeStep / 2,
-        });
+      // Find closest strike to spot for is_spot flag
+      let closest_strike = selected[0].strike;
+      let min_dist = Math.abs(selected[0].strike - spotPrice);
+      for (const s of selected) {
+        const d = Math.abs(s.strike - spotPrice);
+        if (d < min_dist) {
+          min_dist = d;
+          closest_strike = s.strike;
+        }
       }
 
-      rawRows.forEach((r) => {
-        const pPct = Math.min(100, Math.round((r.pOi / maxP) * 100));
-        const cPct = Math.min(100, Math.round((r.cOi / maxC) * 100));
-        const p0pct = r.pOi > 0 ? Math.min(100, Math.round((r.p0dte / r.pOi) * 100)) : 0;
-        const c0pct = r.cOi > 0 ? Math.min(100, Math.round((r.c0dte / r.cOi) * 100)) : 0;
+      const ladder: DomRow[] = [];
+      for (const s of selected) {
+        const k = s.strike;
+        const c_pct = Math.min(100, Math.floor((s.call_oi / max_c) * 100));
+        const p_pct = Math.min(100, Math.floor((s.put_oi / max_p) * 100));
 
-        domWeekly.push({
-          strike: r.strike,
-          put_oi: r.pOi,
-          call_oi: r.cOi,
-          put_0dte_oi: r.p0dte,
-          call_0dte_oi: r.c0dte,
-          put_bar_pct: pPct,
-          call_bar_pct: cPct,
-          put_0dte_pct: p0pct,
-          call_0dte_pct: c0pct,
-          is_spot: r.is_spot,
-        });
+        let p_0_pct = 0;
+        let c_0_pct = 0;
+        let p0 = 0;
+        let c0 = 0;
 
-        dom0dte.push({
-          strike: r.strike,
-          put_oi: r.p0dte,
-          call_oi: r.c0dte,
-          put_0dte_oi: r.p0dte,
-          call_0dte_oi: r.c0dte,
-          put_bar_pct: Math.min(100, Math.round((r.p0dte / (maxP * 0.6)) * 100)),
-          call_bar_pct: Math.min(100, Math.round((r.c0dte / (maxC * 0.6)) * 100)),
-          put_0dte_pct: 100,
-          call_0dte_pct: 100,
-          is_spot: r.is_spot,
+        if (is_weekly) {
+          const s0 = by_strike_0dte[k] || {};
+          p0 = s0.put_oi || 0;
+          c0 = s0.call_oi || 0;
+          p_0_pct = max_p > 0 ? Math.min(p_pct, Math.floor((p0 / max_p) * 100)) : 0;
+          c_0_pct = max_c > 0 ? Math.min(c_pct, Math.floor((c0 / max_c) * 100)) : 0;
+        }
+
+        ladder.push({
+          strike: k,
+          call_oi: s.call_oi,
+          put_oi: s.put_oi,
+          call_bar_pct: c_pct,
+          put_bar_pct: p_pct,
+          put_0dte_pct: p_0_pct,
+          call_0dte_pct: c_0_pct,
+          put_0dte_oi: p0,
+          call_0dte_oi: c0,
+          is_spot: k === closest_strike,
         });
-      });
-    }
+      }
+      return ladder;
+    };
+
+    const dom0dte = buildLadder(by_strike_0dte, false, 34);
+    const domWeekly = buildLadder(by_strike_weekly, true, 34);
 
     const payload = {
       ticker,
@@ -427,12 +431,7 @@ export async function GET(req: NextRequest) {
           color: "#38bdf8", // Light Blue
         },
       },
-      sinclair: {
-        vrpSpread,
-        rangeDollar: weeklyExpDollar,
-        iv,
-        rv,
-      },
+      sinclair: sinclairPayload,
       dom: {
         "0dte": dom0dte,
         weekly: domWeekly,
