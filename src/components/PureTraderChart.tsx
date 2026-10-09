@@ -219,22 +219,6 @@ export default function PureTraderChart({
             hour12: false,
           }).format(date);
         },
-        dateFormatter: (time: any) => {
-          let date: Date;
-          if (typeof time === "number") {
-            date = new Date(time > 1e11 ? time : time * 1000);
-          } else if (time && typeof time === "object" && "year" in time) {
-            date = new Date(Date.UTC(time.year, time.month - 1, time.day));
-          } else {
-            date = new Date();
-          }
-          return new Intl.DateTimeFormat("en-GB", {
-            timeZone: "Europe/Sofia",
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          }).format(date);
-        },
       },
       timeScale: {
         borderColor: "#1e293b",
