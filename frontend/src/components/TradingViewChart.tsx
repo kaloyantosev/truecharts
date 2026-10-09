@@ -13,13 +13,20 @@ interface Level {
   tests?: number;
 }
 
-interface TradingViewChartProps {
+export interface TradingViewChartProps {
   ticker: string;
   spot: number;
   maxPain: number;
   supports: Level[];
   resistances: Level[];
   timeframe: string;
+  weeklyMaxPain?: number;
+  monthlyMaxPain?: number;
+  gammaFlip?: number;
+  expectedMoveUpper?: number;
+  expectedMoveLower?: number;
+  expectedMoveRange?: number | string;
+  sinclairVolatility?: any;
 }
 
 export default function TradingViewChart({
@@ -29,6 +36,13 @@ export default function TradingViewChart({
   supports,
   resistances,
   timeframe,
+  weeklyMaxPain,
+  monthlyMaxPain,
+  gammaFlip,
+  expectedMoveUpper,
+  expectedMoveLower,
+  expectedMoveRange,
+  sinclairVolatility,
 }: TradingViewChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -57,13 +71,16 @@ export default function TradingViewChart({
   }, [resistances]);
 
   const gammaFlipPrice = useMemo(() => {
+    if (gammaFlip !== undefined && gammaFlip > 0) {
+      return gammaFlip;
+    }
     const majorSup = supports.find((s) => s.strength / maxSupportAbs >= 0.75)?.price;
     const majorRes = resistances.find((r) => r.strength / maxResistanceAbs >= 0.75)?.price;
     if (majorSup && majorRes) {
       return Number(((majorSup * 0.48) + (majorRes * 0.52)).toFixed(2));
     }
     return Number((spot * 0.994).toFixed(2));
-  }, [supports, resistances, maxSupportAbs, maxResistanceAbs, spot]);
+  }, [supports, resistances, maxSupportAbs, maxResistanceAbs, spot, gammaFlip]);
 
   const isLongGamma = spot >= gammaFlipPrice;
 
