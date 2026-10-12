@@ -71,8 +71,8 @@ export default function BacktestPage() {
 
           <div className="flex items-center gap-2">
             <span className="font-black tracking-wider text-white">HISTORICAL BACKTESTER</span>
-            <span className="bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/40 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-widest">
-              1-MONTH REPLAY
+            <span className="bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/40 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-widest">
+              REAL OCC &amp; CBOE DATA
             </span>
           </div>
         </div>
