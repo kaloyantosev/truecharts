@@ -167,7 +167,7 @@ export default function BacktestPage() {
       <div className="flex-1 w-full max-w-[1420px] mx-auto px-3 py-2 flex flex-col gap-3">
         {/* SPY Chart */}
         {(viewMode === "dual" || viewMode === "spy") && (
-          <div className="w-full flex-1 min-h-[480px]">
+          <div className="w-full">
             {selectedDate && (
               <BacktestChart
                 ticker="SPY"
@@ -184,7 +184,7 @@ export default function BacktestPage() {
 
         {/* QQQ Chart */}
         {(viewMode === "dual" || viewMode === "qqq") && (
-          <div className="w-full flex-1 min-h-[480px]">
+          <div className="w-full">
             {selectedDate && (
               <BacktestChart
                 ticker="QQQ"

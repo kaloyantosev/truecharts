@@ -48,11 +48,53 @@ export default function BacktestChart({
   const [domData, setDomData] = useState<{ "0dte": DomRow[]; weekly: DomRow[] } | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(true);
   const [candleCount, setCandleCount] = useState<number>(0);
+  const [candlesData, setCandlesData] = useState<any[]>([]);
+  const [levelsData, setLevelsData] = useState<PriceLevel[]>([]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const priceLinesRef = useRef<any[]>([]);
+
+  // Function to apply candles and levels to the active chart series
+  const renderChartData = useCallback((candles: any[], levels: PriceLevel[]) => {
+    if (!seriesRef.current || !chartRef.current || candles.length === 0) return;
+
+    try {
+      // 1. Set Candlestick data
+      seriesRef.current.setData(candles as any);
+
+      // 2. Clear previous price lines
+      priceLinesRef.current.forEach((pl) => {
+        try {
+          seriesRef.current?.removePriceLine(pl);
+        } catch (e) {}
+      });
+      priceLinesRef.current = [];
+
+      // 3. Draw Options Model Levels computed at 09:40 ET
+      if (Array.isArray(levels)) {
+        levels.forEach((lvl: PriceLevel) => {
+          if (lvl.price > 0 && seriesRef.current) {
+            const pl = seriesRef.current.createPriceLine({
+              price: lvl.price,
+              color: lvl.color,
+              lineWidth: 2,
+              lineStyle: LineStyle.Solid,
+              axisLabelVisible: true,
+              title: lvl.title,
+            });
+            priceLinesRef.current.push(pl);
+          }
+        });
+      }
+
+      // 4. Fit all candles into view automatically
+      chartRef.current.timeScale().fitContent();
+    } catch (err) {
+      console.error("Error setting chart data:", err);
+    }
+  }, []);
 
   // Fetch backtest data whenever ticker, timeframe, or selectedDate changes
   const fetchBacktestData = useCallback(async () => {
@@ -70,50 +112,25 @@ export default function BacktestChart({
       setSinclair(data.sinclair);
       setDomData(data.dom);
 
-      if (data.candles && data.candles.length > 0 && seriesRef.current) {
-        seriesRef.current.setData(data.candles as any);
-        setCandleCount(data.candles.length);
+      const loadedCandles = Array.isArray(data.candles) ? data.candles : [];
+      const loadedLevels = Array.isArray(data.levels) ? data.levels : [];
 
-        // Clear existing price lines
-        priceLinesRef.current.forEach((pl) => {
-          try {
-            seriesRef.current?.removePriceLine(pl);
-          } catch (e) {}
-        });
-        priceLinesRef.current = [];
+      setCandlesData(loadedCandles);
+      setLevelsData(loadedLevels);
+      setCandleCount(loadedCandles.length);
 
-        // Draw Options Model Levels computed at 09:40 ET
-        if (Array.isArray(data.levels)) {
-          data.levels.forEach((lvl: PriceLevel) => {
-            if (lvl.price > 0 && seriesRef.current) {
-              const pl = seriesRef.current.createPriceLine({
-                price: lvl.price,
-                color: lvl.color,
-                lineWidth: 2,
-                lineStyle: LineStyle.Solid,
-                axisLabelVisible: true,
-                title: lvl.title,
-              });
-              priceLinesRef.current.push(pl);
-            }
-          });
-        }
-
-        // Fit RTH session candles into full view
-        chartRef.current?.timeScale().fitContent();
+      // Render immediately if series is already initialized
+      if (seriesRef.current && loadedCandles.length > 0) {
+        renderChartData(loadedCandles, loadedLevels);
       }
     } catch (err) {
       console.error(`Error loading backtest data for ${ticker} on ${selectedDate}:`, err);
     } finally {
       setLoading(false);
     }
-  }, [ticker, timeframe, selectedDate]);
+  }, [ticker, timeframe, selectedDate, renderChartData]);
 
-  useEffect(() => {
-    fetchBacktestData();
-  }, [fetchBacktestData]);
-
-  // Initialize Lightweight Chart on mount
+  // 1. Initialize Lightweight Chart on mount
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -196,6 +213,7 @@ export default function BacktestChart({
       },
       rightPriceScale: {
         borderColor: "#1e293b",
+        visible: true,
         autoScale: true,
       },
       autoSize: true,
@@ -216,22 +234,39 @@ export default function BacktestChart({
     chartRef.current = chart;
     seriesRef.current = candleSeries;
 
-    const handleResize = () => {
-      if (containerRef.current) {
-        chart.applyOptions({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        });
+    // ResizeObserver ensures chart canvas cleanly resizes with container
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (!entries || entries.length === 0) return;
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) {
+        chart.applyOptions({ width, height });
+        chart.timeScale().fitContent();
       }
-    };
+    });
 
-    window.addEventListener("resize", handleResize);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
 
     return () => {
-      window.removeEventListener("resize", handleResize);
+      resizeObserver.disconnect();
       chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
     };
   }, []);
+
+  // 2. Fetch data whenever ticker, timeframe, or selectedDate changes
+  useEffect(() => {
+    fetchBacktestData();
+  }, [fetchBacktestData]);
+
+  // 3. Whenever candlesData or seriesRef changes, ensure data is rendered
+  useEffect(() => {
+    if (seriesRef.current && candlesData.length > 0) {
+      renderChartData(candlesData, levelsData);
+    }
+  }, [candlesData, levelsData, renderChartData]);
 
   // Previous and Next day navigation
   const currentIndex = availableDates.indexOf(selectedDate);
@@ -251,9 +286,9 @@ export default function BacktestChart({
   };
 
   return (
-    <div className="flex flex-col w-full h-full bg-[#080b14] border border-[#1e293b] rounded-lg overflow-hidden shadow-2xl">
+    <div className="relative w-full h-[520px] bg-black border border-[#1e293b] rounded-lg overflow-hidden flex flex-col shadow-2xl">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between px-3 py-2 bg-[#0a0e1a] border-b border-[#1e293b] select-none text-xs">
+      <div className="h-10 px-3 bg-[#0a0e1a] border-b border-[#1e293b] flex items-center justify-between text-xs select-none flex-shrink-0 z-20">
         <div className="flex items-center gap-3">
           {/* Ticker & Exchange Badges */}
           <div className="flex items-center gap-2">
@@ -291,7 +326,7 @@ export default function BacktestChart({
             <select
               value={selectedDate}
               onChange={(e) => onDateChange && onDateChange(e.target.value)}
-              className="bg-[#0f172a] text-white font-mono text-[11px] font-bold px-2 py-1 rounded border border-[#334155] focus:outline-none focus:border-[#38bdf8]"
+              className="bg-[#0f172a] text-white font-mono text-[11px] font-bold px-2 py-0.5 rounded border border-[#334155] focus:outline-none focus:border-[#38bdf8]"
             >
               {availableDates.map((d) => (
                 <option key={d} value={d} className="bg-[#0b0f19] text-white">
