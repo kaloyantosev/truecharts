@@ -31,6 +31,72 @@ const TIMEFRAMES = [
   { label: "Daily", value: "1D" },
 ];
 
+// Lightweight native browser decoder for real-time exchange quote ticks
+function decodeYahooQuote(base64Str: string): { id: string; price: number; changePct: number } | null {
+  try {
+    const binaryString = atob(base64Str);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+    let pos = 0;
+    let id = "";
+    let price = 0;
+    let changePct = 0;
+
+    while (pos < bytes.length) {
+      const byte = bytes[pos++];
+      const field = byte >> 3;
+      const wire = byte & 0x07;
+
+      if (wire === 0) {
+        let val = 0;
+        let shift = 0;
+        while (pos < bytes.length) {
+          const b = bytes[pos++];
+          val |= (b & 0x7f) << shift;
+          if (!(b & 0x80)) break;
+          shift += 7;
+        }
+      } else if (wire === 5) {
+        if (pos + 4 <= bytes.length) {
+          const f = view.getFloat32(pos, true);
+          pos += 4;
+          if (field === 2) price = f;
+          else if (field === 8) changePct = f;
+        }
+      } else if (wire === 2) {
+        let l = 0;
+        let shift = 0;
+        while (pos < bytes.length) {
+          const b = bytes[pos++];
+          l |= (b & 0x7f) << shift;
+          if (!(b & 0x80)) break;
+          shift += 7;
+        }
+        if (pos + l <= bytes.length) {
+          let str = "";
+          for (let i = 0; i < l; i++) {
+            str += String.fromCharCode(bytes[pos + i]);
+          }
+          pos += l;
+          if (field === 1) id = str;
+        }
+      } else if (wire === 1) {
+        pos += 8;
+      } else {
+        break;
+      }
+    }
+    return { id, price: Number(price.toFixed(2)), changePct: Number(changePct.toFixed(2)) };
+  } catch (e) {
+    return null;
+  }
+}
+
 export default function PureTraderChart({
   ticker,
   exchangeName,
@@ -41,6 +107,7 @@ export default function PureTraderChart({
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const priceLinesRef = useRef<any[]>([]);
+  const lastCandleRef = useRef<{ time: number; open: number; high: number; low: number; close: number } | null>(null);
 
   const [timeframe, setTimeframe] = useState(defaultTimeframe);
   const [spotPrice, setSpotPrice] = useState<number>(0);
@@ -49,6 +116,8 @@ export default function PureTraderChart({
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<string>("");
   const [candleCountdown, setCandleCountdown] = useState<string>("--:--");
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const [priceFlash, setPriceFlash] = useState(false);
 
   // Live Candle Close Countdown Timer (updates every second)
   useEffect(() => {
@@ -112,7 +181,7 @@ export default function PureTraderChart({
     return () => clearInterval(timer);
   }, [timeframe]);
 
-  // Fetch live market data (Candles, Options Model Levels, DOM, Sinclair)
+  // Fetch initial market data (Candles, Options Model Levels, DOM, Sinclair)
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -128,6 +197,7 @@ export default function PureTraderChart({
       // Update Chart Series
       if (seriesRef.current && Array.isArray(data.candles) && data.candles.length > 0) {
         seriesRef.current.setData(data.candles);
+        lastCandleRef.current = { ...data.candles[data.candles.length - 1] };
 
         // Clear previous price lines
         priceLinesRef.current.forEach((pl) => {
@@ -179,11 +249,106 @@ export default function PureTraderChart({
     }
   }, [ticker, timeframe]);
 
+  // Real-time WebSocket: Streams live exchange trade ticks directly into active candle
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let isMounted = true;
+    let reconnectTimer: any = null;
+
+    const connectWs = () => {
+      try {
+        ws = new WebSocket("wss://streamer.finance.yahoo.com");
+
+        ws.onopen = () => {
+          if (!isMounted) return;
+          setIsLiveConnected(true);
+          ws?.send(JSON.stringify({ subscribe: [ticker] }));
+        };
+
+        ws.onmessage = (evt) => {
+          if (!isMounted) return;
+          try {
+            const raw = typeof evt.data === "string" ? evt.data : "";
+            if (!raw) return;
+            const quote = decodeYahooQuote(raw);
+            if (!quote || quote.id !== ticker || !quote.price) return;
+
+            const newPrice = quote.price;
+            setSpotPrice(newPrice);
+            setPriceFlash(true);
+            setTimeout(() => setPriceFlash(false), 200);
+
+            // Update active candle in real-time
+            if (seriesRef.current && lastCandleRef.current) {
+              const cur = lastCandleRef.current;
+              const nowSec = Math.floor(Date.now() / 1000);
+
+              let barSec = 900;
+              if (timeframe === "5m") barSec = 300;
+              else if (timeframe === "15m") barSec = 900;
+              else if (timeframe === "1h") barSec = 3600;
+              else if (timeframe === "1D" || timeframe === "D") barSec = 86400;
+
+              const curBarTime = Math.floor(nowSec / barSec) * barSec;
+
+              // If tick belongs to current bar, update high, low, close
+              if (cur.time >= curBarTime || (timeframe === "1D" && Math.abs(cur.time - nowSec) < 86400)) {
+                const updated = {
+                  time: cur.time,
+                  open: cur.open,
+                  high: Math.max(cur.high, newPrice),
+                  low: Math.min(cur.low, newPrice),
+                  close: newPrice,
+                };
+                lastCandleRef.current = updated;
+                seriesRef.current.update(updated);
+              } else {
+                // Candle closed, open new bar
+                const newBar = {
+                  time: curBarTime,
+                  open: newPrice,
+                  high: newPrice,
+                  low: newPrice,
+                  close: newPrice,
+                };
+                lastCandleRef.current = newBar;
+                seriesRef.current.update(newBar);
+              }
+            }
+          } catch (e) {}
+        };
+
+        ws.onclose = () => {
+          if (!isMounted) return;
+          setIsLiveConnected(false);
+          reconnectTimer = setTimeout(connectWs, 3000);
+        };
+
+        ws.onerror = () => {
+          ws?.close();
+        };
+      } catch (e) {
+        setIsLiveConnected(false);
+      }
+    };
+
+    connectWs();
+
+    return () => {
+      isMounted = false;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
+    };
+  }, [ticker, timeframe]);
+
   // Initial Chart Initialization
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // 1. Create Lightweight Chart with pure black background and hidden grids
+    // 1. Create Lightweight Chart with pure black background, Bulgarian timezone, and hidden grids
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: "#000000" },
@@ -234,7 +399,6 @@ export default function PureTraderChart({
             date = new Date();
           }
 
-          // TickMarkType: 0 = Year, 1 = Month, 2 = DayOfMonth, 3 = Time, 4 = TimeWithSeconds
           if (tickMarkType === 0) {
             return new Intl.DateTimeFormat("en-GB", {
               timeZone: "Europe/Sofia",
@@ -303,12 +467,12 @@ export default function PureTraderChart({
     };
   }, []);
 
-  // Fetch data on timeframe change and mount
+  // Fetch initial data on timeframe change and mount
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Auto-refresh every 60 seconds (1 minute)
+  // Periodic background refresh for options levels & Sinclair metrics every 60s
   useEffect(() => {
     const timer = setInterval(() => {
       fetchData();
@@ -318,17 +482,39 @@ export default function PureTraderChart({
 
   return (
     <div className="relative w-full h-[480px] bg-black border border-[#1e293b] rounded-lg overflow-hidden flex flex-col shadow-2xl">
-      {/* Top Header Strip: Symbol, Timeframes, Live Badge */}
+      {/* Top Header Strip: Symbol, Timeframes, Live Ticks Status */}
       <div className="h-9 px-3 bg-[#05070e] border-b border-[#1e293b] flex items-center justify-between text-xs font-mono select-none z-20 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse" />
+          {/* Live Tick Status Badge */}
+          <div
+            className="flex items-center gap-1.5 px-2 py-0.5 bg-[#0b0f19] border border-[#1e293b] rounded text-[10px] font-mono shadow-sm"
+            title={isLiveConnected ? "Direct Real-time Market WebSocket active" : "Connecting to real-time feed..."}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                isLiveConnected ? "bg-[#10b981] animate-ping" : "bg-[#f59e0b] animate-pulse"
+              }`}
+            />
+            <span className={isLiveConnected ? "text-[#10b981] font-bold" : "text-neutral-400 font-semibold"}>
+              {isLiveConnected ? "LIVE" : "SYNCING"}
+            </span>
+          </div>
+
           <span className="font-bold text-white tracking-wide">{chartTitle}</span>
           <span className="text-neutral-500">·</span>
           <span className="text-neutral-400 font-bold">{timeframe}</span>
           <span className="text-neutral-500">·</span>
           <span className="text-[#38bdf8] font-bold">{exchangeName}</span>
+
+          {/* Live Spot Price with real-time flash animation on ticks */}
           {spotPrice > 0 && (
-            <span className="ml-1 px-2 py-0.5 bg-[#0f172a] border border-[#334155] rounded text-white font-black text-[11px]">
+            <span
+              className={`ml-1 px-2 py-0.5 border rounded text-white font-black text-[11px] transition-colors duration-150 ${
+                priceFlash
+                  ? "bg-[#10b981]/30 border-[#10b981] text-[#a7f3d0]"
+                  : "bg-[#0f172a] border-[#334155]"
+              }`}
+            >
               ${spotPrice.toFixed(2)}
             </span>
           )}
