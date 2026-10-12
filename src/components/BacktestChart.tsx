@@ -71,7 +71,7 @@ export default function BacktestChart({
       setDomData(data.dom);
 
       if (data.candles && data.candles.length > 0 && seriesRef.current) {
-        seriesRef.current.setData(data.candles);
+        seriesRef.current.setData(data.candles as any);
         setCandleCount(data.candles.length);
 
         // Clear existing price lines

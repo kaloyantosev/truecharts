@@ -294,25 +294,25 @@ export default function PureTraderChart({
               // If tick belongs to current bar, update high, low, close
               if (cur.time >= curBarTime || (timeframe === "1D" && Math.abs(cur.time - nowSec) < 86400)) {
                 const updated = {
-                  time: cur.time,
+                  time: cur.time as any,
                   open: cur.open,
                   high: Math.max(cur.high, newPrice),
                   low: Math.min(cur.low, newPrice),
                   close: newPrice,
                 };
                 lastCandleRef.current = updated;
-                seriesRef.current.update(updated);
+                seriesRef.current.update(updated as any);
               } else {
                 // Candle closed, open new bar
                 const newBar = {
-                  time: curBarTime,
+                  time: curBarTime as any,
                   open: newPrice,
                   high: newPrice,
                   low: newPrice,
                   close: newPrice,
                 };
                 lastCandleRef.current = newBar;
-                seriesRef.current.update(newBar);
+                seriesRef.current.update(newBar as any);
               }
             }
           } catch (e) {}

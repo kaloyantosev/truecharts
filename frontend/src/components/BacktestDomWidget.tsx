@@ -119,7 +119,7 @@ export default function BacktestDomWidget({
           <span className="w-1.5 h-1.5 rounded-full bg-[#facc15]" />
           <span className="font-bold text-[#facc15]">09:40 ET SNAPSHOT</span>
         </div>
-        <span className="text-neutral-400 font-mono text-[9px]">10m After Open</span>
+        <span className="text-neutral-400 font-mono text-[9px]">{selectedDate ? `${selectedDate} · ` : ""}10m After Open</span>
       </div>
 
       {/* 2. Sinclair Metrics Grid */}
