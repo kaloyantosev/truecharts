@@ -7,14 +7,14 @@ import BacktestChart from "@/components/BacktestChart";
 export default function BacktestPage() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"dual" | "spy" | "qqq">("dual");
+  const [viewMode, setViewMode] = useState<"spy" | "qqq" | "dual">("spy");
   const [loadingDates, setLoadingDates] = useState<boolean>(true);
 
   // Load available trading dates from the backtest API on mount
   useEffect(() => {
     async function loadDates() {
       try {
-        const res = await fetch("/api/backtest?ticker=SPY");
+        const res = await fetch("/api/backtest?ticker=SPY&timeframe=5m");
         if (res.ok) {
           const data = await res.json();
           if (data.availableDates && data.availableDates.length > 0) {
@@ -61,26 +61,62 @@ export default function BacktestPage() {
           </Link>
           <Link
             href="/trader-panel"
-            className="flex items-center gap-1.5 text-[#00ff88] hover:text-white transition-colors bg-[#00ff88]/10 border border-[#00ff88]/30 px-2.5 py-1 rounded text-[11px] font-bold"
+            className="flex items-center gap-1.5 text-purple-300 hover:text-white transition-colors bg-purple-900/30 border border-purple-500/40 px-2.5 py-1 rounded text-[11px] font-bold"
           >
-            <span>Live Panel</span>
-            <span>⚡</span>
+            <span>📊</span>
+            <span>Trader Panel</span>
           </Link>
 
           <div className="h-4 w-[1px] bg-[#1e293b]" />
 
           <div className="flex items-center gap-2">
-            <span className="font-black tracking-wider text-white">HISTORICAL BACKTESTER</span>
+            <span className="font-black tracking-wider text-white">BACKTESTER</span>
             <span className="bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/40 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-widest">
-              REAL OCC &amp; CBOE DATA
+              THETADATA · 09:40 ET
             </span>
           </div>
         </div>
 
-        {/* Global Date Controls */}
-        <div className="flex items-center gap-2">
+        {/* Center Controls: Symbol Selector (SPY / QQQ) & Trading Day Selector */}
+        <div className="flex items-center gap-3">
+          {/* Symbol Selector: SPY / QQQ / Dual */}
+          <div className="flex items-center gap-1 bg-[#0b0f19] p-1 rounded border border-[#1e293b]">
+            <span className="text-[10px] text-neutral-400 font-semibold px-1.5">SYMBOL:</span>
+            <button
+              onClick={() => setViewMode("spy")}
+              className={`px-3 py-0.5 rounded text-[11px] font-bold transition-all ${
+                viewMode === "spy"
+                  ? "bg-[#38bdf8] text-black font-black shadow-[0_0_8px_rgba(56,189,248,0.4)]"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              SPY
+            </button>
+            <button
+              onClick={() => setViewMode("qqq")}
+              className={`px-3 py-0.5 rounded text-[11px] font-bold transition-all ${
+                viewMode === "qqq"
+                  ? "bg-[#38bdf8] text-black font-black shadow-[0_0_8px_rgba(56,189,248,0.4)]"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              QQQ
+            </button>
+            <button
+              onClick={() => setViewMode("dual")}
+              className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                viewMode === "dual"
+                  ? "bg-[#38bdf8] text-black font-black"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              Dual (SPY+QQQ)
+            </button>
+          </div>
+
+          {/* Date Controls */}
           <div className="flex items-center gap-1 bg-[#0b0f19] px-2 py-1 rounded border border-[#1e293b]">
-            <span className="text-[10px] text-neutral-400 font-semibold mr-1">SESSION DATE:</span>
+            <span className="text-[10px] text-neutral-400 font-semibold mr-1">DAY:</span>
             <button
               onClick={goToPrev}
               disabled={!hasPrev || loadingDates}
@@ -118,55 +154,21 @@ export default function BacktestPage() {
               Next →
             </button>
           </div>
-
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 bg-[#0b0f19] p-0.5 rounded border border-[#1e293b]">
-            <button
-              onClick={() => setViewMode("dual")}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                viewMode === "dual"
-                  ? "bg-[#38bdf8] text-black font-black"
-                  : "text-neutral-400 hover:text-white"
-              }`}
-            >
-              Dual
-            </button>
-            <button
-              onClick={() => setViewMode("spy")}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                viewMode === "spy"
-                  ? "bg-[#38bdf8] text-black font-black"
-                  : "text-neutral-400 hover:text-white"
-              }`}
-            >
-              SPY
-            </button>
-            <button
-              onClick={() => setViewMode("qqq")}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                viewMode === "qqq"
-                  ? "bg-[#38bdf8] text-black font-black"
-                  : "text-neutral-400 hover:text-white"
-              }`}
-            >
-              QQQ
-            </button>
-          </div>
         </div>
 
         {/* Informational Badges */}
         <div className="flex items-center gap-2 text-[11px]">
           <div className="flex items-center gap-1.5 bg-[#0f172a] px-2.5 py-1 rounded border border-[#1e293b]">
             <span className="w-2 h-2 rounded-full bg-[#facc15]" />
-            <span className="text-neutral-300 font-bold text-[10px]">DOM: 10m After Open</span>
+            <span className="text-neutral-300 font-bold text-[10px]">5m · 16:30 – 23:00 BG</span>
           </div>
         </div>
       </header>
 
-      {/* Main Container: Stacked Vertically */}
+      {/* Main Container */}
       <div className="flex-1 w-full max-w-[1420px] mx-auto px-3 py-2 flex flex-col gap-3">
         {/* SPY Chart */}
-        {(viewMode === "dual" || viewMode === "spy") && (
+        {(viewMode === "spy" || viewMode === "dual") && (
           <div className="w-full">
             {selectedDate && (
               <BacktestChart
@@ -176,14 +178,15 @@ export default function BacktestPage() {
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
                 availableDates={availableDates}
-                defaultTimeframe="15m"
+                defaultTimeframe="5m"
+                heightClass={viewMode === "spy" ? "h-[640px]" : "h-[520px]"}
               />
             )}
           </div>
         )}
 
         {/* QQQ Chart */}
-        {(viewMode === "dual" || viewMode === "qqq") && (
+        {(viewMode === "qqq" || viewMode === "dual") && (
           <div className="w-full">
             {selectedDate && (
               <BacktestChart
@@ -193,7 +196,8 @@ export default function BacktestPage() {
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
                 availableDates={availableDates}
-                defaultTimeframe="15m"
+                defaultTimeframe="5m"
+                heightClass={viewMode === "qqq" ? "h-[640px]" : "h-[520px]"}
               />
             )}
           </div>

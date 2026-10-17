@@ -25,6 +25,7 @@ interface BacktestChartProps {
   onDateChange?: (date: string) => void;
   availableDates?: string[];
   defaultTimeframe?: string;
+  heightClass?: string;
 }
 
 const TIMEFRAMES = [
@@ -40,7 +41,8 @@ export default function BacktestChart({
   selectedDate,
   onDateChange,
   availableDates = [],
-  defaultTimeframe = "15m",
+  defaultTimeframe = "5m",
+  heightClass = "h-[520px]",
 }: BacktestChartProps) {
   const [timeframe, setTimeframe] = useState<string>(defaultTimeframe);
   const [spotPrice, setSpotPrice] = useState<number>(0);
@@ -286,7 +288,7 @@ export default function BacktestChart({
   };
 
   return (
-    <div className="relative w-full h-[520px] bg-black border border-[#1e293b] rounded-lg overflow-hidden flex flex-col shadow-2xl">
+    <div className={`relative w-full ${heightClass} bg-black border border-[#1e293b] rounded-lg overflow-hidden flex flex-col shadow-2xl`}>
       {/* Top Header Bar */}
       <div className="h-10 px-3 bg-[#0a0e1a] border-b border-[#1e293b] flex items-center justify-between text-xs select-none flex-shrink-0 z-20">
         <div className="flex items-center gap-3">

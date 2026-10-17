@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const ticker = (searchParams.get("ticker") || "SPY").toUpperCase().trim();
-    const timeframe = (searchParams.get("timeframe") || "15m").toLowerCase();
+    const timeframe = (searchParams.get("timeframe") || "5m").toLowerCase();
     const requestedDate = searchParams.get("date") || "";
 
     const dataset = ticker === "QQQ" ? qqqData : spyData;
@@ -26,8 +26,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: `No data for date: ${selectedDate}` }, { status: 404 });
     }
 
-    const validTimeframe = ["5m", "15m", "1h"].includes(timeframe) ? timeframe : "15m";
-    const candles = dayData.candles[validTimeframe] || dayData.candles["15m"] || [];
+    const validTimeframe = ["5m", "15m", "1h"].includes(timeframe) ? timeframe : "5m";
+    const candles = dayData.candles[validTimeframe] || dayData.candles["5m"] || [];
 
     const payload = {
       ticker,

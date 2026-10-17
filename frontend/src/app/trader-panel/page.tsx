@@ -24,6 +24,14 @@ export default function TraderPanelPage() {
               PRO DUAL
             </span>
           </div>
+          <div className="h-4 w-[1px] bg-[#1e293b]" />
+          <Link
+            href="/backtest"
+            className="flex items-center gap-1.5 text-amber-300 hover:text-white transition-colors bg-amber-500/10 border border-amber-500/40 px-2.5 py-1 rounded text-[11px] font-bold"
+          >
+            <span>⏪</span>
+            <span>Backtester</span>
+          </Link>
         </div>
 
         <div className="flex items-center gap-3 text-[11px] text-neutral-400">

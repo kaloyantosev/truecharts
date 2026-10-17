@@ -139,14 +139,24 @@ export default function GlobalHeader({
           </svg>
         </div>
 
-        {/* Trader Panel Navigation Button */}
-        <Link
-          href="/trader-panel"
-          className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-900/50 to-blue-900/50 border border-purple-500/50 hover:border-purple-400 text-purple-200 hover:text-white rounded text-xs font-mono font-bold transition-all shadow-[0_0_12px_rgba(168,85,247,0.25)] hover:scale-105 active:scale-95"
-        >
-          <span className="text-purple-400">📊</span>
-          <span>Trader Panel</span>
-        </Link>
+        {/* Trader Panel & Backtester Navigation Buttons */}
+        <div className="flex items-center gap-2">
+          <Link
+            href="/trader-panel"
+            className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-900/50 to-blue-900/50 border border-purple-500/50 hover:border-purple-400 text-purple-200 hover:text-white rounded text-xs font-mono font-bold transition-all shadow-[0_0_12px_rgba(168,85,247,0.25)] hover:scale-105 active:scale-95"
+          >
+            <span className="text-purple-400">📊</span>
+            <span>Trader Panel</span>
+          </Link>
+
+          <Link
+            href="/backtest"
+            className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-amber-900/50 to-teal-900/50 border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white rounded text-xs font-mono font-bold transition-all shadow-[0_0_12px_rgba(245,158,11,0.25)] hover:scale-105 active:scale-95"
+          >
+            <span className="text-amber-400">⏪</span>
+            <span>Backtester</span>
+          </Link>
+        </div>
 
         {/* API Connection Indicator */}
         <div className="flex items-center gap-1.5">
