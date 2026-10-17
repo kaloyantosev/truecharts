@@ -122,27 +122,7 @@ export default function BacktestDomWidget({
         <span className="text-neutral-400 font-mono text-[9px]">{selectedDate ? `${selectedDate} · ` : ""}OPRA</span>
       </div>
 
-      {/* 2. Sinclair Metrics Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px", marginBottom: "6px", fontSize: "10px", flexShrink: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(15,23,42,0.7)", padding: "3px 6px", borderRadius: "3px", border: "1px solid #1e293b" }}>
-          <span style={{ color: "#94a3b8" }}>VRP:</span>
-          <span style={{ color: vrpColor, fontWeight: "bold" }}>{vrpVal}</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(15,23,42,0.7)", padding: "3px 6px", borderRadius: "3px", border: "1px solid #1e293b" }}>
-          <span style={{ color: "#94a3b8" }}>Range:</span>
-          <span style={{ color: "#38bdf8", fontWeight: "bold" }}>{rangeVal}</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(15,23,42,0.7)", padding: "3px 6px", borderRadius: "3px", border: "1px solid #1e293b" }}>
-          <span style={{ color: "#94a3b8" }}>IV:</span>
-          <span style={{ color: "#fff", fontWeight: "bold" }}>{ivVal}</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(15,23,42,0.7)", padding: "3px 6px", borderRadius: "3px", border: "1px solid #1e293b" }}>
-          <span style={{ color: "#94a3b8" }}>RV:</span>
-          <span style={{ color: "#fff", fontWeight: "bold" }}>{rvVal}</span>
-        </div>
-      </div>
-
-      {/* 3. Title Row with 0DTE / Weekly Pill */}
+      {/* 2. Title Row with 0DTE / Weekly Pill */}
       <div
         style={{
           display: "flex",
