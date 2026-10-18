@@ -113,16 +113,7 @@ export default function BacktestDomWidget({
         overflow: "hidden",
       }}
     >
-      {/* 1. Historical Snapshot Time Badge */}
-      <div className="flex items-center justify-between mb-1.5 px-1 py-1 rounded bg-[#0b0f19] border border-[#1e293b] text-[9.5px]">
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
-          <span className="font-bold text-[#10b981]">THETADATA · 09:40 ET</span>
-        </div>
-        <span className="text-neutral-400 font-mono text-[9px]">{selectedDate ? `${selectedDate} · ` : ""}OPRA</span>
-      </div>
-
-      {/* 2. Title Row with 0DTE / Weekly Pill */}
+      {/* Title Row with 0DTE / Weekly Pill */}
       <div
         style={{
           display: "flex",

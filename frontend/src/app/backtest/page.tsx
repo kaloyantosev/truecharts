@@ -10,6 +10,11 @@ export default function BacktestPage() {
   const [viewMode, setViewMode] = useState<"spy" | "qqq" | "dual">("spy");
   const [loadingDates, setLoadingDates] = useState<boolean>(true);
 
+  // Unbiased / Blind Backtest State
+  const [isBlindMode, setIsBlindMode] = useState<boolean>(false);
+  const [revealed, setRevealed] = useState<boolean>(false);
+  const [sessionCount, setSessionCount] = useState<number>(1);
+
   // Load available trading dates from the backtest API on mount
   useEffect(() => {
     async function loadDates() {
@@ -47,6 +52,18 @@ export default function BacktestPage() {
     }
   };
 
+  // Pick a random day and mask date for a 100% unbiased backtest
+  const handleRandomDay = () => {
+    if (availableDates.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * availableDates.length);
+    setSelectedDate(availableDates[randomIndex]);
+    setIsBlindMode(true);
+    setRevealed(false);
+    setSessionCount((prev) => prev + 1);
+  };
+
+  const effectiveBlind = isBlindMode && !revealed;
+
   return (
     <main className="min-h-screen bg-[#05060a] text-neutral-100 flex flex-col">
       {/* Sleek Minimal Header */}
@@ -72,12 +89,12 @@ export default function BacktestPage() {
           <div className="flex items-center gap-2">
             <span className="font-black tracking-wider text-white">BACKTESTER</span>
             <span className="bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/40 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-widest">
-              THETADATA · 09:40 ET
+              {effectiveBlind ? "UNBIASED BLIND MODE" : "HISTORICAL REPLAY"}
             </span>
           </div>
         </div>
 
-        {/* Center Controls: Symbol Selector (SPY / QQQ) & Trading Day Selector */}
+        {/* Center Controls: Symbol Selector & Session / Random Controls */}
         <div className="flex items-center gap-3">
           {/* Symbol Selector: SPY / QQQ / Dual */}
           <div className="flex items-center gap-1 bg-[#0b0f19] p-1 rounded border border-[#1e293b]">
@@ -114,45 +131,86 @@ export default function BacktestPage() {
             </button>
           </div>
 
-          {/* Date Controls */}
+          {/* Random Day Button for Unbiased Backtesting */}
+          <button
+            onClick={handleRandomDay}
+            className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded text-[11px] font-bold transition-all shadow-[0_0_12px_rgba(168,85,247,0.35)] active:scale-95"
+            title="Pick a random session without showing the date for a 100% unbiased backtest"
+          >
+            <span>🎲</span>
+            <span>Random Day</span>
+          </button>
+
+          {/* Date Controls (Masked in Blind Mode) */}
           <div className="flex items-center gap-1 bg-[#0b0f19] px-2 py-1 rounded border border-[#1e293b]">
-            <span className="text-[10px] text-neutral-400 font-semibold mr-1">DAY:</span>
-            <button
-              onClick={goToPrev}
-              disabled={!hasPrev || loadingDates}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
-                hasPrev
-                  ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
-                  : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
-              }`}
-            >
-              ← Prev
-            </button>
+            {effectiveBlind ? (
+              <div className="flex items-center gap-2 px-1">
+                <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1">
+                  <span>🔒</span>
+                  <span>Session #{sessionCount} (Hidden Date)</span>
+                </span>
+                <button
+                  onClick={() => setRevealed(true)}
+                  className="px-2 py-0.5 rounded bg-[#1e293b] hover:bg-[#334155] text-neutral-200 text-[10px] font-bold transition-colors border border-[#475569]"
+                  title="Reveal the actual calendar date of this session"
+                >
+                  👁️ Reveal Date
+                </button>
+              </div>
+            ) : (
+              <>
+                <span className="text-[10px] text-neutral-400 font-semibold mr-1">DAY:</span>
+                <button
+                  onClick={goToPrev}
+                  disabled={!hasPrev || loadingDates}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                    hasPrev
+                      ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
+                      : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
+                  }`}
+                >
+                  ← Prev
+                </button>
 
-            <select
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              disabled={loadingDates}
-              className="bg-[#0f172a] text-[#facc15] font-mono text-[11px] font-black px-2.5 py-0.5 rounded border border-[#334155] focus:outline-none focus:border-[#facc15]"
-            >
-              {availableDates.map((d) => (
-                <option key={d} value={d} className="bg-[#080b14] text-white">
-                  {d}
-                </option>
-              ))}
-            </select>
+                <select
+                  value={selectedDate}
+                  onChange={(e) => {
+                    setSelectedDate(e.target.value);
+                    setRevealed(true);
+                  }}
+                  disabled={loadingDates}
+                  className="bg-[#0f172a] text-[#facc15] font-mono text-[11px] font-black px-2.5 py-0.5 rounded border border-[#334155] focus:outline-none focus:border-[#facc15]"
+                >
+                  {availableDates.map((d) => (
+                    <option key={d} value={d} className="bg-[#080b14] text-white">
+                      {d}
+                    </option>
+                  ))}
+                </select>
 
-            <button
-              onClick={goToNext}
-              disabled={!hasNext || loadingDates}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
-                hasNext
-                  ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
-                  : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
-              }`}
-            >
-              Next →
-            </button>
+                <button
+                  onClick={goToNext}
+                  disabled={!hasNext || loadingDates}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                    hasNext
+                      ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
+                      : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
+                  }`}
+                >
+                  Next →
+                </button>
+
+                {isBlindMode && revealed && (
+                  <button
+                    onClick={() => setRevealed(false)}
+                    className="ml-1 px-1.5 py-0.5 rounded bg-[#1e293b] hover:bg-[#334155] text-neutral-400 hover:text-white text-[10px] font-bold border border-[#475569]"
+                    title="Hide date again"
+                  >
+                    🔒 Hide
+                  </button>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -160,7 +218,7 @@ export default function BacktestPage() {
         <div className="flex items-center gap-2 text-[11px]">
           <div className="flex items-center gap-1.5 bg-[#0f172a] px-2.5 py-1 rounded border border-[#1e293b]">
             <span className="w-2 h-2 rounded-full bg-[#facc15]" />
-            <span className="text-neutral-300 font-bold text-[10px]">5m · 16:30 – 23:00 BG</span>
+            <span className="text-neutral-300 font-bold text-[10px]">5m · 09:30 – 16:00 ET (RTH)</span>
           </div>
         </div>
       </header>
@@ -180,6 +238,7 @@ export default function BacktestPage() {
                 availableDates={availableDates}
                 defaultTimeframe="5m"
                 heightClass={viewMode === "spy" ? "h-[640px]" : "h-[520px]"}
+                isBlindMode={effectiveBlind}
               />
             )}
           </div>
@@ -198,6 +257,7 @@ export default function BacktestPage() {
                 availableDates={availableDates}
                 defaultTimeframe="5m"
                 heightClass={viewMode === "qqq" ? "h-[640px]" : "h-[520px]"}
+                isBlindMode={effectiveBlind}
               />
             )}
           </div>

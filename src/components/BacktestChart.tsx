@@ -20,12 +20,13 @@ interface PriceLevel {
 interface BacktestChartProps {
   ticker: "SPY" | "QQQ";
   exchangeName: "AMEX" | "NASDAQ";
-  chartTitle: string;
+  chartTitle?: string;
   selectedDate: string;
   onDateChange?: (date: string) => void;
   availableDates?: string[];
   defaultTimeframe?: string;
   heightClass?: string;
+  isBlindMode?: boolean;
 }
 
 type ToolMode = "cursor" | "ruler" | "long" | "short";
@@ -57,10 +58,9 @@ export default function BacktestChart({
   ticker,
   exchangeName,
   selectedDate,
-  onDateChange,
-  availableDates = [],
   defaultTimeframe = "5m",
   heightClass = "h-[640px]",
+  isBlindMode = false,
 }: BacktestChartProps) {
   const [timeframe, setTimeframe] = useState<string>(defaultTimeframe);
   const [spotPrice, setSpotPrice] = useState<number>(0);
@@ -73,7 +73,7 @@ export default function BacktestChart({
   const [visibleCount, setVisibleCount] = useState<number>(2);
   const [levelsData, setLevelsData] = useState<PriceLevel[]>([]);
 
-  // Interactive Tools: Cursor, Ruler (Ролетка), Long Position, Short Position
+  // Interactive Tools: Cursor, Ruler (Measure), Long Position, Short Position
   const [activeTool, setActiveTool] = useState<ToolMode>("cursor");
   const [ruler, setRuler] = useState<RulerDrawing | null>(null);
   const [position, setPosition] = useState<PositionDrawing | null>(null);
@@ -81,7 +81,7 @@ export default function BacktestChart({
 
   // Lot Size & Contract Multiplier: 0.10 lot for SPY, 0.05 lot for QQQ
   const [lotSize, setLotSize] = useState<number>(ticker === "SPY" ? 0.10 : 0.05);
-  const [contractMultiplier, setContractMultiplier] = useState<number>(100); // 1 standard ETF/Stock CFD lot = 100 shares
+  const [contractMultiplier, setContractMultiplier] = useState<number>(100);
 
   useEffect(() => {
     setLotSize(ticker === "SPY" ? 0.10 : 0.05);
@@ -100,18 +100,6 @@ export default function BacktestChart({
   const priceLinesRef = useRef<any[]>([]);
   const isInitialLoadRef = useRef<boolean>(true);
 
-  // Format timestamp into Sofia HH:mm
-  const formatSofiaTime = (ts?: number) => {
-    if (!ts) return "--:--";
-    const d = new Date(ts > 1e11 ? ts : ts * 1000);
-    return new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Europe/Sofia",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(d);
-  };
-
   // Apply sliced candles and option levels to chart
   const renderChartData = useCallback(
     (allCandles: any[], count: number, levels: PriceLevel[], resetViewport: boolean) => {
@@ -129,17 +117,23 @@ export default function BacktestChart({
         });
         priceLinesRef.current = [];
 
-        // Draw ThetaData 09:40 ET Options Levels
+        // Draw ThetaData 09:40 ET Options Levels (mask dates in titles if in blind mode)
         if (Array.isArray(levels)) {
           levels.forEach((lvl: PriceLevel) => {
             if (lvl.price > 0 && seriesRef.current) {
+              let displayTitle = lvl.title;
+              if (isBlindMode) {
+                // Strip date text like "(09:40 Oct 16)" -> "(09:40)"
+                displayTitle = displayTitle.replace(/\s*\(\d{2}:\d{2}\s+[A-Za-z]+\s+\d+\)/, " (09:40)");
+                displayTitle = displayTitle.replace(/\s*\([A-Za-z]+\s+\d+\)/, "");
+              }
               const pl = seriesRef.current.createPriceLine({
                 price: lvl.price,
                 color: lvl.color,
                 lineWidth: 2,
                 lineStyle: LineStyle.Solid,
                 axisLabelVisible: true,
-                title: lvl.title,
+                title: displayTitle,
               });
               priceLinesRef.current.push(pl);
             }
@@ -153,7 +147,7 @@ export default function BacktestChart({
             to: 36,
           });
         } else {
-          // If the newly revealed bar is near or beyond the right edge of the current view, scroll gently
+          // If the newly revealed bar is near or beyond the right edge, scroll gently
           const range = chartRef.current.timeScale().getVisibleLogicalRange();
           if (range && sliced.length - 1 > range.to - 2) {
             const span = range.to - range.from;
@@ -168,7 +162,7 @@ export default function BacktestChart({
         console.error("Error rendering chart data:", err);
       }
     },
-    [triggerOverlayUpdate]
+    [isBlindMode, triggerOverlayUpdate]
   );
 
   // Fetch backtest data for selected day
@@ -193,7 +187,7 @@ export default function BacktestChart({
       setCandlesData(loadedCandles);
       setLevelsData(loadedLevels);
 
-      // Start each day at the first 2 candles (16:30 and 16:35 BG = 09:40 ET snapshot time)
+      // Start each day at the first 2 candles (09:30 and 09:35 ET)
       const initialBars = Math.min(2, loadedCandles.length || 2);
       setVisibleCount(initialBars);
       isInitialLoadRef.current = true;
@@ -228,8 +222,8 @@ export default function BacktestChart({
         horzLine: { color: "rgba(255, 255, 255, 0.25)", width: 1, style: LineStyle.Dashed },
       },
       localization: {
-        locale: "bg-BG",
-        dateFormat: "dd MMM yyyy",
+        locale: "en-US",
+        dateFormat: "HH:mm",
         timeFormatter: (time: any) => {
           let date: Date;
           if (typeof time === "number") {
@@ -239,7 +233,16 @@ export default function BacktestChart({
           } else {
             date = new Date();
           }
-          return new Intl.DateTimeFormat("en-GB", {
+          if (isBlindMode) {
+            // In blind mode, show only HH:mm so the calendar date is never spoiled
+            return new Intl.DateTimeFormat("en-US", {
+              timeZone: "Europe/Sofia",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            }).format(date);
+          }
+          return new Intl.DateTimeFormat("en-US", {
             timeZone: "Europe/Sofia",
             day: "2-digit",
             month: "short",
@@ -254,7 +257,7 @@ export default function BacktestChart({
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 8,
-        tickMarkFormatter: (time: any, tickMarkType: number) => {
+        tickMarkFormatter: (time: any) => {
           let date: Date;
           if (typeof time === "number") {
             date = new Date(time > 1e11 ? time : time * 1000);
@@ -263,15 +266,7 @@ export default function BacktestChart({
           } else {
             date = new Date();
           }
-
-          if (tickMarkType <= 2) {
-            return new Intl.DateTimeFormat("en-GB", {
-              timeZone: "Europe/Sofia",
-              day: "numeric",
-              month: "short",
-            }).format(date);
-          }
-          return new Intl.DateTimeFormat("en-GB", {
+          return new Intl.DateTimeFormat("en-US", {
             timeZone: "Europe/Sofia",
             hour: "2-digit",
             minute: "2-digit",
@@ -322,7 +317,7 @@ export default function BacktestChart({
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [triggerOverlayUpdate]);
+  }, [isBlindMode, triggerOverlayUpdate]);
 
   useEffect(() => {
     fetchBacktestData();
@@ -386,14 +381,14 @@ export default function BacktestChart({
     return y !== null ? Number(y) : null;
   };
 
-  // Mouse handlers on the chart wrapper for Ruler & Long/Short Position placement and dragging
+  // Mouse handlers on chart wrapper for Ruler & Long/Short Position placement and dragging
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!chartWrapperRef.current) return;
     const rect = chartWrapperRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Ignore clicks on the right price axis (~65px) or bottom time axis (~28px)
+    // Ignore clicks on right price axis (~65px) or bottom time axis (~28px)
     if (x > rect.width - 65 || y > rect.height - 28) return;
 
     const clickLogical = xToLogical(x);
@@ -422,7 +417,6 @@ export default function BacktestChart({
 
     if (activeTool === "long" || activeTool === "short") {
       const isLong = activeTool === "long";
-      // Default TP = 0.40% away, Default SL = 0.20% away (2:1 R:R)
       const tpDist = clickPrice * 0.004;
       const slDist = clickPrice * 0.002;
       const startL = Math.max(0, Math.round(clickLogical));
@@ -521,24 +515,10 @@ export default function BacktestChart({
     }
   };
 
-  // Previous / Next day navigation
-  const currentIndex = availableDates.indexOf(selectedDate);
-  const hasPrev = currentIndex > 0;
-  const hasNext = currentIndex < availableDates.length - 1 && currentIndex !== -1;
-
-  const goToPrev = () => {
-    if (hasPrev && onDateChange) onDateChange(availableDates[currentIndex - 1]);
-  };
-  const goToNext = () => {
-    if (hasNext && onDateChange) onDateChange(availableDates[currentIndex + 1]);
-  };
-
-  // Current last visible candle info
   const currentCandle =
     candlesData.length > 0
       ? candlesData[Math.min(visibleCount - 1, candlesData.length - 1)]
       : null;
-  const currentCandleTime = currentCandle ? formatSofiaTime(currentCandle.time) : "--:--";
   const currentClosePrice = currentCandle ? Number(currentCandle.close) : spotPrice;
 
   // Compute Ruler overlay coordinates & stats
@@ -565,7 +545,7 @@ export default function BacktestChart({
       const height = Math.max(2, Math.abs(y2 - y1));
 
       rulerOverlay = (
-        <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden font-mono">
           <div
             style={{
               position: "absolute",
@@ -577,20 +557,11 @@ export default function BacktestChart({
               border: `1.5px dashed ${borderColor}`,
             }}
           />
-          {/* Crosshair lines inside ruler box */}
           <svg className="absolute inset-0 w-full h-full">
-            <line
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              stroke={borderColor}
-              strokeWidth="1.5"
-            />
+            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={borderColor} strokeWidth="1.5" />
             <circle cx={x1} cy={y1} r="3.5" fill={borderColor} />
             <circle cx={x2} cy={y2} r="3.5" fill={borderColor} />
           </svg>
-          {/* Floating Ruler Label */}
           <div
             style={{
               position: "absolute",
@@ -601,7 +572,6 @@ export default function BacktestChart({
               padding: "4px 10px",
               borderRadius: "5px",
               fontSize: "11px",
-              fontFamily: "Consolas, monospace",
               fontWeight: 900,
               boxShadow: "0 4px 14px rgba(0,0,0,0.75)",
               whiteSpace: "nowrap",
@@ -614,7 +584,7 @@ export default function BacktestChart({
               {pct.toFixed(2)}%)
             </div>
             <div className="text-[10px] font-normal opacity-90">
-              {barsCount} кендъла · {totalMins} мин (${ruler.startPrice.toFixed(2)} → ${ruler.endPrice.toFixed(2)})
+              {barsCount} bars · {totalMins} mins (${ruler.startPrice.toFixed(2)} → ${ruler.endPrice.toFixed(2)})
             </div>
           </div>
         </div>
@@ -634,7 +604,7 @@ export default function BacktestChart({
     if (x1 !== null && x2 !== null && yEntry !== null && yTp !== null && ySl !== null) {
       const left = Math.min(x1, x2);
       const width = Math.max(70, Math.abs(x2 - x1));
-      const units = lotSize * contractMultiplier; // e.g. 0.10 * 100 = 10 shares for SPY; 0.05 * 100 = 5 shares for QQQ
+      const units = lotSize * contractMultiplier;
 
       const isLong = position.type === "long";
       const tpDiff = isLong
@@ -651,7 +621,6 @@ export default function BacktestChart({
       const slDollars = slDiff * units;
       const rrRatio = slDiff > 0 ? tpDiff / slDiff : 0;
 
-      // Live PnL at current visible candle close
       const liveDiff = isLong
         ? currentClosePrice - position.entryPrice
         : position.entryPrice - currentClosePrice;
@@ -696,7 +665,7 @@ export default function BacktestChart({
           {/* Draggable TP Line & Info Pill */}
           <div
             onMouseDown={startDraggingPart("tp")}
-            title="Плъзни нагоре/надолу за промяна на Take Profit (TP)"
+            title="Drag to adjust Take Profit (TP)"
             className="pointer-events-auto cursor-ns-resize group"
             style={{
               position: "absolute",
@@ -725,14 +694,14 @@ export default function BacktestChart({
                 boxShadow: "0 2px 8px rgba(0,0,0,0.8)",
               }}
             >
-              TP: ${position.tpPrice.toFixed(2)} | +{tpPct.toFixed(2)}% (+${tpDiff.toFixed(2)}) | Печалба: +${tpDollars.toFixed(2)}
+              TP: ${position.tpPrice.toFixed(2)} | +{tpPct.toFixed(2)}% (+${tpDiff.toFixed(2)}) | Profit: +${tpDollars.toFixed(2)}
             </div>
           </div>
 
           {/* Draggable Entry Line & Center Info Pill */}
           <div
             onMouseDown={startDraggingPart("entry")}
-            title="Плъзни за преместване на Entry позицията"
+            title="Drag to move Entry position"
             className="pointer-events-auto cursor-move group"
             style={{
               position: "absolute",
@@ -764,9 +733,9 @@ export default function BacktestChart({
               <span className={isLong ? "text-[#10b981]" : "text-[#f43f5e]"}>
                 {isLong ? "▲ LONG" : "▼ SHORT"}
               </span>{" "}
-              {lotSize.toFixed(2)} лота ({units.toFixed(0)} бр.) @ ${position.entryPrice.toFixed(2)} | R:R 1:{rrRatio.toFixed(2)} |{" "}
+              {lotSize.toFixed(2)} lots ({units.toFixed(0)} units) @ ${position.entryPrice.toFixed(2)} | R:R 1:{rrRatio.toFixed(2)} |{" "}
               <span className={liveDollars >= 0 ? "text-[#10b981]" : "text-[#f43f5e]"}>
-                Текущ: {liveDollars >= 0 ? "+" : ""}${liveDollars.toFixed(2)} ({livePct >= 0 ? "+" : ""}
+                Live: {liveDollars >= 0 ? "+" : ""}${liveDollars.toFixed(2)} ({livePct >= 0 ? "+" : ""}
                 {livePct.toFixed(2)}%)
               </span>
             </div>
@@ -775,7 +744,7 @@ export default function BacktestChart({
           {/* Draggable SL Line & Info Pill */}
           <div
             onMouseDown={startDraggingPart("sl")}
-            title="Плъзни нагоре/надолу за промяна на Stop Loss (SL)"
+            title="Drag to adjust Stop Loss (SL)"
             className="pointer-events-auto cursor-ns-resize group"
             style={{
               position: "absolute",
@@ -804,14 +773,14 @@ export default function BacktestChart({
                 boxShadow: "0 2px 8px rgba(0,0,0,0.8)",
               }}
             >
-              SL: ${position.slPrice.toFixed(2)} | -{slPct.toFixed(2)}% (-${slDiff.toFixed(2)}) | Загуба: -${slDollars.toFixed(2)}
+              SL: ${position.slPrice.toFixed(2)} | -{slPct.toFixed(2)}% (-${slDiff.toFixed(2)}) | Loss: -${slDollars.toFixed(2)}
             </div>
           </div>
 
           {/* Right Edge Width Handle */}
           <div
             onMouseDown={startDraggingPart("rightEdge")}
-            title="Плъзни наляво/надясно за разширяване на позицията"
+            title="Drag to resize position width"
             className="pointer-events-auto cursor-ew-resize"
             style={{
               position: "absolute",
@@ -828,75 +797,72 @@ export default function BacktestChart({
 
   return (
     <div className={`relative w-full ${heightClass} bg-black border border-[#1e293b] rounded-lg overflow-hidden flex flex-col shadow-2xl`}>
-      {/* Row 1: Top Header Bar (Symbol, Spot, Day Navigation, Timeframes) */}
-      <div className="h-10 px-3 bg-[#0a0e1a] border-b border-[#1e293b] flex items-center justify-between text-xs select-none flex-shrink-0 z-30">
-        <div className="flex items-center gap-2.5">
-          {/* Ticker & Exchange Badges */}
-          <div className="flex items-center gap-1.5">
-            <span className="font-black text-sm tracking-wide text-white">{ticker}</span>
-            <span className="text-[10px] text-neutral-400 font-mono bg-[#0f172a] px-1.5 py-0.5 rounded border border-[#1e293b]">
-              {exchangeName}
-            </span>
-          </div>
+      {/* Replay & TradingView Drawing Tools Toolbar */}
+      <div className="h-10 px-3 bg-[#070a12] border-b border-[#1e293b] flex items-center justify-between text-xs font-mono select-none flex-shrink-0 z-30">
+        {/* Left: Candle-by-Candle Replay Controls (No 78/78 box) */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-bold text-neutral-400 uppercase mr-1">CANDLES:</span>
 
-          <div className="h-4 w-[1px] bg-[#1e293b]" />
+          <button
+            onClick={resetToTwo}
+            title="Reset to first 2 candles (09:30 & 09:35 ET)"
+            className="px-2 py-1 rounded bg-[#0f172a] hover:bg-[#1e293b] text-neutral-300 border border-[#334155] text-[10.5px] font-bold transition-colors"
+          >
+            ⏮ First 2
+          </button>
 
-          {/* Spot price at 09:40 */}
-          <div className="flex items-center gap-1 font-mono">
-            <span className="text-neutral-400 text-[10px]">09:40 SPOT:</span>
-            <span className="text-xs font-black text-[#38bdf8]">${spotPrice.toFixed(2)}</span>
-          </div>
+          <button
+            onClick={stepBackward}
+            disabled={visibleCount <= 2}
+            title="Step back 1 candle"
+            className={`px-2 py-1 rounded border text-[10.5px] font-bold transition-colors ${
+              visibleCount > 2
+                ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
+                : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
+            }`}
+          >
+            ◀ -1
+          </button>
 
-          <div className="h-4 w-[1px] bg-[#1e293b]" />
+          <button
+            onClick={() => stepForward(1)}
+            disabled={visibleCount >= candlesData.length}
+            title="Step forward 1 candle"
+            className={`px-3 py-1 rounded border text-[11px] font-black transition-all ${
+              visibleCount < candlesData.length
+                ? "bg-[#00ff88] hover:bg-[#10b981] text-black border-[#00ff88] shadow-[0_0_10px_rgba(0,255,136,0.35)] active:scale-95"
+                : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
+            }`}
+          >
+            ▶ +1 Bar
+          </button>
 
-          {/* Date Selector and Prev/Next Navigation */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={goToPrev}
-              disabled={!hasPrev}
-              title="Предишен ден"
-              className={`px-2 py-0.5 rounded text-[11px] font-bold border transition-colors ${
-                hasPrev
-                  ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
-                  : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
-              }`}
-            >
-              ← Prev
-            </button>
+          <button
+            onClick={() => stepForward(5)}
+            disabled={visibleCount >= candlesData.length}
+            title="Step forward 5 candles"
+            className={`px-2 py-1 rounded border text-[10.5px] font-bold transition-colors ${
+              visibleCount < candlesData.length
+                ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
+                : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
+            }`}
+          >
+            +5 ⏩
+          </button>
 
-            <select
-              value={selectedDate}
-              onChange={(e) => onDateChange && onDateChange(e.target.value)}
-              className="bg-[#0f172a] text-white font-mono text-[11px] font-bold px-2 py-0.5 rounded border border-[#334155] focus:outline-none focus:border-[#38bdf8]"
-            >
-              {availableDates.map((d) => (
-                <option key={d} value={d} className="bg-[#0b0f19] text-white">
-                  {d}
-                </option>
-              ))}
-            </select>
-
-            <button
-              onClick={goToNext}
-              disabled={!hasNext}
-              title="Следващ ден"
-              className={`px-2 py-0.5 rounded text-[11px] font-bold border transition-colors ${
-                hasNext
-                  ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
-                  : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
-              }`}
-            >
-              Next →
-            </button>
-          </div>
+          <button
+            onClick={showAllCandles}
+            disabled={visibleCount >= candlesData.length}
+            title="Reveal all candles for the session"
+            className="px-2 py-1 rounded bg-[#0f172a] hover:bg-[#1e293b] text-neutral-300 border border-[#334155] text-[10.5px] font-bold transition-colors"
+          >
+            All
+          </button>
         </div>
 
-        {/* Right side: Sofia Time & Timeframes */}
+        {/* Right: Timeframe, Measure Tool, Long/Short Position Tools & Lot Calculator */}
         <div className="flex items-center gap-2">
-          <span className="px-2 py-0.5 bg-[#0b0f19] border border-[#334155] rounded text-neutral-300 text-[10px] font-bold">
-            🇧🇬 16:30 – 23:00 BG
-          </span>
-
+          {/* Timeframe Selector (Moved here from deleted row) */}
           <div className="flex items-center gap-1 bg-[#0b0f19] p-0.5 rounded border border-[#1e293b]">
             {TIMEFRAMES.map((tf) => (
               <button
@@ -912,78 +878,9 @@ export default function BacktestChart({
               </button>
             ))}
           </div>
-        </div>
-      </div>
 
-      {/* Row 2: Bar-by-Bar Replay & TradingView Drawing Tools Bar */}
-      <div className="h-10 px-3 bg-[#070a12] border-b border-[#1e293b] flex items-center justify-between text-xs font-mono select-none flex-shrink-0 z-30">
-        {/* Left: Candle-by-Candle Replay Controls */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-bold text-neutral-400 uppercase mr-1">КЕНДЪЛИ:</span>
+          <div className="h-4 w-[1px] bg-[#1e293b]" />
 
-          <button
-            onClick={resetToTwo}
-            title="Върни само първите 2 кендъла (16:30 и 16:35)"
-            className="px-2 py-1 rounded bg-[#0f172a] hover:bg-[#1e293b] text-neutral-300 border border-[#334155] text-[10.5px] font-bold transition-colors"
-          >
-            ⏮ Първи 2
-          </button>
-
-          <button
-            onClick={stepBackward}
-            disabled={visibleCount <= 2}
-            title="1 кендъл назад"
-            className={`px-2 py-1 rounded border text-[10.5px] font-bold transition-colors ${
-              visibleCount > 2
-                ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
-                : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
-            }`}
-          >
-            ◀ -1
-          </button>
-
-          <button
-            onClick={() => stepForward(1)}
-            disabled={visibleCount >= candlesData.length}
-            title="Покажи следващия кендъл"
-            className={`px-3 py-1 rounded border text-[11px] font-black transition-all ${
-              visibleCount < candlesData.length
-                ? "bg-[#00ff88] hover:bg-[#10b981] text-black border-[#00ff88] shadow-[0_0_10px_rgba(0,255,136,0.35)] active:scale-95"
-                : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
-            }`}
-          >
-            ▶ +1 Кендъл
-          </button>
-
-          <button
-            onClick={() => stepForward(5)}
-            disabled={visibleCount >= candlesData.length}
-            title="Покажи следващите 5 кендъла"
-            className={`px-2 py-1 rounded border text-[10.5px] font-bold transition-colors ${
-              visibleCount < candlesData.length
-                ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
-                : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
-            }`}
-          >
-            +5 ⏩
-          </button>
-
-          <button
-            onClick={showAllCandles}
-            disabled={visibleCount >= candlesData.length}
-            title="Покажи всички кендъли за деня"
-            className="px-2 py-1 rounded bg-[#0f172a] hover:bg-[#1e293b] text-neutral-300 border border-[#334155] text-[10.5px] font-bold transition-colors"
-          >
-            Всички ({candlesData.length})
-          </button>
-
-          <span className="ml-1 px-2 py-0.5 rounded bg-[#0f172a] border border-[#1e293b] text-[10.5px] text-[#38bdf8] font-bold">
-            {visibleCount} / {candlesData.length} ({currentCandleTime} BG · ${currentClosePrice.toFixed(2)})
-          </span>
-        </div>
-
-        {/* Right: Ruler (Ролетка) & Long/Short Position Tools + Lot Calculator */}
-        <div className="flex items-center gap-1.5">
           <button
             onClick={() => setActiveTool(activeTool === "ruler" ? "cursor" : "ruler")}
             className={`px-2.5 py-1 rounded border text-[10.5px] font-bold transition-all ${
@@ -991,9 +888,9 @@ export default function BacktestChart({
                 ? "bg-[#38bdf8] text-black border-[#38bdf8] font-black shadow-[0_0_8px_rgba(56,189,248,0.5)]"
                 : "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
             }`}
-            title="Кликни 2 точки върху графиката за измерване на разстояние в % и $"
+            title="Click 2 points on chart to measure percentage and price distance"
           >
-            📏 Ролетка (%)
+            📏 Measure (%)
           </button>
 
           <button
@@ -1003,7 +900,7 @@ export default function BacktestChart({
                 ? "bg-[#10b981] text-black border-[#10b981] font-black shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                 : "bg-[#064e3b]/60 hover:bg-[#065f46] text-[#34d399] border-[#10b981]/50"
             }`}
-            title="Кликни върху графиката за отваряне на Long позиция с TP и SL"
+            title="Click on chart to place a Long Position with TP & SL"
           >
             📈 Long
           </button>
@@ -1015,14 +912,14 @@ export default function BacktestChart({
                 ? "bg-[#ef4444] text-white border-[#ef4444] font-black shadow-[0_0_8px_rgba(239,68,68,0.5)]"
                 : "bg-[#7f1d1d]/60 hover:bg-[#991b1b] text-[#fca5a5] border-[#ef4444]/50"
             }`}
-            title="Кликни върху графиката за отваряне на Short позиция с TP и SL"
+            title="Click on chart to place a Short Position with TP & SL"
           >
             📉 Short
           </button>
 
           {/* Lot Size & Multiplier Controls */}
           <div className="flex items-center gap-1 bg-[#0f172a] px-2 py-0.5 rounded border border-[#334155]">
-            <span className="text-[10px] text-neutral-400">Лот:</span>
+            <span className="text-[10px] text-neutral-400">Lot:</span>
             <input
               type="number"
               step="0.01"
@@ -1034,13 +931,13 @@ export default function BacktestChart({
             <select
               value={contractMultiplier}
               onChange={(e) => setContractMultiplier(Number(e.target.value))}
-              title="Размер на 1 лот (100 = стандартен CFD лот за акции/ETF, 1000 = Индексен множител)"
+              title="Contract unit multiplier (100 = standard Stock/ETF CFD lot)"
               className="bg-black text-neutral-300 text-[10px] px-1 py-0.5 rounded border border-[#334155] focus:outline-none"
             >
-              <option value={100}>1 лот = 100</option>
-              <option value={1000}>1 лот = 1000</option>
-              <option value={10}>1 лот = 10</option>
-              <option value={1}>1 лот = 1</option>
+              <option value={100}>1 lot = 100</option>
+              <option value={1000}>1 lot = 1000</option>
+              <option value={10}>1 lot = 10</option>
+              <option value={1}>1 lot = 1</option>
             </select>
           </div>
 
@@ -1052,9 +949,9 @@ export default function BacktestChart({
                 setActiveTool("cursor");
               }}
               className="px-2 py-1 rounded bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-500/40 text-[10.5px] font-bold transition-colors"
-              title="Изчисти ролетката и позициите от графиката"
+              title="Clear active ruler and positions"
             >
-              ✕ Изчисти
+              ✕ Clear
             </button>
           )}
         </div>
@@ -1065,12 +962,12 @@ export default function BacktestChart({
         <div className="bg-[#0284c7]/90 text-white text-[11px] font-mono font-bold px-3 py-1 text-center z-30">
           {activeTool === "ruler" &&
             (ruler && !ruler.locked
-              ? "📏 Премести мишката и кликни втора точка за заключване на измерването..."
-              : "📏 Кликни върху началната точка на графиката за измерване с ролетката...")}
+              ? "📏 Move mouse and click second point to lock measurement..."
+              : "📏 Click start point on chart to measure...")}
           {activeTool === "long" &&
-            `📈 Кликни върху кендъл/цена на графиката за поставяне на LONG позиция (${lotSize.toFixed(2)} лота ${ticker})...`}
+            `📈 Click on chart to place LONG position (${lotSize.toFixed(2)} lots ${ticker})...`}
           {activeTool === "short" &&
-            `📉 Кликни върху кендъл/цена на графиката за поставяне на SHORT позиция (${lotSize.toFixed(2)} лота ${ticker})...`}
+            `📉 Click on chart to place SHORT position (${lotSize.toFixed(2)} lots ${ticker})...`}
         </div>
       )}
 
@@ -1109,7 +1006,7 @@ export default function BacktestChart({
           {loading && (
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none z-30 font-mono text-xs text-neutral-400">
               <span className="animate-pulse">
-                Зареждане на {ticker} за {selectedDate}...
+                Loading {ticker} session...
               </span>
             </div>
           )}
