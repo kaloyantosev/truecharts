@@ -239,6 +239,7 @@ export default function BacktestPage() {
                 defaultTimeframe="5m"
                 heightClass={viewMode === "spy" ? "h-[640px]" : "h-[520px]"}
                 isBlindMode={effectiveBlind}
+                onRandomDay={handleRandomDay}
               />
             )}
           </div>
@@ -258,6 +259,7 @@ export default function BacktestPage() {
                 defaultTimeframe="5m"
                 heightClass={viewMode === "qqq" ? "h-[640px]" : "h-[520px]"}
                 isBlindMode={effectiveBlind}
+                onRandomDay={handleRandomDay}
               />
             )}
           </div>

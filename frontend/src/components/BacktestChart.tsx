@@ -27,6 +27,7 @@ interface BacktestChartProps {
   defaultTimeframe?: string;
   heightClass?: string;
   isBlindMode?: boolean;
+  onRandomDay?: () => void;
 }
 
 type ToolMode = "cursor" | "ruler" | "long" | "short";
@@ -48,29 +49,24 @@ interface PositionDrawing {
   slPrice: number;
 }
 
-const TIMEFRAMES = [
-  { label: "5m", value: "5m" },
-  { label: "15m", value: "15m" },
-  { label: "1h", value: "1h" },
-];
-
 export default function BacktestChart({
   ticker,
   exchangeName,
   selectedDate,
-  defaultTimeframe = "5m",
   heightClass = "h-[640px]",
   isBlindMode = false,
+  onRandomDay,
 }: BacktestChartProps) {
-  const [timeframe, setTimeframe] = useState<string>(defaultTimeframe);
+  // Fixed timeframe: 5-minute RTH
+  const timeframe = "5m";
   const [spotPrice, setSpotPrice] = useState<number>(0);
   const [sinclair, setSinclair] = useState<SinclairStats | undefined>(undefined);
   const [domData, setDomData] = useState<{ "0dte": DomRow[]; weekly: DomRow[] } | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Full day candles & step-by-step replay state (starts at 2 candles!)
+  // Full day candles & step-by-step replay state (starts at 3 candles!)
   const [candlesData, setCandlesData] = useState<any[]>([]);
-  const [visibleCount, setVisibleCount] = useState<number>(2);
+  const [visibleCount, setVisibleCount] = useState<number>(3);
   const [levelsData, setLevelsData] = useState<PriceLevel[]>([]);
 
   // Interactive Tools: Cursor, Ruler (Measure), Long Position, Short Position
@@ -120,7 +116,7 @@ export default function BacktestChart({
         // Draw ThetaData 09:40 ET Options Levels (mask dates in titles if in blind mode)
         if (Array.isArray(levels)) {
           levels.forEach((lvl: PriceLevel) => {
-            if (lvl.price > 0 && seriesRef.current) {
+            if (lvl.price > 0 && seriesRef.current && Number.isFinite(lvl.price)) {
               let displayTitle = lvl.title;
               if (isBlindMode) {
                 // Strip date text like "(09:40 Oct 16)" -> "(09:40)"
@@ -141,11 +137,17 @@ export default function BacktestChart({
         }
 
         if (resetViewport) {
-          // Show the first 2 candles at natural width on the left with space for upcoming bars
-          chartRef.current.timeScale().setVisibleLogicalRange({
-            from: -1.5,
-            to: 36,
-          });
+          // Immediately center directly on price - fit the candles cleanly without floating in the air
+          chartRef.current.timeScale().fitContent();
+          setTimeout(() => {
+            if (chartRef.current && seriesRef.current) {
+              chartRef.current.timeScale().setVisibleLogicalRange({
+                from: -1,
+                to: 14,
+              });
+              seriesRef.current.priceScale().applyOptions({ autoScale: true });
+            }
+          }, 35);
         } else {
           // If the newly revealed bar is near or beyond the right edge, scroll gently
           const range = chartRef.current.timeScale().getVisibleLogicalRange();
@@ -172,7 +174,7 @@ export default function BacktestChart({
 
     try {
       const res = await fetch(
-        `/api/backtest?ticker=${ticker}&timeframe=${timeframe}&date=${selectedDate}`
+        `/api/backtest?ticker=${ticker}&timeframe=5m&date=${selectedDate}`
       );
       if (!res.ok) throw new Error("Failed to load backtest data");
       const data = await res.json();
@@ -187,8 +189,8 @@ export default function BacktestChart({
       setCandlesData(loadedCandles);
       setLevelsData(loadedLevels);
 
-      // Start each day at the first 2 candles (09:30 and 09:35 ET)
-      const initialBars = Math.min(2, loadedCandles.length || 2);
+      // Start each day at the first 3 candles (visibleCount = 3)
+      const initialBars = Math.min(3, loadedCandles.length || 3);
       setVisibleCount(initialBars);
       isInitialLoadRef.current = true;
 
@@ -201,7 +203,7 @@ export default function BacktestChart({
     } finally {
       setLoading(false);
     }
-  }, [ticker, timeframe, selectedDate, renderChartData]);
+  }, [ticker, selectedDate, renderChartData]);
 
   // Initialize Lightweight Chart
   useEffect(() => {
@@ -234,7 +236,6 @@ export default function BacktestChart({
             date = new Date();
           }
           if (isBlindMode) {
-            // In blind mode, show only HH:mm so the calendar date is never spoiled
             return new Intl.DateTimeFormat("en-US", {
               timeZone: "Europe/Sofia",
               hour: "2-digit",
@@ -331,7 +332,7 @@ export default function BacktestChart({
     }
   }, [candlesData, visibleCount, levelsData, renderChartData]);
 
-  // Step controls
+  // Step controls (minimum 3 candles)
   const stepForward = useCallback(
     (step: number = 1) => {
       setVisibleCount((prev) => Math.min(candlesData.length, prev + step));
@@ -340,12 +341,12 @@ export default function BacktestChart({
   );
 
   const stepBackward = useCallback(() => {
-    setVisibleCount((prev) => Math.max(2, prev - 1));
+    setVisibleCount((prev) => Math.max(3, prev - 1));
   }, []);
 
-  const resetToTwo = useCallback(() => {
+  const resetToThree = useCallback(() => {
     isInitialLoadRef.current = true;
-    setVisibleCount(Math.min(2, candlesData.length || 2));
+    setVisibleCount(Math.min(3, candlesData.length || 3));
   }, [candlesData.length]);
 
   const showAllCandles = useCallback(() => {
@@ -515,6 +516,7 @@ export default function BacktestChart({
     }
   };
 
+  // Price at third candle
   const currentCandle =
     candlesData.length > 0
       ? candlesData[Math.min(visibleCount - 1, candlesData.length - 1)]
@@ -533,7 +535,7 @@ export default function BacktestChart({
       const diff = ruler.endPrice - ruler.startPrice;
       const pct = ruler.startPrice > 0 ? (diff / ruler.startPrice) * 100 : 0;
       const barsCount = Math.abs(ruler.endLogical - ruler.startLogical);
-      const minsPerBar = timeframe === "5m" ? 5 : timeframe === "15m" ? 15 : 60;
+      const minsPerBar = 5;
       const totalMins = barsCount * minsPerBar;
       const isUp = diff >= 0;
       const boxBg = isUp ? "rgba(56, 189, 248, 0.18)" : "rgba(244, 63, 94, 0.18)";
@@ -799,24 +801,24 @@ export default function BacktestChart({
     <div className={`relative w-full ${heightClass} bg-black border border-[#1e293b] rounded-lg overflow-hidden flex flex-col shadow-2xl`}>
       {/* Replay & TradingView Drawing Tools Toolbar */}
       <div className="h-10 px-3 bg-[#070a12] border-b border-[#1e293b] flex items-center justify-between text-xs font-mono select-none flex-shrink-0 z-30">
-        {/* Left: Candle-by-Candle Replay Controls (No 78/78 box) */}
+        {/* Left: Candle-by-Candle Replay Controls (Starting at 3rd Candle) */}
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] font-bold text-neutral-400 uppercase mr-1">CANDLES:</span>
 
           <button
-            onClick={resetToTwo}
-            title="Reset to first 2 candles (09:30 & 09:35 ET)"
+            onClick={resetToThree}
+            title="Reset to first 3 candles"
             className="px-2 py-1 rounded bg-[#0f172a] hover:bg-[#1e293b] text-neutral-300 border border-[#334155] text-[10.5px] font-bold transition-colors"
           >
-            ⏮ First 2
+            ⏮ First 3
           </button>
 
           <button
             onClick={stepBackward}
-            disabled={visibleCount <= 2}
+            disabled={visibleCount <= 3}
             title="Step back 1 candle"
             className={`px-2 py-1 rounded border text-[10.5px] font-bold transition-colors ${
-              visibleCount > 2
+              visibleCount > 3
                 ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
                 : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
             }`}
@@ -858,26 +860,28 @@ export default function BacktestChart({
           >
             All
           </button>
+
+          <div className="h-4 w-[1px] bg-[#1e293b] ml-1" />
+
+          {/* Current Close Price display */}
+          <span className="text-[11px] font-bold text-[#38bdf8] font-mono px-1">
+            ${currentClosePrice.toFixed(2)}
+          </span>
         </div>
 
-        {/* Right: Timeframe, Measure Tool, Long/Short Position Tools & Lot Calculator */}
+        {/* Right: Random Day, Measure Tool, Long/Short Position Tools & Lot Calculator */}
         <div className="flex items-center gap-2">
-          {/* Timeframe Selector (Moved here from deleted row) */}
-          <div className="flex items-center gap-1 bg-[#0b0f19] p-0.5 rounded border border-[#1e293b]">
-            {TIMEFRAMES.map((tf) => (
-              <button
-                key={tf.value}
-                onClick={() => setTimeframe(tf.value)}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  timeframe === tf.value
-                    ? "bg-[#f59e0b] text-black shadow-sm font-black"
-                    : "text-neutral-400 hover:text-white"
-                }`}
-              >
-                {tf.label}
-              </button>
-            ))}
-          </div>
+          {/* Random Day Button placed right on this toolbar */}
+          {onRandomDay && (
+            <button
+              onClick={onRandomDay}
+              className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded text-[11px] font-bold transition-all shadow-[0_0_12px_rgba(168,85,247,0.35)] active:scale-95"
+              title="Pick a random session without showing the date for a 100% unbiased backtest"
+            >
+              <span>🎲</span>
+              <span>Random Day</span>
+            </button>
+          )}
 
           <div className="h-4 w-[1px] bg-[#1e293b]" />
 
