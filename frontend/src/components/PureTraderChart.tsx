@@ -11,6 +11,11 @@ import {
 } from "lightweight-charts";
 import OptionsDomWidget, { DomRow, SinclairStats } from "./OptionsDomWidget";
 
+// Read a design token (CSS custom property) for canvas-drawn chart elements.
+const cssVar = (name: string, fallback: string) =>
+  (typeof window !== "undefined" && getComputedStyle(document.documentElement).getPropertyValue(name).trim()) || fallback;
+
+
 interface PriceLevel {
   price: number;
   title: string;
@@ -351,8 +356,8 @@ export default function PureTraderChart({
     // 1. Create Lightweight Chart with pure black background, Bulgarian timezone, and hidden grids
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: "#000000" },
-        textColor: "#94a3b8",
+        background: { type: ColorType.Solid, color: "transparent" },
+        textColor: cssVar("--muted", "#71717a"),
       },
       grid: {
         vertLines: { visible: false },
@@ -386,7 +391,7 @@ export default function PureTraderChart({
         },
       },
       timeScale: {
-        borderColor: "#1e293b",
+        borderColor: cssVar("--line", "#e4e4e7"),
         timeVisible: true,
         secondsVisible: false,
         tickMarkFormatter: (time: any, tickMarkType: number) => {
@@ -427,7 +432,7 @@ export default function PureTraderChart({
         },
       },
       rightPriceScale: {
-        borderColor: "#1e293b",
+        borderColor: cssVar("--line", "#e4e4e7"),
         autoScale: true,
       },
       autoSize: true,
@@ -481,38 +486,38 @@ export default function PureTraderChart({
   }, [fetchData]);
 
   return (
-    <div className="relative w-full h-[480px] bg-black border border-[#1e293b] rounded-lg overflow-hidden flex flex-col shadow-2xl">
+    <div className="relative w-full h-[480px] bg-black border border-[var(--line)] rounded-lg overflow-hidden flex flex-col">
       {/* Top Header Strip: Symbol, Timeframes, Live Ticks Status */}
-      <div className="h-9 px-3 bg-[#05070e] border-b border-[#1e293b] flex items-center justify-between text-xs font-mono select-none z-20 flex-shrink-0">
+      <div className="h-9 px-3 bg-[var(--bg)] border-b border-[var(--line)] flex items-center justify-between text-xs font-mono select-none z-20 flex-shrink-0">
         <div className="flex items-center gap-2">
           {/* Live Tick Status Badge */}
           <div
-            className="flex items-center gap-1.5 px-2 py-0.5 bg-[#0b0f19] border border-[#1e293b] rounded text-[10px] font-mono shadow-sm"
+            className="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--surface)] border border-[var(--line)] rounded text-[10px] font-mono shadow-sm"
             title={isLiveConnected ? "Direct Real-time Market WebSocket active" : "Connecting to real-time feed..."}
           >
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                isLiveConnected ? "bg-[#10b981] animate-ping" : "bg-[#f59e0b] animate-pulse"
+                isLiveConnected ? "bg-[var(--up)]" : "bg-[var(--warn)]"
               }`}
             />
-            <span className={isLiveConnected ? "text-[#10b981] font-bold" : "text-neutral-400 font-semibold"}>
+            <span className={isLiveConnected ? "text-[var(--up)] font-bold" : "text-[var(--muted)] font-semibold"}>
               {isLiveConnected ? "LIVE" : "SYNCING"}
             </span>
           </div>
 
-          <span className="font-bold text-white tracking-wide">{chartTitle}</span>
-          <span className="text-neutral-500">·</span>
-          <span className="text-neutral-400 font-bold">{timeframe}</span>
-          <span className="text-neutral-500">·</span>
-          <span className="text-[#38bdf8] font-bold">{exchangeName}</span>
+          <span className="font-bold text-[var(--fg)] tracking-wide">{chartTitle}</span>
+          <span className="text-[var(--muted)]">·</span>
+          <span className="text-[var(--muted)] font-bold">{timeframe}</span>
+          <span className="text-[var(--muted)]">·</span>
+          <span className="text-[var(--accent)] font-bold">{exchangeName}</span>
 
           {/* Live Spot Price with real-time flash animation on ticks */}
           {spotPrice > 0 && (
             <span
-              className={`ml-1 px-2 py-0.5 border rounded text-white font-black text-[11px] transition-colors duration-150 ${
+              className={`ml-1 px-2 py-0.5 border rounded text-[var(--fg)] font-bold text-[11px] transition-colors duration-150 ${
                 priceFlash
-                  ? "bg-[#10b981]/30 border-[#10b981] text-[#a7f3d0]"
-                  : "bg-[#0f172a] border-[#334155]"
+                  ? "bg-[var(--up)]/30 border-[var(--up)] text-[var(--up)]"
+                  : "bg-[var(--hover)] border-[var(--line)]"
               }`}
             >
               ${spotPrice.toFixed(2)}
@@ -521,7 +526,7 @@ export default function PureTraderChart({
 
           {/* Bulgarian Timezone Badge */}
           <span
-            className="px-1.5 py-0.5 bg-[#0b0f19] border border-[#334155] rounded text-neutral-300 text-[10px] font-bold"
+            className="px-1.5 py-0.5 bg-[var(--surface)] border border-[var(--line)] rounded text-[var(--fg)] text-[10px] font-bold"
             title="Chart timescale displayed in Bulgarian Local Time (Europe/Sofia)"
           >
             🇧🇬 SOFIA
@@ -529,25 +534,25 @@ export default function PureTraderChart({
 
           {/* Real-time Candle Close Countdown */}
           <div
-            className="ml-2 flex items-center gap-1.5 px-2 py-0.5 bg-[#0b0f19] border border-[#f59e0b]/40 rounded text-[11px] font-mono shadow-sm"
+            className="ml-2 flex items-center gap-1.5 px-2 py-0.5 bg-[var(--surface)] border border-[var(--warn)]/40 rounded text-[11px] font-mono shadow-sm"
             title={`Time remaining until active ${timeframe} candle closes`}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b] animate-ping" />
-            <span className="text-neutral-400 text-[10px] font-semibold">CLOSE IN</span>
-            <span className="text-[#f59e0b] font-black tracking-wider text-[11px]">{candleCountdown}</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--warn)]" />
+            <span className="text-[var(--muted)] text-[10px] font-semibold">CLOSE IN</span>
+            <span className="text-[var(--warn)] font-bold tracking-wider text-[11px]">{candleCountdown}</span>
           </div>
         </div>
 
         {/* Timeframe Selectors (5m, 15m, 1h, Daily - 4h removed) */}
-        <div className="flex items-center gap-1 bg-[#0b0f19] p-0.5 rounded border border-[#1e293b]">
+        <div className="flex items-center gap-1 bg-[var(--surface)] p-0.5 rounded border border-[var(--line)]">
           {TIMEFRAMES.map((tf) => (
             <button
               key={tf.value}
               onClick={() => setTimeframe(tf.value)}
               className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                 timeframe === tf.value
-                  ? "bg-[#f59e0b] text-black shadow-sm font-black"
-                  : "text-neutral-400 hover:text-white"
+                  ? "bg-[var(--warn)] text-white shadow-sm font-bold"
+                  : "text-[var(--muted)] hover:text-[var(--fg)]"
               }`}
             >
               {tf.label}
@@ -560,7 +565,7 @@ export default function PureTraderChart({
       <div className="relative flex-1 w-full flex flex-row min-h-0 bg-black overflow-hidden">
         {/* Left Column: Dedicated Fixed Space for Options DOM & Sinclair Stats */}
         {/* Cut cleanly from the chart by the right vertical border (as indicated in screenshot) */}
-        <div className="w-[316px] min-w-[316px] max-w-[316px] h-full bg-[#080a14] border-r border-[#1e293b] p-2 flex flex-col z-10 overflow-hidden">
+        <div className="w-[316px] min-w-[316px] max-w-[316px] h-full bg-[var(--surface)] border-r border-[var(--line)] p-2 flex flex-col z-10 overflow-hidden">
           <OptionsDomWidget
             ticker={ticker}
             sinclair={sinclair}
@@ -575,8 +580,8 @@ export default function PureTraderChart({
 
           {/* Loading Spinner */}
           {loading && (
-            <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none z-10 font-mono text-xs text-neutral-400">
-              <span className="animate-pulse">Loading {ticker} {timeframe} candles...</span>
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none z-10 font-mono text-xs text-[var(--muted)]">
+              <span className="">Loading {ticker} {timeframe} candles...</span>
             </div>
           )}
         </div>

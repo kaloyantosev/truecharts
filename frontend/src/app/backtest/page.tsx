@@ -65,30 +65,30 @@ export default function BacktestPage() {
   const effectiveBlind = isBlindMode && !revealed;
 
   return (
-    <main className="min-h-screen bg-[#05060a] text-neutral-100 flex flex-col">
+    <main className="min-h-screen bg-[var(--bg)] text-[var(--fg)] flex flex-col">
       {/* Sleek Minimal Header */}
-      <header className="h-12 px-4 bg-[#080b14] border-b border-[#1e293b] flex items-center justify-between text-xs font-mono select-none">
+      <header className="h-12 px-4 bg-[var(--surface)] border-b border-[var(--line)] flex items-center justify-between text-xs font-mono select-none">
         <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="flex items-center gap-1.5 text-neutral-400 hover:text-white transition-colors bg-[#0f172a] border border-[#1e293b] px-2.5 py-1 rounded text-[11px]"
+            className="flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--fg)] transition-colors bg-[var(--hover)] border border-[var(--line)] px-2.5 py-1 rounded text-[11px]"
           >
             <span>←</span>
             <span>Home</span>
           </Link>
           <Link
             href="/trader-panel"
-            className="flex items-center gap-1.5 text-purple-300 hover:text-white transition-colors bg-purple-900/30 border border-purple-500/40 px-2.5 py-1 rounded text-[11px] font-bold"
+            className="flex items-center gap-1.5 text-[var(--violet)] hover:text-[var(--fg)] transition-colors bg-purple-900/30 border border-[var(--violet)]/40 px-2.5 py-1 rounded text-[11px] font-bold"
           >
             <span>📊</span>
             <span>Trader Panel</span>
           </Link>
 
-          <div className="h-4 w-[1px] bg-[#1e293b]" />
+          <div className="h-4 w-[1px] bg-[var(--line)]" />
 
           <div className="flex items-center gap-2">
-            <span className="font-black tracking-wider text-white">BACKTESTER</span>
-            <span className="bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/40 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-widest">
+            <span className="font-bold tracking-wider text-[var(--fg)]">BACKTESTER</span>
+            <span className="bg-[var(--up)]/15 text-[var(--up)] border border-[var(--up)]/40 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-wide">
               {effectiveBlind ? "UNBIASED BLIND MODE" : "HISTORICAL REPLAY"}
             </span>
           </div>
@@ -97,14 +97,14 @@ export default function BacktestPage() {
         {/* Center Controls: Symbol Selector & Session / Random Controls */}
         <div className="flex items-center gap-3">
           {/* Symbol Selector: SPY / QQQ / Dual */}
-          <div className="flex items-center gap-1 bg-[#0b0f19] p-1 rounded border border-[#1e293b]">
-            <span className="text-[10px] text-neutral-400 font-semibold px-1.5">SYMBOL:</span>
+          <div className="flex items-center gap-1 bg-[var(--surface)] p-1 rounded border border-[var(--line)]">
+            <span className="text-[10px] text-[var(--muted)] font-semibold px-1.5">SYMBOL:</span>
             <button
               onClick={() => setViewMode("spy")}
               className={`px-3 py-0.5 rounded text-[11px] font-bold transition-all ${
                 viewMode === "spy"
-                  ? "bg-[#38bdf8] text-black font-black shadow-[0_0_8px_rgba(56,189,248,0.4)]"
-                  : "text-neutral-400 hover:text-white"
+                  ? "bg-[var(--accent)] text-white font-bold"
+                  : "text-[var(--muted)] hover:text-[var(--fg)]"
               }`}
             >
               SPY
@@ -113,8 +113,8 @@ export default function BacktestPage() {
               onClick={() => setViewMode("qqq")}
               className={`px-3 py-0.5 rounded text-[11px] font-bold transition-all ${
                 viewMode === "qqq"
-                  ? "bg-[#38bdf8] text-black font-black shadow-[0_0_8px_rgba(56,189,248,0.4)]"
-                  : "text-neutral-400 hover:text-white"
+                  ? "bg-[var(--accent)] text-white font-bold"
+                  : "text-[var(--muted)] hover:text-[var(--fg)]"
               }`}
             >
               QQQ
@@ -123,8 +123,8 @@ export default function BacktestPage() {
               onClick={() => setViewMode("dual")}
               className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
                 viewMode === "dual"
-                  ? "bg-[#38bdf8] text-black font-black"
-                  : "text-neutral-400 hover:text-white"
+                  ? "bg-[var(--accent)] text-white font-bold"
+                  : "text-[var(--muted)] hover:text-[var(--fg)]"
               }`}
             >
               Dual (SPY+QQQ)
@@ -134,7 +134,7 @@ export default function BacktestPage() {
           {/* Random Day Button for Unbiased Backtesting */}
           <button
             onClick={handleRandomDay}
-            className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded text-[11px] font-bold transition-all shadow-[0_0_12px_rgba(168,85,247,0.35)] active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1 bg-[var(--accent)] hover:opacity-90 text-white rounded-md text-[11px] font-bold transition-all active:scale-95"
             title="Pick a random session without showing the date for a 100% unbiased backtest"
           >
             <span>🎲</span>
@@ -142,16 +142,16 @@ export default function BacktestPage() {
           </button>
 
           {/* Date Controls (Masked in Blind Mode) */}
-          <div className="flex items-center gap-1 bg-[#0b0f19] px-2 py-1 rounded border border-[#1e293b]">
+          <div className="flex items-center gap-1 bg-[var(--surface)] px-2 py-1 rounded border border-[var(--line)]">
             {effectiveBlind ? (
               <div className="flex items-center gap-2 px-1">
-                <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1">
+                <span className="text-[11px] font-bold text-[var(--warn)] flex items-center gap-1">
                   <span>🔒</span>
                   <span>Session #{sessionCount} (Hidden Date)</span>
                 </span>
                 <button
                   onClick={() => setRevealed(true)}
-                  className="px-2 py-0.5 rounded bg-[#1e293b] hover:bg-[#334155] text-neutral-200 text-[10px] font-bold transition-colors border border-[#475569]"
+                  className="px-2 py-0.5 rounded bg-[var(--line)] hover:bg-[var(--line)] text-[var(--fg)] text-[10px] font-bold transition-colors border border-[var(--line)]"
                   title="Reveal the actual calendar date of this session"
                 >
                   👁️ Reveal Date
@@ -159,14 +159,14 @@ export default function BacktestPage() {
               </div>
             ) : (
               <>
-                <span className="text-[10px] text-neutral-400 font-semibold mr-1">DAY:</span>
+                <span className="text-[10px] text-[var(--muted)] font-semibold mr-1">DAY:</span>
                 <button
                   onClick={goToPrev}
                   disabled={!hasPrev || loadingDates}
                   className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
                     hasPrev
-                      ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
-                      : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
+                      ? "bg-[var(--hover)] hover:bg-[var(--line)] text-[var(--fg)] border-[var(--line)]"
+                      : "bg-black/30 text-[var(--muted)] border-[var(--line)] cursor-not-allowed"
                   }`}
                 >
                   ← Prev
@@ -179,10 +179,10 @@ export default function BacktestPage() {
                     setRevealed(true);
                   }}
                   disabled={loadingDates}
-                  className="bg-[#0f172a] text-[#facc15] font-mono text-[11px] font-black px-2.5 py-0.5 rounded border border-[#334155] focus:outline-none focus:border-[#facc15]"
+                  className="bg-[var(--hover)] text-[var(--warn)] font-mono text-[11px] font-bold px-2.5 py-0.5 rounded border border-[var(--line)] focus:outline-none focus:border-[var(--warn)]"
                 >
                   {availableDates.map((d) => (
-                    <option key={d} value={d} className="bg-[#080b14] text-white">
+                    <option key={d} value={d} className="bg-[var(--surface)] text-[var(--fg)]">
                       {d}
                     </option>
                   ))}
@@ -193,8 +193,8 @@ export default function BacktestPage() {
                   disabled={!hasNext || loadingDates}
                   className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
                     hasNext
-                      ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
-                      : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
+                      ? "bg-[var(--hover)] hover:bg-[var(--line)] text-[var(--fg)] border-[var(--line)]"
+                      : "bg-black/30 text-[var(--muted)] border-[var(--line)] cursor-not-allowed"
                   }`}
                 >
                   Next →
@@ -203,7 +203,7 @@ export default function BacktestPage() {
                 {isBlindMode && revealed && (
                   <button
                     onClick={() => setRevealed(false)}
-                    className="ml-1 px-1.5 py-0.5 rounded bg-[#1e293b] hover:bg-[#334155] text-neutral-400 hover:text-white text-[10px] font-bold border border-[#475569]"
+                    className="ml-1 px-1.5 py-0.5 rounded bg-[var(--line)] hover:bg-[var(--line)] text-[var(--muted)] hover:text-[var(--fg)] text-[10px] font-bold border border-[var(--line)]"
                     title="Hide date again"
                   >
                     🔒 Hide
@@ -216,9 +216,9 @@ export default function BacktestPage() {
 
         {/* Informational Badges */}
         <div className="flex items-center gap-2 text-[11px]">
-          <div className="flex items-center gap-1.5 bg-[#0f172a] px-2.5 py-1 rounded border border-[#1e293b]">
-            <span className="w-2 h-2 rounded-full bg-[#facc15]" />
-            <span className="text-neutral-300 font-bold text-[10px]">5m · 09:30 – 16:00 ET (RTH)</span>
+          <div className="flex items-center gap-1.5 bg-[var(--hover)] px-2.5 py-1 rounded border border-[var(--line)]">
+            <span className="w-2 h-2 rounded-full bg-[var(--warn)]" />
+            <span className="text-[var(--fg)] font-bold text-[10px]">5m · 09:30 – 16:00 ET (RTH)</span>
           </div>
         </div>
       </header>

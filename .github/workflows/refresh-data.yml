@@ -21,6 +21,8 @@ jobs:
           python-version: '3.12'
       - run: pip install yfinance pandas
       - run: python scripts/update_data.py
+      - name: Copy data into the deployed frontend folder
+        run: cp src/data/institutional.json src/data/macro.json frontend/src/data/
       - name: Commit if the data changed (ignoring the asOf stamp)
         run: |
           changed=$(python - <<'PY'
@@ -41,6 +43,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-          git add src/data/institutional.json src/data/macro.json
+          git add src/data/institutional.json src/data/macro.json frontend/src/data/institutional.json frontend/src/data/macro.json
           git commit -m "data: refresh 13F, macro and COT ($(date -u +%Y-%m-%d))"
           git push

@@ -9,7 +9,7 @@ import MacroNarrativeDashboard from "@/components/MacroNarrativeDashboard";
 import MultiAssetWatchlist from "@/components/MultiAssetWatchlist";
 import LiveMarketTickerBar from "@/components/LiveMarketTickerBar";
 import SinclairVolBox, { SinclairVolatility } from "@/components/SinclairVolBox";
-import { REAL_TOP_20_CONVICTION } from "@/data/realInstitutionalData";
+import { REAL_TOP_20_CONVICTION, INSTITUTIONAL_META } from "@/data/realInstitutionalData";
 
 interface Level {
   price: number;
@@ -103,21 +103,21 @@ function Top5Panel({
     totalShares > 0 ? ((top5TotalShares / totalShares) * 100).toFixed(3) : "—";
 
   return (
-    <div className="bg-[#07070d] border border-[#1b1b2a] rounded-lg p-4 flex flex-col gap-3 font-mono">
+    <div className="bg-[var(--bg)] border border-[var(--line)] rounded-xl p-4 flex flex-col gap-3 font-mono">
       <div className="flex items-center justify-between">
-        <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">
+        <h3 className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wide">
           Top 5 Institutional Holders
         </h3>
         <div className="flex items-center gap-3">
-          <span className="text-[9px] text-neutral-500">{quarter} filing</span>
-          <span className="text-[10px] font-bold text-[#00e5ff] border border-[#00e5ff]/30 bg-[#00e5ff]/10 px-2 py-0.5 rounded">
+          <span className="text-[9px] text-[var(--muted)]">{quarter} filing</span>
+          <span className="text-[10px] font-bold text-[var(--accent)] border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-2 py-0.5 rounded">
             Top 5 = {top5CapPct}% of cap
           </span>
         </div>
       </div>
       <table className="w-full text-left border-collapse">
         <thead>
-          <tr className="text-[9px] uppercase tracking-[0.15em] text-neutral-500 border-b border-[#181827]">
+          <tr className="text-[9px] uppercase tracking-wide text-[var(--muted)] border-b border-[var(--line)]">
             <th className="pb-2 font-semibold">Fund</th>
             <th className="pb-2 font-semibold text-right">Shares</th>
             <th className="pb-2 font-semibold text-right">% Cap</th>
@@ -139,44 +139,44 @@ function Top5Panel({
               totalShares > 0 ? ((shareCount / totalShares) * 100).toFixed(3) : "—";
             const color =
               isPos || isNew
-                ? "text-[#00ff88]"
+                ? "text-[var(--up)]"
                 : isNeg
-                ? "text-rose-400"
-                : "text-neutral-500";
+                ? "text-[var(--down)]"
+                : "text-[var(--muted)]";
             const bar =
-              isPos || isNew ? "bg-[#00ff88]" : isNeg ? "bg-rose-500" : "bg-neutral-700";
+              isPos || isNew ? "bg-[var(--up)]" : isNeg ? "bg-[var(--down)]" : "bg-[var(--hover)]";
             return (
               <tr
                 key={i}
-                className="border-b border-[#141422] hover:bg-[#11111d] transition-colors"
+                className="border-b border-[var(--line)] hover:bg-[var(--hover)] transition-colors"
               >
                 <td className="py-2 pr-2">
                   <div className="flex items-center gap-1.5">
                     <div className={`w-0.5 h-3.5 rounded-full shrink-0 ${bar}`}></div>
                     <span
-                      className="text-[10px] font-bold text-neutral-200 truncate max-w-[120px]"
+                      className="text-[10px] font-bold text-[var(--fg)] truncate max-w-[120px]"
                       title={tx.ownerName}
                     >
                       {tx.ownerName}
                     </span>
                   </div>
                 </td>
-                <td className="py-2 text-[10px] text-neutral-400 text-right">{tx.sharesHeld}</td>
-                <td className="py-2 text-[11px] text-[#00e5ff] text-right font-bold">{capPct}%</td>
+                <td className="py-2 text-[10px] text-[var(--muted)] text-right">{tx.sharesHeld}</td>
+                <td className="py-2 text-[11px] text-[var(--accent)] text-right font-bold">{capPct}%</td>
                 <td className={`py-2 text-[10px] text-right font-bold ${color}`}>
                   {isPos || isNew ? "+" : ""}
                   {tx.sharesChange}
                 </td>
                 <td className={`py-2 text-[10px] text-right font-bold ${color}`}>
                   {isNew ? (
-                    <span className="px-1 py-0.5 bg-[#00ff88]/20 rounded text-[8px] uppercase">
+                    <span className="px-1 py-0.5 bg-[var(--up)]/20 rounded text-[8px] uppercase">
                       NEW
                     </span>
                   ) : (
                     tx.sharesChangePCT
                   )}
                 </td>
-                <td className="py-2 text-[10px] text-neutral-400 text-right">{tx.marketValue}</td>
+                <td className="py-2 text-[10px] text-[var(--muted)] text-right">{tx.marketValue}</td>
               </tr>
             );
           })}
@@ -236,27 +236,33 @@ export default function Home() {
         }
 
         if (!loadedInst) {
+          // Backend unreachable: fall back to the auto-updated 13F dataset (no invented totals).
           const realStock = REAL_TOP_20_CONVICTION.find((s) => s.symbol === cleanSym);
           if (realStock && realStock.topHolders && realStock.topHolders.length > 0) {
             setInstData({
-              source: "Official SEC 13F-HR Filing (EDGAR)",
+              source: INSTITUTIONAL_META.source,
               quarters: {
-                current: "Q2 2026",
-                q1: "Q1 2026",
-                q2: "Q4 2025",
+                current: INSTITUTIONAL_META.latestFilingQuarter ?? "",
+                q1: "",
+                q2: "",
               },
-              totalSharesOutstanding: 10000000000,
+              totalSharesOutstanding: 0, // unknown here, so "% of cap" shows as —
               ownershipSummary: {
                 SharesOutstandingPCT: { label: "% Held by Institutions", value: `${realStock.instPct}%` },
                 TotalHoldingsValue: { label: "Total Institutional Holdings", value: realStock.valB },
               },
-              holdingsTransactions: realStock.topHolders.map((th: any) => ({
-                ownerName: th.holder,
-                sharesHeld: th.shares,
-                marketValue: th.val,
-                sharesChangePCT: th.pct,
-                sharesChange: th.pct,
-              })),
+              holdingsTransactions: realStock.topHolders.map((th) => {
+                const shares = Number(th.shares.replace(/,/g, "")) || 0;
+                const pct = parseFloat(th.pct) / 100;
+                const change = pct > -1 ? Math.round((shares * pct) / (1 + pct)) : 0;
+                return {
+                  ownerName: th.holder,
+                  sharesHeld: th.shares,
+                  marketValue: th.val,
+                  sharesChangePCT: th.pct,
+                  sharesChange: Math.abs(change).toLocaleString("en-US"),
+                };
+              }),
             });
             setInstError(null);
           } else {
@@ -293,7 +299,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-neutral-100 font-sans flex flex-col pb-16">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--fg)] font-sans flex flex-col pb-16">
       {/* MODULE 1: GLOBAL HEADER BAR */}
       <GlobalHeader
         ticker={ticker}
@@ -319,14 +325,14 @@ export default function Home() {
           {/* LEFT SIDEBAR: Symbol Search Controls & Key Metrics */}
           <div className="lg:col-span-3 flex flex-col gap-5">
             {/* Symbol Analysis Card */}
-            <div className="bg-[#0b0b13] border border-[#1e1e2f] rounded-lg p-4 flex flex-col gap-4">
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider font-mono">
+                <h2 className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider font-mono">
                   Target Asset & Timeframe
                 </h2>
                 {loading && (
-                  <span className="flex items-center gap-1.5 text-[10px] font-mono text-[#00e5ff] bg-[#00e5ff]/10 border border-[#00e5ff]/30 px-2 py-0.5 rounded-full animate-pulse">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-ping" />
+                  <span className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--accent)] bg-[var(--accent)]/10 border border-[var(--accent)]/30 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
                     loading...
                   </span>
                 )}
@@ -334,20 +340,20 @@ export default function Home() {
 
               <form onSubmit={handleFormSearch} className="flex flex-col gap-3">
                 <div>
-                  <label className="block text-[10px] text-neutral-500 uppercase font-mono font-bold mb-1">
+                  <label className="block text-[10px] text-[var(--muted)] uppercase font-mono font-bold mb-1">
                     Symbol Ticker
                   </label>
                   <input
                     type="text"
                     value={ticker}
                     onChange={(e) => setTicker(e.target.value)}
-                    className="w-full bg-[#06060a] border border-[#1e1e2f] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[#00e5ff] font-mono uppercase font-bold"
+                    className="w-full bg-[var(--bg)] border border-[var(--line)] rounded px-3 py-2 text-sm text-[var(--fg)] focus:outline-none focus:border-[var(--accent)] font-mono uppercase font-bold"
                     placeholder="e.g. SPY, AAPL"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] text-neutral-500 uppercase font-mono font-bold mb-1">
+                  <label className="block text-[10px] text-[var(--muted)] uppercase font-mono font-bold mb-1">
                     Chart Timeframe
                   </label>
                   <select
@@ -357,7 +363,7 @@ export default function Home() {
                       setTimeframe(newTf);
                       fetchAnalysis(ticker, newTf);
                     }}
-                    className="w-full bg-[#06060a] border border-[#1e1e2f] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[#00e5ff] font-mono font-semibold"
+                    className="w-full bg-[var(--bg)] border border-[var(--line)] rounded px-3 py-2 text-sm text-[var(--fg)] focus:outline-none focus:border-[var(--accent)] font-mono font-semibold"
                   >
                     <option value="5 min">5 min</option>
                     <option value="15 min">15 min</option>
@@ -373,40 +379,40 @@ export default function Home() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-[#00ff88] hover:bg-[#00e077] disabled:bg-emerald-950 text-black font-mono font-bold text-xs py-2.5 rounded transition-all mt-1 uppercase tracking-wider"
+                  className="w-full bg-[var(--up)] hover:bg-[var(--up)] disabled:bg-[var(--hover)] text-white font-mono font-bold text-xs py-2.5 rounded transition-all mt-1 uppercase tracking-wider"
                 >
                   {loading ? "FETCHING QUANT DATA..." : "ANALYZE ASSET FLOWS"}
                 </button>
               </form>
-              {error && <p className="text-rose-400 text-xs font-mono">{error}</p>}
+              {error && <p className="text-[var(--down)] text-xs font-mono">{error}</p>}
             </div>
 
             {/* Quick Analytics Summary */}
-            <div className="bg-[#0b0b13] border border-[#1e1e2f] rounded-lg p-4 flex flex-col gap-3 font-mono">
-              <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-4 flex flex-col gap-3 font-mono">
+              <h2 className="text-xs font-bold text-[var(--muted)] uppercase tracking-wider">
                 Options & Volatility Regime
               </h2>
-              <div className="flex justify-between items-center py-1.5 border-b border-[#181827]">
-                <span className="text-neutral-400 text-xs">Put/Call Ratio</span>
-                <span className="text-white text-xs font-bold">
-                  {data ? data.put_call_ratio : "—"}
+              <div className="flex justify-between items-center py-1.5 border-b border-[var(--line)]">
+                <span className="text-[var(--muted)] text-xs">Put/Call Ratio</span>
+                <span className="text-[var(--fg)] text-xs font-bold">
+                  {data?.put_call_ratio != null ? data.put_call_ratio : "—"}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-1.5 border-b border-[#181827]">
-                <span className="text-neutral-400 text-xs">Volatility Regime</span>
-                <span className="text-[#00e5ff] text-xs font-bold">
+              <div className="flex justify-between items-center py-1.5 border-b border-[var(--line)]">
+                <span className="text-[var(--muted)] text-xs">Volatility Regime</span>
+                <span className="text-[var(--accent)] text-xs font-bold">
                   {data ? data.iv_regime : "—"}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-1.5 border-b border-[#181827]">
-                <span className="text-neutral-400 text-xs">Trend Phase</span>
-                <span className="text-[#00ff88] text-xs font-bold">
+              <div className="flex justify-between items-center py-1.5 border-b border-[var(--line)]">
+                <span className="text-[var(--muted)] text-xs">Trend Phase</span>
+                <span className="text-[var(--up)] text-xs font-bold">
                   {data ? data.trend_phase : "—"}
                 </span>
               </div>
               <div className="flex justify-between items-center py-1.5">
-                <span className="text-neutral-400 text-xs">Market Sentiment</span>
-                <span className="text-emerald-400 text-xs font-bold">
+                <span className="text-[var(--muted)] text-xs">Market Sentiment</span>
+                <span className="text-[var(--up)] text-xs font-bold">
                   {data ? data.sentiment : "—"}
                 </span>
               </div>
@@ -415,27 +421,27 @@ export default function Home() {
 
           {/* CENTER: SYSTEM CHART (SYSTEM CHART FUNCTIONALITY PRESERVED EXACTLY AS REQUESTED) */}
           <div className="lg:col-span-9 flex flex-col gap-6">
-            <div className="bg-[#0b0b13] border border-[#1e1e2f] rounded-lg p-5 flex flex-col w-full min-h-[500px]">
-              <div className="flex items-center justify-between mb-3 border-b border-[#1b1b2a] pb-3">
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-5 flex flex-col w-full min-h-[500px]">
+              <div className="flex items-center justify-between mb-3 border-b border-[var(--line)] pb-3">
                 <div>
                   <div className="flex items-center gap-3">
-                    <h1 className="text-2xl font-black font-mono text-white tracking-tight">
+                    <h1 className="text-2xl font-bold font-mono text-[var(--fg)] tracking-tight">
                       {data?.ticker || ticker}
                     </h1>
-                    <span className="text-xs font-mono text-neutral-400 bg-[#12121e] border border-[#232338] px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-[var(--muted)] bg-[var(--hover)] border border-[var(--line)] px-2 py-0.5 rounded">
                       SPOT: ${data?.spot ? data.spot.toFixed(2) : "—"}
                     </span>
-                    <span className="text-xs font-mono text-[#00e5ff] bg-[#00e5ff]/10 border border-[#00e5ff]/30 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-[var(--accent)] bg-[var(--accent)]/10 border border-[var(--accent)]/30 px-2 py-0.5 rounded">
                       MAX PAIN: ${data?.max_pain ? data.max_pain.toFixed(2) : "—"}
                     </span>
                   </div>
-                  <p className="text-neutral-500 font-mono text-xs mt-1">
+                  <p className="text-[var(--muted)] font-mono text-xs mt-1">
                     {data?.name && data.name !== data.ticker ? data.name : ""}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 font-mono text-xs">
-                  <span className="text-neutral-400">Timeframe:</span>
-                  <span className="text-[#00ff88] font-bold uppercase">{timeframe}</span>
+                  <span className="text-[var(--muted)]">Timeframe:</span>
+                  <span className="text-[var(--up)] font-bold uppercase">{timeframe}</span>
                 </div>
               </div>
 
@@ -458,14 +464,14 @@ export default function Home() {
                     sinclairVolatility={data.sinclair_volatility}
                   />
                 ) : (
-                  <div className="flex-1 w-full bg-[#06060a] rounded flex flex-col items-center justify-center border border-[#181827] p-6 text-center">
-                    <span className="text-xs text-neutral-400 font-mono mb-2">
+                  <div className="flex-1 w-full bg-[var(--bg)] rounded flex flex-col items-center justify-center border border-[var(--line)] p-6 text-center">
+                    <span className="text-xs text-[var(--muted)] font-mono mb-2">
                       {loading ? "Connecting to live options engine (waking up server)..." : (error || "Select a symbol to view interactive chart")}
                     </span>
                     {error && (
                       <button
                         onClick={() => fetchAnalysis(ticker, timeframe)}
-                        className="mt-2 bg-[#00e5ff]/10 hover:bg-[#00e5ff]/20 text-[#00e5ff] border border-[#00e5ff]/30 px-3 py-1.5 rounded text-xs font-mono font-bold"
+                        className="mt-2 bg-[var(--accent)]/10 hover:bg-[var(--accent)]/20 text-[var(--accent)] border border-[var(--accent)]/30 px-3 py-1.5 rounded text-xs font-mono font-bold"
                       >
                         ⚡ Retry Live Connection
                       </button>
@@ -487,17 +493,17 @@ export default function Home() {
 
         {/* 13F INSTITUTIONAL POSITIONING PANEL */}
         {instData && (instData.ownershipSummary || instData.history) && (
-          <div className="bg-[#0b0b13] border border-[#1e1e2f] rounded-lg p-5 flex flex-col gap-4 font-mono">
-            <div className="flex items-center justify-between border-b border-[#1b1b2a] pb-3">
+          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-5 flex flex-col gap-4 font-mono">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
               <div>
-                <h2 className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
+                <h2 className="text-xs font-bold text-[var(--fg)] uppercase tracking-wider">
                   Detailed Institutional Position Breakdown · {ticker}
                 </h2>
-                <p className="text-[10px] text-neutral-500">
-                  WhaleWisdom Quality Filtered 13F Filings Analysis
+                <p className="text-[10px] text-[var(--muted)]">
+                  {instData.source || "13F filings"}
                 </p>
               </div>
-              <span className="text-[10px] text-[#00ff88] bg-[#00ff88]/10 border border-[#00ff88]/30 px-2 py-0.5 rounded font-bold">
+              <span className="text-[10px] text-[var(--up)] bg-[var(--up)]/10 border border-[var(--up)]/30 px-2 py-0.5 rounded font-bold">
                 13F FILINGS
               </span>
             </div>
@@ -520,7 +526,11 @@ export default function Home() {
         <MacroNarrativeDashboard />
 
         {/* MODULE 5: MULTI-ASSET WATCHLIST WITH ORDER FLOW CONTEXT */}
-        <MultiAssetWatchlist activeTicker={ticker} onSelectTicker={handleSelectTicker} />
+        <MultiAssetWatchlist
+          activeTicker={ticker}
+          onSelectTicker={handleSelectTicker}
+          analytics={data ? { ticker: data.ticker, put_call_ratio: data.put_call_ratio, max_pain: data.max_pain, gamma_flip: data.gamma_flip } : null}
+        />
 
       </main>
 

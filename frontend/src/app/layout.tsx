@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Truecharts",
-  description: "Advanced analytics and institutional options data",
+  description: "Options levels, volatility regime, 13F institutional flows and macro liquidity in one dashboard.",
 };
 
 export default function RootLayout({
@@ -15,9 +15,9 @@ export default function RootLayout({
     <html
       lang="en"
       className="h-full antialiased"
-      style={{ fontSize: "80%" }}
+      style={{ fontSize: "85%" }}
     >
-      <body className="min-h-full flex flex-col font-sans bg-[#0a0a0f] text-neutral-100">{children}</body>
+      <body className="min-h-full flex flex-col font-sans bg-[var(--bg)] text-[var(--fg)]">{children}</body>
     </html>
   );
 }

@@ -323,43 +323,23 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Fallback options levels matching tv_automation.py lines 1032-1046
-    const fallbackGammaFlip = Number((spotPrice * 0.9965).toFixed(2));
-    const fallbackExpUp = Number((spotPrice * 1.018).toFixed(2));
-    const fallbackExpDn = Number((spotPrice * 0.982).toFixed(2));
-    const fallbackSupports = [
-      {
-        price: realPutWallStrike || Math.round((spotPrice - 9) / 5) * 5,
-        strength: 1.0,
-        source: "options",
-        is_confluence: true,
-        sublabel: "PUT WALL + Support",
-      },
-    ];
-    const fallbackResistances = [
-      {
-        price: realCallWallStrike || Math.round((spotPrice + 8) / 5) * 5,
-        strength: 1.0,
-        source: "options",
-        is_confluence: false,
-        has_surge: true,
-        sublabel: "CALL WALL",
-      },
-    ];
+    // When the analysis backend has no levels, only walls read from the real options chain are used.
+    // Nothing is derived from spot with fixed multipliers.
+    const fallbackSupports = realPutWallStrike
+      ? [{ price: realPutWallStrike, strength: 1.0, source: "options", is_confluence: false, sublabel: "PUT WALL" }]
+      : [];
+    const fallbackResistances = realCallWallStrike
+      ? [{ price: realCallWallStrike, strength: 1.0, source: "options", is_confluence: false, sublabel: "CALL WALL" }]
+      : [];
 
     // 4. Sinclair metrics extraction (exact match to tv_automation.py lines 1039-1045)
     const sinclair_vol = levelsData?.sinclair_volatility || {};
+    const num = (v: unknown) => (v === undefined || v === null || v === "" ? null : parseFloat(String(v)));
     const sinclairPayload = {
-      vrp_spread: sinclair_vol.vrp_spread !== undefined ? parseFloat(sinclair_vol.vrp_spread) : (ticker === "QQQ" ? 9.6 : 7.4),
-      weekly_expected_move_dollars: sinclair_vol.weekly_expected_move_dollars !== undefined
-        ? parseFloat(sinclair_vol.weekly_expected_move_dollars)
-        : Number((spotPrice * 0.0245).toFixed(2)),
-      implied_volatility: sinclair_vol.implied_volatility !== undefined
-        ? parseFloat(sinclair_vol.implied_volatility)
-        : (ticker === "QQQ" ? 23.4 : 17.4),
-      rv_yang_zhang: sinclair_vol.rv_yang_zhang !== undefined
-        ? parseFloat(sinclair_vol.rv_yang_zhang)
-        : (ticker === "QQQ" ? 13.9 : 10.0),
+      vrp_spread: num(sinclair_vol.vrp_spread),
+      weekly_expected_move_dollars: num(sinclair_vol.weekly_expected_move_dollars),
+      implied_volatility: num(sinclair_vol.implied_volatility),
+      rv_yang_zhang: num(sinclair_vol.rv_yang_zhang),
     };
 
     // 5. Build Exact Levels matching tv_automation.py lines 1110-1308
@@ -378,7 +358,7 @@ export async function GET(req: NextRequest) {
     const todayStr = todayDate.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
 
     // Gamma Flip (Zero-GEX Regime Compass)
-    const gammaFlipNum = Number(levelsData?.gamma_flip || fallbackGammaFlip);
+    const gammaFlipNum = Number(levelsData?.gamma_flip || 0);
     if (gammaFlipNum > 0) {
       rawItems.push({
         price: gammaFlipNum,
@@ -390,8 +370,8 @@ export async function GET(req: NextRequest) {
     }
 
     // Expected Move Envelope (+- 1-Standard Deviation)
-    const emUpperNum = Number(levelsData?.expected_move?.upper || levelsData?.expected_move_upper || fallbackExpUp);
-    const emLowerNum = Number(levelsData?.expected_move?.lower || levelsData?.expected_move_lower || fallbackExpDn);
+    const emUpperNum = Number(levelsData?.expected_move?.upper || levelsData?.expected_move_upper || 0);
+    const emLowerNum = Number(levelsData?.expected_move?.lower || levelsData?.expected_move_lower || 0);
     if (emUpperNum > 0 && emLowerNum > 0) {
       rawItems.push({
         price: emUpperNum,
