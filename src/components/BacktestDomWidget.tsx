@@ -36,7 +36,7 @@ interface BacktestDomWidgetProps {
 }
 
 function getPutStyle(pct: number) {
-  if (!pct || pct <= 0) return { bg: "transparent", text: "#64748b", barBorder: "", textWeight: "600" };
+  if (!pct || pct <= 0) return { bg: "transparent", text: "var(--muted)", barBorder: "", textWeight: "600" };
   if (pct < 20) {
     return { bg: "rgba(16,185,129,0.14)", text: "#a7f3d0", barBorder: "", textWeight: "bold" };
   } else if (pct < 50) {
@@ -49,7 +49,7 @@ function getPutStyle(pct: number) {
 }
 
 function getCallStyle(pct: number) {
-  if (!pct || pct <= 0) return { bg: "transparent", text: "#64748b", barBorder: "", textWeight: "600" };
+  if (!pct || pct <= 0) return { bg: "transparent", text: "var(--muted)", barBorder: "", textWeight: "600" };
   if (pct < 20) {
     return { bg: "rgba(239,68,68,0.14)", text: "#fecaca", barBorder: "", textWeight: "bold" };
   } else if (pct < 50) {
@@ -106,7 +106,7 @@ export default function BacktestDomWidget({
         width: "100%",
         height: "100%",
         background: "transparent",
-        color: "#f8fafc",
+        color: "var(--fg)",
         fontFamily: "Consolas, monospace",
         fontSize: "10.5px",
         lineHeight: 1.3,
@@ -130,7 +130,7 @@ export default function BacktestDomWidget({
           <div
             style={{
               display: "inline-flex",
-              background: "#0f172a",
+              background: "var(--hover)",
               border: "1px solid #334155",
               borderRadius: "12px",
               padding: "2px",
@@ -181,19 +181,19 @@ export default function BacktestDomWidget({
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <span style={{ fontWeight: "bold", color: "#fff", background: "#1e293b", padding: "1px 5px", borderRadius: "3px", fontSize: "10px", border: "1px solid #334155" }}>
+          <span style={{ fontWeight: "bold", color: "#fff", background: "var(--line)", padding: "1px 5px", borderRadius: "3px", fontSize: "10px", border: "1px solid #334155" }}>
             {ticker}
           </span>
-          <span className="text-[10px] text-[#38bdf8] font-bold">
+          <span className="text-[10px] text-[var(--accent)] font-bold">
             ${spot > 0 ? spot.toFixed(2) : "—"}
           </span>
         </div>
       </div>
 
       {/* 4. Column Headers */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 64px 1fr", fontSize: "10px", color: "#94a3b8", marginBottom: "3px", fontWeight: "bold" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 64px 1fr", fontSize: "10px", color: "var(--muted)", marginBottom: "3px", fontWeight: "bold" }}>
         <span style={{ color: "#10b981", textAlign: "left", paddingLeft: "6px" }}>PUT OI</span>
-        <span style={{ color: "#cbd5e1", textAlign: "center" }}>STRIKE</span>
+        <span style={{ color: "var(--fg)", textAlign: "center" }}>STRIKE</span>
         <span style={{ color: "#ef4444", textAlign: "right", paddingRight: "6px" }}>CALL OI</span>
       </div>
 
@@ -203,7 +203,7 @@ export default function BacktestDomWidget({
         style={{ display: "flex", flexDirection: "column", overflowY: "auto", flex: "1 1 0%", minHeight: 0 }}
       >
         {ladder.length === 0 ? (
-          <div style={{ color: "#64748b", fontSize: "10px", textAlign: "center", padding: "12px 0" }}>
+          <div style={{ color: "var(--muted)", fontSize: "10px", textAlign: "center", padding: "12px 0" }}>
             No options chain data for {ticker}.
           </div>
         ) : (

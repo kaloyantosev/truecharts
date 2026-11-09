@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickSeries } from "lightweight-charts";
 
+// Read a design token (CSS custom property) for canvas-drawn chart elements.
+const cssVar = (name: string, fallback: string) =>
+  (typeof window !== "undefined" && getComputedStyle(document.documentElement).getPropertyValue(name).trim()) || fallback;
+
+
 interface Level {
   price: number;
   strength: number;
@@ -50,6 +55,7 @@ export default function TradingViewChart({
   const priceLinesRef = useRef<any[]>([]);
   const [isHovered, setIsHovered] = useState(false);
   const [weeklyGaps, setWeeklyGaps] = useState<any[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [svgRects, setSvgRects] = useState<any[]>([]);
 
   // Institutional Options Enhancements Toggles
@@ -70,19 +76,11 @@ export default function TradingViewChart({
     return resistances.length > 0 ? Math.max(...resistances.map((r) => r.strength)) : 1.0;
   }, [resistances]);
 
-  const gammaFlipPrice = useMemo(() => {
-    if (gammaFlip !== undefined && gammaFlip > 0) {
-      return gammaFlip;
-    }
-    const majorSup = supports.find((s) => s.strength / maxSupportAbs >= 0.75)?.price;
-    const majorRes = resistances.find((r) => r.strength / maxResistanceAbs >= 0.75)?.price;
-    if (majorSup && majorRes) {
-      return Number(((majorSup * 0.48) + (majorRes * 0.52)).toFixed(2));
-    }
-    return Number((spot * 0.994).toFixed(2));
-  }, [supports, resistances, maxSupportAbs, maxResistanceAbs, spot, gammaFlip]);
+  // Only the backend's computed zero-GEX level is used; no estimate is drawn when it is missing.
+  const gammaFlipPrice = gammaFlip != null && gammaFlip > 0 ? gammaFlip : 0;
+  const hasGammaFlip = gammaFlipPrice > 0;
 
-  const isLongGamma = spot >= gammaFlipPrice;
+  const isLongGamma = hasGammaFlip && spot >= gammaFlipPrice;
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -90,8 +88,8 @@ export default function TradingViewChart({
     // Create TradingView Chart
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: "#0a0a0a" },
-        textColor: "#a3a3a3",
+        background: { type: ColorType.Solid, color: "transparent" },
+        textColor: cssVar("--muted", "#71717a"),
       },
       grid: {
         vertLines: { visible: false },
@@ -125,7 +123,7 @@ export default function TradingViewChart({
         },
       },
       timeScale: {
-        borderColor: "#262626",
+        borderColor: cssVar("--line", "#e4e4e7"),
         timeVisible: true,
         secondsVisible: false,
         tickMarkFormatter: (time: any, tickMarkType: number) => {
@@ -166,7 +164,7 @@ export default function TradingViewChart({
         },
       },
       rightPriceScale: {
-        borderColor: "#262626",
+        borderColor: cssVar("--line", "#e4e4e7"),
       },
     });
 
@@ -183,55 +181,24 @@ export default function TradingViewChart({
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
 
-    const generateFallbackCandles = (spotPrice: number, tf: string) => {
-      const count = 120;
-      const now = Math.floor(Date.now() / 1000);
-      let step = 86400;
-      if (tf === "5 min") step = 300;
-      else if (tf === "15 min") step = 900;
-      else if (tf === "1h") step = 3600;
-      else if (tf === "4h") step = 14400;
-      else if (tf === "1w") step = 604800;
-      else if (tf === "1m") step = 2592000;
-      else if (tf === "3m") step = 7776000;
-
-      const base = spotPrice > 0 ? spotPrice : 100.0;
-      const list: any[] = [];
-      let current = base * 0.95;
-
-      for (let i = count; i >= 0; i--) {
-        const time = now - i * step;
-        const delta = (Math.sin(i * 0.2) * 0.008 + (Math.random() - 0.49) * 0.015) * current;
-        const open = current;
-        const close = Math.max(1.0, current + delta);
-        const high = Math.max(open, close) + Math.abs(delta) * 0.4;
-        const low = Math.min(open, close) - Math.abs(delta) * 0.4;
-        current = close;
-        list.push({
-          time: time as any,
-          open: Number(open.toFixed(2)),
-          high: Number(high.toFixed(2)),
-          low: Number(low.toFixed(2)),
-          close: Number(close.toFixed(2)),
-        });
-      }
-      return list;
-    };
-
     const loadData = async () => {
       let data: any[] = [];
       try {
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://truecharts.onrender.com";
         const res = await fetch(`${apiBaseUrl}/api/history/${ticker}?timeframe=${encodeURIComponent(timeframe)}`);
         if (res.ok) {
           data = await res.json();
         }
       } catch (err) {
-        console.error("Failed to load chart history from API, generating fallback candles", err);
+        console.error("Failed to load chart history from API", err);
       }
 
       if (!Array.isArray(data) || data.length === 0) {
-        data = generateFallbackCandles(spot, timeframe);
+        // No simulated candles: show the levels on an empty chart and say why.
+        setHistoryError(`Price history for ${ticker} (${timeframe}) is unavailable right now.`);
+        data = [];
+      } else {
+        setHistoryError(null);
       }
 
       candleSeries.setData(data);
@@ -649,25 +616,32 @@ export default function TradingViewChart({
   }, [maxPain, supports, resistances, isHovered, weeklyGaps, showGammaFlip, gammaFlipPrice, maxSupportAbs, maxResistanceAbs]);
 
   return (
-    <div className="w-full bg-neutral-950 rounded-lg p-2 border border-neutral-900 overflow-hidden relative">
+    <div className="w-full bg-[var(--surface)] rounded-lg p-2 border border-[var(--line)] overflow-hidden relative">
+      {historyError && (
+        <div className="absolute inset-x-0 top-1/2 z-20 flex justify-center pointer-events-none">
+          <span className="text-xs px-3 py-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]">
+            {historyError}
+          </span>
+        </div>
+      )}
       {/* Chart Top Control Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-2 pt-1">
         {/* Left: Live Status + Regime Watermark */}
         <div className="flex items-center gap-3">
-          <div className="flex gap-1.5 items-center bg-[#0d0d16] border border-[#1f1f32] px-2.5 py-1 rounded">
-            <span className="w-2 h-2 rounded-full bg-[#00ff88] animate-pulse" />
-            <span className="text-[10px] font-mono font-bold tracking-wider text-neutral-200">LIVE FEED</span>
+          <div className="flex gap-1.5 items-center bg-[var(--surface)] border border-[var(--line)] px-2.5 py-1 rounded">
+            <span className="w-2 h-2 rounded-full bg-[var(--up)]" />
+            <span className="text-[10px] font-mono font-bold tracking-wider text-[var(--fg)]">{historyError ? "NO PRICE DATA" : "LIVE FEED"}</span>
           </div>
 
-          {showGammaFlip && (
+          {showGammaFlip && hasGammaFlip && (
             <div
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-[10px] font-mono font-bold uppercase tracking-wider ${
                 isLongGamma
-                  ? "bg-[#00ff88]/10 text-[#00ff88] border-[#00ff88]/30"
-                  : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                  ? "bg-[var(--up)]/10 text-[var(--up)] border-[var(--up)]/30"
+                  : "bg-[var(--warn)]/10 text-[var(--warn)] border-[var(--warn)]/30"
               }`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${isLongGamma ? "bg-[#00ff88]" : "bg-amber-400"}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${isLongGamma ? "bg-[var(--up)]" : "bg-[var(--warn)]"}`} />
               <span>
                 {isLongGamma
                   ? "LONG GAMMA REGIME (Vol Suppressed / Mean-Reverting)"
@@ -683,8 +657,8 @@ export default function TradingViewChart({
             onClick={() => setShowPockets(!showPockets)}
             className={`px-2 py-0.5 rounded border transition-all ${
               showPockets
-                ? "bg-[#00e5ff]/15 text-[#00e5ff] border-[#00e5ff]/40 font-bold"
-                : "bg-[#11111d] text-neutral-500 border-[#222234] hover:text-neutral-300"
+                ? "bg-[var(--accent)]/15 text-[var(--accent)] border-[var(--accent)]/40 font-bold"
+                : "bg-[var(--hover)] text-[var(--muted)] border-[var(--line)] hover:text-[var(--fg)]"
             }`}
           >
             Pockets: {showPockets ? "ON" : "OFF"}
@@ -694,8 +668,8 @@ export default function TradingViewChart({
             onClick={() => setShowGexProfile(!showGexProfile)}
             className={`px-2 py-0.5 rounded border transition-all ${
               showGexProfile
-                ? "bg-[#00ff88]/15 text-[#00ff88] border-[#00ff88]/40 font-bold"
-                : "bg-[#11111d] text-neutral-500 border-[#222234] hover:text-neutral-300"
+                ? "bg-[var(--up)]/15 text-[var(--up)] border-[var(--up)]/40 font-bold"
+                : "bg-[var(--hover)] text-[var(--muted)] border-[var(--line)] hover:text-[var(--fg)]"
             }`}
           >
             GEX Profile: {showGexProfile ? "ON" : "OFF"}
@@ -705,8 +679,8 @@ export default function TradingViewChart({
             onClick={() => setShowGammaFlip(!showGammaFlip)}
             className={`px-2 py-0.5 rounded border transition-all ${
               showGammaFlip
-                ? "bg-amber-500/15 text-amber-300 border-amber-500/40 font-bold"
-                : "bg-[#11111d] text-neutral-500 border-[#222234] hover:text-neutral-300"
+                ? "bg-[var(--warn)]/15 text-[var(--warn)] border-[var(--warn)]/40 font-bold"
+                : "bg-[var(--hover)] text-[var(--muted)] border-[var(--line)] hover:text-[var(--fg)]"
             }`}
           >
             Gamma Flip: {showGammaFlip ? "ON" : "OFF"}

@@ -9,27 +9,42 @@ interface CommandPaletteProps {
 }
 
 const PRESET_SYMBOLS = [
-  { symbol: "SPY", name: "SPDR S&P 500 ETF Trust", category: "Index ETF", trend: "+0.45%" },
-  { symbol: "QQQ", name: "Invesco QQQ Trust (Nasdaq 100)", category: "Index ETF", trend: "+0.82%" },
-  { symbol: "IWM", name: "iShares Russell 2000 ETF", category: "Index ETF", trend: "-0.15%" },
-  { symbol: "NVDA", name: "NVIDIA Corporation", category: "Mega Cap Tech", trend: "+2.40%" },
-  { symbol: "AAPL", name: "Apple Inc.", category: "Mega Cap Tech", trend: "+0.35%" },
-  { symbol: "MSFT", name: "Microsoft Corporation", category: "Mega Cap Tech", trend: "+1.10%" },
-  { symbol: "AMZN", name: "Amazon.com Inc.", category: "Mega Cap Tech", trend: "+0.95%" },
-  { symbol: "META", name: "Meta Platforms Inc.", category: "Mega Cap Tech", trend: "+1.85%" },
-  { symbol: "TSLA", name: "Tesla Inc.", category: "Automotive / EV", trend: "-1.20%" },
-  { symbol: "SMCI", name: "Super Micro Computer Inc.", category: "AI Hardware", trend: "+4.15%" },
-  { symbol: "ES1!", name: "E-mini S&P 500 Futures", category: "Futures", trend: "+0.50%" },
-  { symbol: "NQ1!", name: "E-mini Nasdaq 100 Futures", category: "Futures", trend: "+0.88%" },
-  { symbol: "XLK", name: "Technology Select Sector SPDR", category: "GICS Sector", trend: "+1.35%" },
-  { symbol: "XLF", name: "Financial Select Sector SPDR", category: "GICS Sector", trend: "+0.40%" },
-  { symbol: "XLE", name: "Energy Select Sector SPDR", category: "GICS Sector", trend: "-0.90%" },
+  { symbol: "SPY", name: "SPDR S&P 500 ETF Trust", category: "Index ETF" },
+  { symbol: "QQQ", name: "Invesco QQQ Trust (Nasdaq 100)", category: "Index ETF" },
+  { symbol: "IWM", name: "iShares Russell 2000 ETF", category: "Index ETF" },
+  { symbol: "NVDA", name: "NVIDIA Corporation", category: "Mega Cap Tech" },
+  { symbol: "AAPL", name: "Apple Inc.", category: "Mega Cap Tech" },
+  { symbol: "MSFT", name: "Microsoft Corporation", category: "Mega Cap Tech" },
+  { symbol: "AMZN", name: "Amazon.com Inc.", category: "Mega Cap Tech" },
+  { symbol: "META", name: "Meta Platforms Inc.", category: "Mega Cap Tech" },
+  { symbol: "TSLA", name: "Tesla Inc.", category: "Automotive / EV" },
+  { symbol: "SMCI", name: "Super Micro Computer Inc.", category: "AI Hardware" },
+  { symbol: "ES1!", name: "E-mini S&P 500 Futures", category: "Futures" },
+  { symbol: "NQ1!", name: "E-mini Nasdaq 100 Futures", category: "Futures" },
+  { symbol: "XLK", name: "Technology Select Sector SPDR", category: "GICS Sector" },
+  { symbol: "XLF", name: "Financial Select Sector SPDR", category: "GICS Sector" },
+  { symbol: "XLE", name: "Energy Select Sector SPDR", category: "GICS Sector" },
 ];
 
 export default function CommandPalette({ isOpen, onClose, onSelectSymbol }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [changes, setChanges] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    fetch(`/api/quotes?symbols=${encodeURIComponent(PRESET_SYMBOLS.map((p) => p.symbol).join(","))}`)
+      .then((r) => (r.ok ? r.json() : { quotes: [] }))
+      .then(({ quotes }) => {
+        if (!cancelled) setChanges(Object.fromEntries(quotes.map((q: { symbol: string; changePct: number }) => [q.symbol, q.changePct])));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -83,15 +98,15 @@ export default function CommandPalette({ isOpen, onClose, onSelectSymbol }: Comm
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center pt-20 px-4">
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-start justify-center pt-20 px-4">
       <div
-        className="bg-[#0b0b12] border border-[#222234] rounded-lg w-full max-w-xl shadow-2xl overflow-hidden flex flex-col"
+        className="bg-[var(--surface)] border border-[var(--line)] rounded-lg w-full max-w-xl overflow-hidden flex flex-col"
         onKeyDown={handleKeyDownModal}
       >
         {/* Search Input Bar */}
-        <div className="p-3 border-b border-[#1d1d2d] flex items-center gap-3">
-          <svg className="w-5 h-5 text-[#00e5ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        <div className="p-3 border-b border-[var(--line)] flex items-center gap-3">
+          <svg className="w-5 h-5 text-[var(--accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             ref={inputRef}
@@ -102,18 +117,18 @@ export default function CommandPalette({ isOpen, onClose, onSelectSymbol }: Comm
               setSelectedIndex(0);
             }}
             placeholder="Type a ticker symbol or asset name..."
-            className="w-full bg-transparent text-sm font-mono text-white placeholder-neutral-500 focus:outline-none uppercase"
+            className="w-full bg-transparent text-sm font-mono text-[var(--fg)] placeholder-[var(--muted)] focus:outline-none uppercase"
           />
           <button
             onClick={onClose}
-            className="px-2 py-0.5 text-[10px] font-mono text-neutral-400 bg-[#161624] border border-[#27273c] rounded hover:text-white"
+            className="px-2 py-0.5 text-[10px] font-mono text-[var(--muted)] bg-[var(--hover)] border border-[var(--line)] rounded hover:text-[var(--fg)]"
           >
             ESC
           </button>
         </div>
 
         {/* Results List */}
-        <div className="max-h-80 overflow-y-auto p-2 divide-y divide-[#151522]">
+        <div className="max-h-80 overflow-y-auto p-2 divide-y divide-[var(--line)]">
           {filtered.length === 0 ? (
             <div
               onClick={() => {
@@ -122,14 +137,15 @@ export default function CommandPalette({ isOpen, onClose, onSelectSymbol }: Comm
                   onClose();
                 }
               }}
-              className="p-4 text-center cursor-pointer hover:bg-[#131320] rounded text-xs font-mono text-neutral-400"
+              className="p-4 text-center cursor-pointer hover:bg-[var(--hover)] rounded text-xs font-mono text-[var(--muted)]"
             >
-              Analyze custom symbol <span className="text-[#00ff88] font-bold">"{query.toUpperCase()}"</span> (Press Enter)
+              Analyze custom symbol <span className="text-[var(--up)] font-bold">"{query.toUpperCase()}"</span> (Press Enter)
             </div>
           ) : (
             filtered.map((item, idx) => {
               const isSelected = idx === selectedIndex;
-              const isPositive = item.trend.startsWith("+");
+              const chg = changes[item.symbol];
+              const isPositive = (chg ?? 0) >= 0;
               return (
                 <div
                   key={item.symbol}
@@ -139,20 +155,20 @@ export default function CommandPalette({ isOpen, onClose, onSelectSymbol }: Comm
                   }}
                   onMouseEnter={() => setSelectedIndex(idx)}
                   className={`flex items-center justify-between p-2.5 rounded cursor-pointer transition-all ${
-                    isSelected ? "bg-[#141424] border border-[#00e5ff]/40" : "hover:bg-[#11111d] border border-transparent"
+                    isSelected ? "bg-[var(--hover)] border border-[var(--accent)]/40" : "hover:bg-[var(--hover)] border border-transparent"
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="font-mono font-bold text-sm text-[#00ff88] tracking-wider w-16">
+                    <span className="font-mono font-bold text-sm text-[var(--up)] tracking-wider w-16">
                       {item.symbol}
                     </span>
                     <div className="flex flex-col">
-                      <span className="text-xs font-semibold text-neutral-200">{item.name}</span>
-                      <span className="text-[10px] font-mono text-neutral-500">{item.category}</span>
+                      <span className="text-xs font-semibold text-[var(--fg)]">{item.name}</span>
+                      <span className="text-[10px] font-mono text-[var(--muted)]">{item.category}</span>
                     </div>
                   </div>
-                  <span className={`text-xs font-mono font-bold ${isPositive ? "text-[#00ff88]" : "text-rose-400"}`}>
-                    {item.trend}
+                  <span className={`text-xs font-mono font-bold ${isPositive ? "text-[var(--up)]" : "text-[var(--down)]"}`}>
+                    {chg == null ? "—" : `${isPositive ? "+" : ""}${chg.toFixed(2)}%`}
                   </span>
                 </div>
               );
@@ -161,12 +177,12 @@ export default function CommandPalette({ isOpen, onClose, onSelectSymbol }: Comm
         </div>
 
         {/* Modal Footer */}
-        <div className="p-2.5 bg-[#08080f] border-t border-[#1a1a2b] flex items-center justify-between text-[10px] font-mono text-neutral-500">
+        <div className="p-2.5 bg-[var(--surface)] border-t border-[var(--line)] flex items-center justify-between text-[10px] font-mono text-[var(--muted)]">
           <div className="flex items-center gap-3">
             <span>↑↓ Navigate</span>
             <span>↵ Select</span>
           </div>
-          <span className="text-[#00e5ff]">TrueCharts Command Engine v2.4</span>
+          <span className="text-[var(--accent)]">TrueCharts Command Engine v2.4</span>
         </div>
       </div>
     </div>

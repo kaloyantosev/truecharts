@@ -36,7 +36,7 @@ interface OptionsDomWidgetProps {
 
 // Vibrancy helper directly from tv_automation.py injector lines 503-526
 function getPutStyle(pct: number) {
-  if (!pct || pct <= 0) return { bg: "transparent", text: "#64748b", barBorder: "", textWeight: "600", glow: "" };
+  if (!pct || pct <= 0) return { bg: "transparent", text: "var(--muted)", barBorder: "", textWeight: "600", glow: "" };
   if (pct < 20) {
     return { bg: "rgba(16,185,129,0.14)", text: "#a7f3d0", barBorder: "", textWeight: "bold", glow: "" };
   } else if (pct < 50) {
@@ -49,7 +49,7 @@ function getPutStyle(pct: number) {
 }
 
 function getCallStyle(pct: number) {
-  if (!pct || pct <= 0) return { bg: "transparent", text: "#64748b", barBorder: "", textWeight: "600", glow: "" };
+  if (!pct || pct <= 0) return { bg: "transparent", text: "var(--muted)", barBorder: "", textWeight: "600", glow: "" };
   if (pct < 20) {
     return { bg: "rgba(239,68,68,0.14)", text: "#fecaca", barBorder: "", textWeight: "bold", glow: "" };
   } else if (pct < 50) {
@@ -105,7 +105,7 @@ export default function OptionsDomWidget({
         width: "100%",
         height: "100%",
         background: "transparent",
-        color: "#f8fafc",
+        color: "var(--fg)",
         fontFamily: "Consolas, monospace",
         fontSize: "10.5px",
         lineHeight: 1.3,
@@ -117,19 +117,19 @@ export default function OptionsDomWidget({
       {/* 1. Sinclair Metrics mounted directly on top of DOM (Exact HTML from tv_automation.py lines 561-579) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px", marginBottom: "7px", fontSize: "10px", flexShrink: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(15,23,42,0.7)", padding: "4px 7px", borderRadius: "3px", border: "1px solid #1e293b" }}>
-          <span style={{ color: "#94a3b8" }}>VRP:</span>
+          <span style={{ color: "var(--muted)" }}>VRP:</span>
           <span style={{ color: vrpColor, fontWeight: "bold" }}>{vrpVal}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(15,23,42,0.7)", padding: "4px 7px", borderRadius: "3px", border: "1px solid #1e293b" }}>
-          <span style={{ color: "#94a3b8" }}>Range:</span>
+          <span style={{ color: "var(--muted)" }}>Range:</span>
           <span style={{ color: "#38bdf8", fontWeight: "bold" }}>{rangeVal}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(15,23,42,0.7)", padding: "4px 7px", borderRadius: "3px", border: "1px solid #1e293b" }}>
-          <span style={{ color: "#94a3b8" }}>IV:</span>
+          <span style={{ color: "var(--muted)" }}>IV:</span>
           <span style={{ color: "#fff", fontWeight: "bold" }}>{ivVal}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(15,23,42,0.7)", padding: "4px 7px", borderRadius: "3px", border: "1px solid #1e293b" }}>
-          <span style={{ color: "#94a3b8" }}>RV:</span>
+          <span style={{ color: "var(--muted)" }}>RV:</span>
           <span style={{ color: "#fff", fontWeight: "bold" }}>{rvVal}</span>
         </div>
       </div>
@@ -153,7 +153,7 @@ export default function OptionsDomWidget({
             id="tc-dom-mode-pill"
             style={{
               display: "inline-flex",
-              background: "#0f172a",
+              background: "var(--hover)",
               border: "1px solid #334155",
               borderRadius: "12px",
               padding: "2px",
@@ -211,15 +211,15 @@ export default function OptionsDomWidget({
             </button>
           </div>
         </div>
-        <span style={{ fontWeight: "bold", color: "#fff", background: "#1e293b", padding: "2px 6px", borderRadius: "3px", fontSize: "10px", border: "1px solid #334155" }}>
+        <span style={{ fontWeight: "bold", color: "#fff", background: "var(--line)", padding: "2px 6px", borderRadius: "3px", fontSize: "10px", border: "1px solid #334155" }}>
           {ticker}
         </span>
       </div>
 
       {/* 3. COLUMN HEADERS (tv_automation.py lines 692-696) */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 64px 1fr", fontSize: "10px", color: "#94a3b8", marginBottom: "3px", fontWeight: "bold" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 64px 1fr", fontSize: "10px", color: "var(--muted)", marginBottom: "3px", fontWeight: "bold" }}>
         <span style={{ color: "#10b981", textAlign: "left", paddingLeft: "6px" }}>PUT OI</span>
-        <span style={{ color: "#cbd5e1", textAlign: "center" }}>STRIKE</span>
+        <span style={{ color: "var(--fg)", textAlign: "center" }}>STRIKE</span>
         <span style={{ color: "#ef4444", textAlign: "right", paddingRight: "6px" }}>CALL OI</span>
       </div>
 
@@ -229,7 +229,7 @@ export default function OptionsDomWidget({
         style={{ display: "flex", flexDirection: "column", overflowY: "auto", flex: "1 1 0%", minHeight: 0 }}
       >
         {ladder.length === 0 ? (
-          <div style={{ color: "#64748b", fontSize: "10px", textAlign: "center", padding: "12px 0" }}>
+          <div style={{ color: "var(--muted)", fontSize: "10px", textAlign: "center", padding: "12px 0" }}>
             Real options chain not available for {ticker}.
           </div>
         ) : (

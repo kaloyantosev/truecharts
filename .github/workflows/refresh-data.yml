@@ -1,0 +1,46 @@
+name: Refresh 13F, macro and COT data
+
+# Weekly, plus daily during the 13F filing windows (filings for a quarter are due
+# 45 days after quarter end: mid Feb, May, Aug, Nov). COT reports publish on Fridays.
+on:
+  schedule:
+    - cron: '0 7 * * 6'                 # every Saturday
+    - cron: '0 7 * 2,5,8,11 1-5'        # weekdays in filing-window months
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install yfinance pandas
+      - run: python scripts/update_data.py
+      - name: Commit if the data changed (ignoring the asOf stamp)
+        run: |
+          changed=$(python - <<'PY'
+          import json, subprocess
+          out = []
+          for f in ["src/data/institutional.json", "src/data/macro.json"]:
+              old = subprocess.run(["git", "show", f"HEAD:{f}"], capture_output=True, text=True).stdout or "{}"
+              a, b = json.loads(old), json.load(open(f))
+              a.pop("asOf", None); b.pop("asOf", None)
+              if a != b:
+                  out.append(f)
+          print(" ".join(out))
+          PY
+          )
+          if [ -z "$changed" ]; then
+            echo "No data changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add src/data/institutional.json src/data/macro.json
+          git commit -m "data: refresh 13F, macro and COT ($(date -u +%Y-%m-%d))"
+          git push

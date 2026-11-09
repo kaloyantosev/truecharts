@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+__pycache__/
+*.pyc
+venv/
+.venv/
+.env*
+.vercel
+graphify-out/

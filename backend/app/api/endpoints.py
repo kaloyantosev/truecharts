@@ -45,12 +45,10 @@ def get_quarter_prices(hist, q_labels):
     }
     
     if hist is None or len(hist) == 0:
-        import random
-        base = random.uniform(400, 500)
         return {
-            "prev": {"start": round(base, 2), "end": round(base*1.05, 2), "pct": 5.0},
-            "last": {"start": round(base*1.05, 2), "end": round(base*1.12, 2), "pct": 6.7},
-            "current": {"start": round(base*1.12, 2), "end": round(base*1.20, 2), "pct": 7.1},
+            "prev": {"start": 0, "end": 0, "pct": None},
+            "last": {"start": 0, "end": 0, "pct": None},
+            "current": {"start": 0, "end": 0, "pct": None},
         }
         
     try:
@@ -82,14 +80,12 @@ def get_quarter_prices(hist, q_labels):
         c_e = float(hist['Close'].iloc[-1]) if len(hist) > 0 else 0
         c_pct = ((c_e - c_s) / c_s * 100) if c_s > 0 else 0
         
-        # If the dates yielded empty data despite history existing, fallback to mock to ensure UI renders
+        # If the dates yielded no data, report it as missing rather than inventing prices
         if p_e == 0 and l_e == 0:
-            import random
-            base = random.uniform(400, 500)
             return {
-                "prev": {"start": round(base, 2), "end": round(base*1.05, 2), "pct": 5.0},
-                "last": {"start": round(base*1.05, 2), "end": round(base*1.12, 2), "pct": 6.7},
-                "current": {"start": round(base*1.12, 2), "end": round(base*1.20, 2), "pct": 7.1},
+                "prev": {"start": 0, "end": 0, "pct": None},
+                "last": {"start": 0, "end": 0, "pct": None},
+                "current": {"start": 0, "end": 0, "pct": None},
             }
         
         return {
@@ -99,12 +95,10 @@ def get_quarter_prices(hist, q_labels):
         }
     except Exception as e:
         print("Error calculating quarter prices:", e)
-        import random
-        base = random.uniform(400, 500)
         return {
-            "prev": {"start": round(base, 2), "end": round(base*1.05, 2), "pct": 5.0},
-            "last": {"start": round(base*1.05, 2), "end": round(base*1.12, 2), "pct": 6.7},
-            "current": {"start": round(base*1.12, 2), "end": round(base*1.20, 2), "pct": 7.1},
+            "prev": {"start": 0, "end": 0, "pct": None},
+            "last": {"start": 0, "end": 0, "pct": None},
+            "current": {"start": 0, "end": 0, "pct": None},
         }
 
 import time
@@ -318,90 +312,6 @@ def get_chart_history(ticker: str, timeframe: str = "1d"):
             deduped.append(r)
 
     return deduped
-
-def generate_mock_options_chain_fallback(spot: float, ticker: str, history: pd.DataFrame) -> List[Dict[str, Any]]:
-    """
-    Fallback option chain generator that calculates dynamic IV and concentrates
-    open interest on key support/resistance strikes based on the stock's price scale.
-    This eliminates high-frequency noise and results in clear key options walls.
-    """
-    import random
-    seed_val = sum(ord(c) for c in ticker)
-    rng = random.Random(seed_val)
-    
-    if not history.empty and len(history) > 10:
-        hv = float(history["close"].pct_change().std() * np.sqrt(252))
-        if np.isnan(hv) or hv <= 0:
-            hv = 0.30
-    else:
-        hv = 0.30
-        
-    pcr_base = 0.8
-    chain = []
-    
-    # Dynamic step size and major strike placement based on price scale
-    if spot < 15:
-        step = 1.0
-        offsets = [1.0, 2.0, 3.0]
-    elif spot < 50:
-        step = 2.5
-        offsets = [2.5, 5.0, 7.5]
-    elif spot < 250:
-        step = 5.0
-        offsets = [5.0, 10.0, 15.0]
-    elif spot < 1000:
-        step = 10.0
-        offsets = [10.0, 20.0, 30.0]
-    else:
-        step = 50.0
-        offsets = [50.0, 100.0, 150.0]
-        
-    base_strike = round(spot / step) * step
-    
-    # Generate strikes within +/- 15% range
-    min_strike = int(base_strike - 5 * step)
-    max_strike = int(base_strike + 5 * step)
-    
-    # Pre-define key support and resistance strikes
-    major_supports = [base_strike - off for off in offsets]
-    major_resistances = [base_strike + off for off in offsets]
-    
-    # Expirations covering DTE horizons (Minor, Intermediate, Major)
-    dte_list = [7.0, 14.0, 30.0, 45.0, 60.0, 90.0]
-    
-    for dte in dte_list:
-        decay = np.exp(-0.015 * dte)
-        # Iterate over strikes with the appropriate step size
-        for strike_val in range(int(min_strike), int(max_strike) + 1, int(step)):
-            strike = float(strike_val)
-            
-            # Apply volatility skew
-            put_skew = 1.15 if strike < spot else 0.85
-            call_skew = 0.85 if strike < spot else 1.15
-            
-            put_iv = hv * put_skew * (0.9 + rng.random() * 0.2)
-            call_iv = hv * call_skew * (0.9 + rng.random() * 0.2)
-            
-            # Normal strikes have very low baseline open interest
-            base_oi = int((10 + rng.random() * 45) * decay)
-            
-            # Boost open interest on key major strikes to represent clean walls
-            if strike in major_supports:
-                put_oi = int((1500 + rng.random() * 2500) * decay)
-                call_oi = base_oi
-            elif strike in major_resistances:
-                call_oi = int((1500 + rng.random() * 2500) * decay)
-                put_oi = base_oi
-            else:
-                call_oi = base_oi
-                put_oi = int(base_oi * pcr_base)
-                
-            chain.append({"strike": strike, "type": "call", "open_interest": call_oi, "iv": round(call_iv, 4), "dte": dte})
-            chain.append({"strike": strike, "type": "put", "open_interest": put_oi, "iv": round(put_iv, 4), "dte": dte})
-            
-    return chain
-
-import math
 
 def std_normal_cdf(x: float) -> float:
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
@@ -797,9 +707,9 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
     
     # 2. Fetch real options chain
     chain = fetch_live_options_chain(ticker, spot)
-    if not chain:
-        # Fallback to mock chain center around spot using history/ticker details
-        chain = generate_mock_options_chain_fallback(spot, ticker, history)
+    # No simulated chain: without live options data the options-derived fields are returned as null
+    # and only technical levels are drawn (clients can read "options_source").
+    options_source = "live" if chain else "unavailable"
         
     # Dual-Expiration Max Pain (McMillan Ch. 31-33)
     weekly_max_pain = calculate_max_pain(chain, max_dte=7.0)
@@ -1064,54 +974,23 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
     # 6. Euan Sinclair Volatility & Flow Intelligence Model
     # Engine now extracts real ATM IV from the chain internally (Fix 2).
     # avg_iv is still passed as a fallback in case chain is empty.
-    try:
-        sinclair_vol = synthesize_sinclair_analysis(history, chain, avg_iv, spot)
-    except Exception as e:
-        print(f"Sinclair volatility analysis failed for {ticker}: {e}")
-        _rv_fallback = round(avg_iv * 0.85, 1)
-        sinclair_vol = {
-            "rv_yang_zhang":        _rv_fallback,
-            "rv_yang_zhang_5d":     _rv_fallback,
-            "rv_yang_zhang_10d":    _rv_fallback,
-            "rv_yang_zhang_30d":    _rv_fallback,
-            "rv_confidence":        "Low",
-            "implied_volatility":   round(avg_iv, 1),
-            "vrp_spread":           round(avg_iv * 0.15, 2),
-            "vrp_pct":              17.6,
-            "vrp_5d":               round(avg_iv * 0.15, 2),
-            "vrp_10d":              round(avg_iv * 0.15, 2),
-            "vrp_30d":              round(avg_iv * 0.12, 2),
-            "rv_rank":              50.0,
-            "iv_rank":              50.0,
-            "rank_alert":           "",
-            "ivts":                 0.95,
-            "term_structure_regime": "Contango (Normal Upward Term)",
-            "term_curve_shape":     "Normal Contango",
-            "front_iv":             round(avg_iv, 1),
-            "back_iv":              round(avg_iv * 0.95, 1),
-            "iv_7d":                round(avg_iv * 1.02, 1),
-            "iv_21d":               round(avg_iv, 1),
-            "iv_45d":               round(avg_iv * 0.97, 1),
-            "iv_90d":               round(avg_iv * 0.95, 1),
-            "skew_slope":           1.15,
-            "skew_bias":            "Put Hedging",
-            "regime_score":         25.0,
-            "regime_confidence":    "Low",
-            "regime_verdict":       "Overpriced Vol (Short Premium Edge)",
-            "vol_edge":             "Fade extremes — fade rallies at Call Wall, fade drops at Put Wall",
-            "weekly_expected_move_dollars": round(spot * (avg_iv / 100.0) * math.sqrt(5.0 / 252.0), 2),
-            "weekly_expected_move_pct":     round(((spot * (avg_iv / 100.0) * math.sqrt(5.0 / 252.0)) / spot) * 100.0, 2) if spot > 0 else 0.0,
-        }
+    sinclair_vol = None
+    if options_source == "live":
+        try:
+            sinclair_vol = synthesize_sinclair_analysis(history, chain, avg_iv, spot)
+        except Exception as e:
+            print(f"Sinclair volatility analysis failed for {ticker}: {e}")
+            sinclair_vol = None
 
     # 6.5 Calculate Spatial GEX Velocity & 0DTE Concentration
-    try:
-        spatial_gex = calculate_spatial_gex_velocity(spot, chain)
-        sinclair_vol["spatial_gex_regime"] = spatial_gex["velocity_regime"]
-        sinclair_vol["spatial_gex_slope"] = spatial_gex["velocity_slope"]
-        sinclair_vol["dominance_0dte_pct"] = spatial_gex["dominance_0dte_pct"]
-    except Exception as e:
-        sinclair_vol["spatial_gex_regime"] = "Sticky"
-        sinclair_vol["spatial_gex_slope"] = 0.0
+    if sinclair_vol is not None:
+        try:
+            spatial_gex = calculate_spatial_gex_velocity(spot, chain)
+            sinclair_vol["spatial_gex_regime"] = spatial_gex["velocity_regime"]
+            sinclair_vol["spatial_gex_slope"] = spatial_gex["velocity_slope"]
+            sinclair_vol["dominance_0dte_pct"] = spatial_gex["dominance_0dte_pct"]
+        except Exception as e:
+            print(f"Spatial GEX failed for {ticker}: {e}")
     # 6.6 Calculate Weekly Capped Options DOM (Depth of Market)
     try:
         weekly_dom = calculate_weekly_options_dom(spot, chain, max_dte=7.0)
@@ -1137,8 +1016,18 @@ def analyze_ticker(ticker: str, timeframe: str = "1d", db: Session = Depends(get
         "trend_phase": trend_phase,
         "iv_regime": iv_regime,
         "sinclair_volatility": sinclair_vol,
-        "weekly_options_dom": weekly_dom
+        "weekly_options_dom": weekly_dom,
+        "options_source": options_source,
     }
+    if options_source != "live":
+        for k in ("max_pain", "weekly_max_pain", "monthly_max_pain", "gamma_flip",
+                  "expected_move_upper", "expected_move_lower", "expected_move_range", "put_call_ratio"):
+            res_payload[k] = None
+        res_payload["supports"] = [x for x in combined_supports if x.get("source") == "technical"]
+        res_payload["resistances"] = [x for x in combined_resistances if x.get("source") == "technical"]
+        res_payload["weekly_options_dom"] = []
+        res_payload["iv_regime"] = "Unavailable (no live options chain)"
+        res_payload["sentiment"] = "Unavailable"
     _ANALYZE_CACHE[cache_key] = (now, res_payload)
     return res_payload
 
@@ -1209,6 +1098,15 @@ def get_current_13f_quarter() -> tuple:
     q2_q, q2_y = q_prev(q1_q, q1_y)
     q2 = q_label(q2_q, q2_y)
     return q0, q1, q2
+
+def _next_13f_deadline() -> str:
+    """13F-HR filings are due 45 days after each quarter end (Feb 14, May 15, Aug 14, Nov 14)."""
+    today = date.today()
+    for m, d in ((2, 14), (5, 15), (8, 14), (11, 14)):
+        if (today.month, today.day) < (m, d):
+            return f"{today.year}-{m:02d}-{d:02d}"
+    return f"{today.year + 1}-02-14"
+
 
 @router.get("/macro/rotation")
 def get_macro_sectors() -> Dict[str, Any]:
@@ -1285,7 +1183,7 @@ def get_macro_sectors() -> Dict[str, Any]:
     q0_label, _, _ = get_current_13f_quarter()
     res = {
         "lastFilingDate": q0_label,
-        "nextUpdate": "2026-08-14",
+        "nextUpdate": _next_13f_deadline(),
         "rankings": rankings
     }
     _MACRO_CACHE["rotation"] = res

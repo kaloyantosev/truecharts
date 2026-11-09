@@ -11,6 +11,11 @@ import {
 } from "lightweight-charts";
 import BacktestDomWidget, { DomRow, SinclairStats } from "./BacktestDomWidget";
 
+// Read a design token (CSS custom property) for canvas-drawn chart elements.
+const cssVar = (name: string, fallback: string) =>
+  (typeof window !== "undefined" && getComputedStyle(document.documentElement).getPropertyValue(name).trim()) || fallback;
+
+
 interface PriceLevel {
   price: number;
   title: string;
@@ -211,8 +216,8 @@ export default function BacktestChart({
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: "#000000" },
-        textColor: "#94a3b8",
+        background: { type: ColorType.Solid, color: "transparent" },
+        textColor: cssVar("--muted", "#71717a"),
       },
       grid: {
         vertLines: { visible: false },
@@ -254,7 +259,7 @@ export default function BacktestChart({
         },
       },
       timeScale: {
-        borderColor: "#1e293b",
+        borderColor: cssVar("--line", "#e4e4e7"),
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 8,
@@ -276,7 +281,7 @@ export default function BacktestChart({
         },
       },
       rightPriceScale: {
-        borderColor: "#1e293b",
+        borderColor: cssVar("--line", "#e4e4e7"),
         visible: true,
         autoScale: true,
       },
@@ -679,7 +684,7 @@ export default function BacktestChart({
               alignItems: "center",
             }}
           >
-            <div className="w-full h-[2px] bg-[#10b981] group-hover:h-[3px] shadow-[0_0_6px_#10b981]" />
+            <div className="w-full h-[2px] bg-[var(--up)] group-hover:h-[3px]" />
             <div
               style={{
                 position: "absolute",
@@ -715,15 +720,15 @@ export default function BacktestChart({
               alignItems: "center",
             }}
           >
-            <div className="w-full h-[2px] bg-[#e2e8f0] group-hover:bg-[#38bdf8]" />
+            <div className="w-full h-[2px] bg-[var(--fg)] group-hover:bg-[var(--accent)]" />
             <div
               style={{
                 position: "absolute",
                 left: 6,
                 top: -11,
-                background: "#0f172a",
+                background: "var(--hover)",
                 border: "1px solid #38bdf8",
-                color: "#f8fafc",
+                color: "var(--fg)",
                 padding: "2px 8px",
                 borderRadius: "4px",
                 fontSize: "10.5px",
@@ -732,11 +737,11 @@ export default function BacktestChart({
                 boxShadow: "0 2px 8px rgba(0,0,0,0.85)",
               }}
             >
-              <span className={isLong ? "text-[#10b981]" : "text-[#f43f5e]"}>
+              <span className={isLong ? "text-[var(--up)]" : "text-[var(--down)]"}>
                 {isLong ? "▲ LONG" : "▼ SHORT"}
               </span>{" "}
               {lotSize.toFixed(2)} lots ({units.toFixed(0)} units) @ ${position.entryPrice.toFixed(2)} | R:R 1:{rrRatio.toFixed(2)} |{" "}
-              <span className={liveDollars >= 0 ? "text-[#10b981]" : "text-[#f43f5e]"}>
+              <span className={liveDollars >= 0 ? "text-[var(--up)]" : "text-[var(--down)]"}>
                 Live: {liveDollars >= 0 ? "+" : ""}${liveDollars.toFixed(2)} ({livePct >= 0 ? "+" : ""}
                 {livePct.toFixed(2)}%)
               </span>
@@ -758,7 +763,7 @@ export default function BacktestChart({
               alignItems: "center",
             }}
           >
-            <div className="w-full h-[2px] bg-[#ef4444] group-hover:h-[3px] shadow-[0_0_6px_#ef4444]" />
+            <div className="w-full h-[2px] bg-[var(--down)] group-hover:h-[3px]" />
             <div
               style={{
                 position: "absolute",
@@ -798,17 +803,17 @@ export default function BacktestChart({
   }
 
   return (
-    <div className={`relative w-full ${heightClass} bg-black border border-[#1e293b] rounded-lg overflow-hidden flex flex-col shadow-2xl`}>
+    <div className={`relative w-full ${heightClass} bg-black border border-[var(--line)] rounded-lg overflow-hidden flex flex-col`}>
       {/* Replay & TradingView Drawing Tools Toolbar */}
-      <div className="h-10 px-3 bg-[#070a12] border-b border-[#1e293b] flex items-center justify-between text-xs font-mono select-none flex-shrink-0 z-30">
+      <div className="h-10 px-3 bg-[var(--surface)] border-b border-[var(--line)] flex items-center justify-between text-xs font-mono select-none flex-shrink-0 z-30">
         {/* Left: Candle-by-Candle Replay Controls (Starting at 3rd Candle) */}
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-bold text-neutral-400 uppercase mr-1">CANDLES:</span>
+          <span className="text-[10px] font-bold text-[var(--muted)] uppercase mr-1">CANDLES:</span>
 
           <button
             onClick={resetToThree}
             title="Reset to first 3 candles"
-            className="px-2 py-1 rounded bg-[#0f172a] hover:bg-[#1e293b] text-neutral-300 border border-[#334155] text-[10.5px] font-bold transition-colors"
+            className="px-2 py-1 rounded bg-[var(--hover)] hover:bg-[var(--line)] text-[var(--fg)] border border-[var(--line)] text-[10.5px] font-bold transition-colors"
           >
             ⏮ First 3
           </button>
@@ -819,8 +824,8 @@ export default function BacktestChart({
             title="Step back 1 candle"
             className={`px-2 py-1 rounded border text-[10.5px] font-bold transition-colors ${
               visibleCount > 3
-                ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
-                : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
+                ? "bg-[var(--hover)] hover:bg-[var(--line)] text-[var(--fg)] border-[var(--line)]"
+                : "bg-black/30 text-[var(--muted)] border-[var(--line)] cursor-not-allowed"
             }`}
           >
             ◀ -1
@@ -830,10 +835,10 @@ export default function BacktestChart({
             onClick={() => stepForward(1)}
             disabled={visibleCount >= candlesData.length}
             title="Step forward 1 candle"
-            className={`px-3 py-1 rounded border text-[11px] font-black transition-all ${
+            className={`px-3 py-1 rounded border text-[11px] font-bold transition-all ${
               visibleCount < candlesData.length
-                ? "bg-[#00ff88] hover:bg-[#10b981] text-black border-[#00ff88] shadow-[0_0_10px_rgba(0,255,136,0.35)] active:scale-95"
-                : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
+                ? "bg-[var(--up)] hover:bg-[var(--up)] text-white border-[var(--up)] active:scale-95"
+                : "bg-black/30 text-[var(--muted)] border-[var(--line)] cursor-not-allowed"
             }`}
           >
             ▶ +1 Bar
@@ -845,8 +850,8 @@ export default function BacktestChart({
             title="Step forward 5 candles"
             className={`px-2 py-1 rounded border text-[10.5px] font-bold transition-colors ${
               visibleCount < candlesData.length
-                ? "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
-                : "bg-black/30 text-neutral-600 border-[#1e293b] cursor-not-allowed"
+                ? "bg-[var(--hover)] hover:bg-[var(--line)] text-[var(--fg)] border-[var(--line)]"
+                : "bg-black/30 text-[var(--muted)] border-[var(--line)] cursor-not-allowed"
             }`}
           >
             +5 ⏩
@@ -856,15 +861,15 @@ export default function BacktestChart({
             onClick={showAllCandles}
             disabled={visibleCount >= candlesData.length}
             title="Reveal all candles for the session"
-            className="px-2 py-1 rounded bg-[#0f172a] hover:bg-[#1e293b] text-neutral-300 border border-[#334155] text-[10.5px] font-bold transition-colors"
+            className="px-2 py-1 rounded bg-[var(--hover)] hover:bg-[var(--line)] text-[var(--fg)] border border-[var(--line)] text-[10.5px] font-bold transition-colors"
           >
             All
           </button>
 
-          <div className="h-4 w-[1px] bg-[#1e293b] ml-1" />
+          <div className="h-4 w-[1px] bg-[var(--line)] ml-1" />
 
           {/* Current Close Price display */}
-          <span className="text-[11px] font-bold text-[#38bdf8] font-mono px-1">
+          <span className="text-[11px] font-bold text-[var(--accent)] font-mono px-1">
             ${currentClosePrice.toFixed(2)}
           </span>
         </div>
@@ -875,7 +880,7 @@ export default function BacktestChart({
           {onRandomDay && (
             <button
               onClick={onRandomDay}
-              className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded text-[11px] font-bold transition-all shadow-[0_0_12px_rgba(168,85,247,0.35)] active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1 bg-[var(--accent)] hover:opacity-90 text-white rounded-md text-[11px] font-bold transition-all active:scale-95"
               title="Pick a random session without showing the date for a 100% unbiased backtest"
             >
               <span>🎲</span>
@@ -883,14 +888,14 @@ export default function BacktestChart({
             </button>
           )}
 
-          <div className="h-4 w-[1px] bg-[#1e293b]" />
+          <div className="h-4 w-[1px] bg-[var(--line)]" />
 
           <button
             onClick={() => setActiveTool(activeTool === "ruler" ? "cursor" : "ruler")}
             className={`px-2.5 py-1 rounded border text-[10.5px] font-bold transition-all ${
               activeTool === "ruler"
-                ? "bg-[#38bdf8] text-black border-[#38bdf8] font-black shadow-[0_0_8px_rgba(56,189,248,0.5)]"
-                : "bg-[#0f172a] hover:bg-[#1e293b] text-neutral-200 border-[#334155]"
+                ? "bg-[var(--accent)] text-white border-[var(--accent)] font-bold"
+                : "bg-[var(--hover)] hover:bg-[var(--line)] text-[var(--fg)] border-[var(--line)]"
             }`}
             title="Click 2 points on chart to measure percentage and price distance"
           >
@@ -901,8 +906,8 @@ export default function BacktestChart({
             onClick={() => setActiveTool(activeTool === "long" ? "cursor" : "long")}
             className={`px-2.5 py-1 rounded border text-[10.5px] font-bold transition-all ${
               activeTool === "long"
-                ? "bg-[#10b981] text-black border-[#10b981] font-black shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-                : "bg-[#064e3b]/60 hover:bg-[#065f46] text-[#34d399] border-[#10b981]/50"
+                ? "bg-[var(--up)] text-white border-[var(--up)] font-bold"
+                : "bg-[var(--up)]/60 hover:bg-[var(--up)] text-[var(--up)] border-[var(--up)]/50"
             }`}
             title="Click on chart to place a Long Position with TP & SL"
           >
@@ -913,8 +918,8 @@ export default function BacktestChart({
             onClick={() => setActiveTool(activeTool === "short" ? "cursor" : "short")}
             className={`px-2.5 py-1 rounded border text-[10.5px] font-bold transition-all ${
               activeTool === "short"
-                ? "bg-[#ef4444] text-white border-[#ef4444] font-black shadow-[0_0_8px_rgba(239,68,68,0.5)]"
-                : "bg-[#7f1d1d]/60 hover:bg-[#991b1b] text-[#fca5a5] border-[#ef4444]/50"
+                ? "bg-[var(--down)] text-[var(--fg)] border-[var(--down)] font-bold"
+                : "bg-[var(--down)]/60 hover:bg-[var(--down)] text-[var(--down)] border-[var(--down)]/50"
             }`}
             title="Click on chart to place a Short Position with TP & SL"
           >
@@ -922,21 +927,21 @@ export default function BacktestChart({
           </button>
 
           {/* Lot Size & Multiplier Controls */}
-          <div className="flex items-center gap-1 bg-[#0f172a] px-2 py-0.5 rounded border border-[#334155]">
-            <span className="text-[10px] text-neutral-400">Lot:</span>
+          <div className="flex items-center gap-1 bg-[var(--hover)] px-2 py-0.5 rounded border border-[var(--line)]">
+            <span className="text-[10px] text-[var(--muted)]">Lot:</span>
             <input
               type="number"
               step="0.01"
               min="0.01"
               value={lotSize}
               onChange={(e) => setLotSize(Math.max(0.01, parseFloat(e.target.value) || 0.01))}
-              className="w-12 bg-black text-[#facc15] font-bold text-[11px] px-1 py-0.5 rounded border border-[#334155] text-center focus:outline-none"
+              className="w-12 bg-black text-[var(--warn)] font-bold text-[11px] px-1 py-0.5 rounded border border-[var(--line)] text-center focus:outline-none"
             />
             <select
               value={contractMultiplier}
               onChange={(e) => setContractMultiplier(Number(e.target.value))}
               title="Contract unit multiplier (100 = standard Stock/ETF CFD lot)"
-              className="bg-black text-neutral-300 text-[10px] px-1 py-0.5 rounded border border-[#334155] focus:outline-none"
+              className="bg-black text-[var(--fg)] text-[10px] px-1 py-0.5 rounded border border-[var(--line)] focus:outline-none"
             >
               <option value={100}>1 lot = 100</option>
               <option value={1000}>1 lot = 1000</option>
@@ -952,7 +957,7 @@ export default function BacktestChart({
                 setPosition(null);
                 setActiveTool("cursor");
               }}
-              className="px-2 py-1 rounded bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-500/40 text-[10.5px] font-bold transition-colors"
+              className="px-2 py-1 rounded bg-[var(--hover)] hover:bg-rose-900 text-rose-200 border border-[var(--down)]/40 text-[10.5px] font-bold transition-colors"
               title="Clear active ruler and positions"
             >
               ✕ Clear
@@ -963,7 +968,7 @@ export default function BacktestChart({
 
       {/* Helper banner when an interactive tool is armed */}
       {activeTool !== "cursor" && (
-        <div className="bg-[#0284c7]/90 text-white text-[11px] font-mono font-bold px-3 py-1 text-center z-30">
+        <div className="bg-[var(--accent)]/90 text-[var(--fg)] text-[11px] font-mono font-bold px-3 py-1 text-center z-30">
           {activeTool === "ruler" &&
             (ruler && !ruler.locked
               ? "📏 Move mouse and click second point to lock measurement..."
@@ -978,7 +983,7 @@ export default function BacktestChart({
       {/* Main Body: 2-Column Side-by-Side Flex Layout */}
       <div className="relative flex-1 w-full flex flex-row min-h-0 bg-black overflow-hidden">
         {/* Left Column: Dedicated Fixed Space for Options DOM Only */}
-        <div className="w-[316px] min-w-[316px] max-w-[316px] h-full bg-[#080a14] border-r border-[#1e293b] p-2 flex flex-col z-10 overflow-hidden">
+        <div className="w-[316px] min-w-[316px] max-w-[316px] h-full bg-[var(--surface)] border-r border-[var(--line)] p-2 flex flex-col z-10 overflow-hidden">
           <BacktestDomWidget
             ticker={ticker}
             selectedDate={selectedDate}
@@ -1008,8 +1013,8 @@ export default function BacktestChart({
 
           {/* Loading Spinner */}
           {loading && (
-            <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none z-30 font-mono text-xs text-neutral-400">
-              <span className="animate-pulse">
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none z-30 font-mono text-xs text-[var(--muted)]">
+              <span className="">
                 Loading {ticker} session...
               </span>
             </div>

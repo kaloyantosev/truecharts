@@ -6,38 +6,38 @@ import PureTraderChart from "@/components/PureTraderChart";
 
 export default function TraderPanelPage() {
   return (
-    <main className="min-h-screen bg-[#05060a] text-neutral-100 flex flex-col">
+    <main className="min-h-screen bg-[var(--bg)] text-[var(--fg)] flex flex-col">
       {/* Sleek Minimal Header */}
-      <header className="h-11 px-4 bg-[#080b14] border-b border-[#1e293b] flex items-center justify-between text-xs font-mono select-none">
+      <header className="h-11 px-4 bg-[var(--surface)] border-b border-[var(--line)] flex items-center justify-between text-xs font-mono select-none">
         <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="flex items-center gap-1.5 text-neutral-400 hover:text-white transition-colors bg-[#0f172a] border border-[#1e293b] px-2.5 py-1 rounded text-[11px]"
+            className="flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--fg)] transition-colors bg-[var(--hover)] border border-[var(--line)] px-2.5 py-1 rounded text-[11px]"
           >
             <span>←</span>
             <span>Home</span>
           </Link>
-          <div className="h-4 w-[1px] bg-[#1e293b]" />
+          <div className="h-4 w-[1px] bg-[var(--line)]" />
           <div className="flex items-center gap-2">
-            <span className="font-black tracking-wider text-white">TRADER PANEL</span>
-            <span className="bg-[#00ff88]/10 text-[#00ff88] border border-[#00ff88]/30 px-1.5 py-0.2 rounded text-[9px] uppercase font-bold tracking-widest">
+            <span className="font-bold tracking-wider text-[var(--fg)]">TRADER PANEL</span>
+            <span className="bg-[var(--up)]/10 text-[var(--up)] border border-[var(--up)]/30 px-1.5 py-0.2 rounded text-[9px] uppercase font-bold tracking-wide">
               PRO DUAL
             </span>
           </div>
-          <div className="h-4 w-[1px] bg-[#1e293b]" />
+          <div className="h-4 w-[1px] bg-[var(--line)]" />
           <Link
             href="/backtest"
-            className="flex items-center gap-1.5 text-amber-300 hover:text-white transition-colors bg-amber-500/10 border border-amber-500/40 px-2.5 py-1 rounded text-[11px] font-bold"
+            className="flex items-center gap-1.5 text-[var(--warn)] hover:text-[var(--fg)] transition-colors bg-[var(--warn)]/10 border border-[var(--warn)]/40 px-2.5 py-1 rounded text-[11px] font-bold"
           >
             <span>⏪</span>
             <span>Backtester</span>
           </Link>
         </div>
 
-        <div className="flex items-center gap-3 text-[11px] text-neutral-400">
-          <div className="flex items-center gap-1.5 bg-[#0f172a] px-2.5 py-1 rounded border border-[#1e293b]">
-            <span className="w-2 h-2 rounded-full bg-[#10b981] animate-ping" />
-            <span className="text-neutral-300 font-bold">1-Min Live Sync</span>
+        <div className="flex items-center gap-3 text-[11px] text-[var(--muted)]">
+          <div className="flex items-center gap-1.5 bg-[var(--hover)] px-2.5 py-1 rounded border border-[var(--line)]">
+            <span className="w-2 h-2 rounded-full bg-[var(--up)]" />
+            <span className="text-[var(--fg)] font-bold">1-Min Live Sync</span>
           </div>
         </div>
       </header>
