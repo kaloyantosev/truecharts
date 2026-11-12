@@ -1,5 +1,5 @@
 {
- "asOf": "2026-11-11",
+ "asOf": "2026-11-12",
  "latestFilingQuarter": "Q2 2026",
  "source": "SEC 13F filings aggregated by Yahoo Finance (yfinance)",
  "method": "Flow = net share change of each stock's 10 largest 13F holders vs. the prior quarter, valued at the latest price.",
@@ -9,44 +9,44 @@
    "symbol": "MSFT",
    "name": "Microsoft Corporation",
    "sector": "Tech",
-   "holders": 8212,
+   "holders": 8214,
    "instPct": 76.2,
-   "valB": "$2.99T",
+   "valB": "$2.97T",
    "holderChg": "+2.4%",
    "trend": "Accumulation",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "607,367,113",
-     "val": "$321.0B",
+     "val": "$318.7B",
      "pct": "+2.37%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "485,192,007",
-     "val": "$256.4B",
+     "val": "$254.6B",
      "pct": "+0.55%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "315,653,206",
-     "val": "$166.8B",
+     "val": "$165.6B",
      "pct": "+2.92%",
      "reported": "2026-06-30"
     },
     {
      "holder": "FMR, LLC",
      "shares": "203,782,761",
-     "val": "$107.7B",
+     "val": "$106.9B",
      "pct": "+9.58%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "192,443,381",
-     "val": "$101.7B",
+     "val": "$101.0B",
      "pct": "+1.48%",
      "reported": "2026-09-30"
     }
@@ -57,44 +57,44 @@
    "symbol": "AMZN",
    "name": "Amazon.com, Inc.",
    "sector": "Cons Disc",
-   "holders": 7944,
+   "holders": 7946,
    "instPct": 68.7,
-   "valB": "$2.00T",
+   "valB": "$1.99T",
    "holderChg": "-0.4%",
    "trend": "Neutral",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "748,403,539",
-     "val": "$201.4B",
+     "val": "$201.0B",
      "pct": "+1.75%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "635,764,130",
-     "val": "$171.1B",
+     "val": "$170.8B",
      "pct": "+0.73%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "397,186,958",
-     "val": "$106.9B",
+     "val": "$106.7B",
      "pct": "+1.73%",
      "reported": "2026-06-30"
     },
     {
      "holder": "FMR, LLC",
      "shares": "322,644,691",
-     "val": "$86.8B",
+     "val": "$86.7B",
      "pct": "-11.76%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "236,354,202",
-     "val": "$63.6B",
+     "val": "$63.5B",
      "pct": "+1.35%",
      "reported": "2026-09-30"
     }
@@ -105,44 +105,44 @@
    "symbol": "AAPL",
    "name": "Apple Inc.",
    "sector": "Tech",
-   "holders": 7753,
+   "holders": 7755,
    "instPct": 67.0,
-   "valB": "$3.45T",
+   "valB": "$3.48T",
    "holderChg": "+1.8%",
    "trend": "Accumulation",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "1,162,996,939",
-     "val": "$412.0B",
+     "val": "$416.0B",
      "pct": "+1.60%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "959,107,911",
-     "val": "$339.8B",
+     "val": "$343.1B",
      "pct": "+0.55%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "615,129,929",
-     "val": "$217.9B",
+     "val": "$220.0B",
      "pct": "+2.12%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "375,209,568",
-     "val": "$132.9B",
+     "val": "$134.2B",
      "pct": "+1.04%",
      "reported": "2026-09-30"
     },
     {
      "holder": "FMR, LLC",
      "shares": "369,988,793",
-     "val": "$131.1B",
+     "val": "$132.3B",
      "pct": "+13.72%",
      "reported": "2026-09-30"
     }
@@ -155,42 +155,42 @@
    "sector": "Tech",
    "holders": 7753,
    "instPct": 71.4,
-   "valB": "$2.98T",
+   "valB": "$2.83T",
    "holderChg": "-0.3%",
    "trend": "Neutral",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "1,941,918,386",
-     "val": "$335.9B",
+     "val": "$319.2B",
      "pct": "+0.85%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "1,540,816,358",
-     "val": "$266.5B",
+     "val": "$253.3B",
      "pct": "+0.15%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "1,009,783,437",
-     "val": "$174.7B",
+     "val": "$166.0B",
      "pct": "+1.60%",
      "reported": "2026-06-30"
     },
     {
      "holder": "FMR, LLC",
      "shares": "932,807,820",
-     "val": "$161.4B",
+     "val": "$153.3B",
      "pct": "-9.09%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "613,740,577",
-     "val": "$106.2B",
+     "val": "$100.9B",
      "pct": "+1.24%",
      "reported": "2026-09-30"
     }
@@ -201,44 +201,44 @@
    "symbol": "GOOGL",
    "name": "Alphabet Inc.",
    "sector": "Comm Serv",
-   "holders": 7464,
+   "holders": 7466,
    "instPct": 80.7,
-   "valB": "$2.88T",
+   "valB": "$2.93T",
    "holderChg": "+3.9%",
    "trend": "Accumulation",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "460,972,803",
-     "val": "$134.0B",
+     "val": "$136.2B",
      "pct": "+3.13%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "382,951,664",
-     "val": "$111.4B",
+     "val": "$113.1B",
      "pct": "+1.24%",
      "reported": "2026-06-30"
     },
     {
      "holder": "FMR, LLC",
      "shares": "247,668,909",
-     "val": "$72.0B",
+     "val": "$73.2B",
      "pct": "-1.21%",
      "reported": "2026-09-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "238,977,259",
-     "val": "$69.5B",
+     "val": "$70.6B",
      "pct": "+5.62%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "151,886,875",
-     "val": "$44.2B",
+     "val": "$44.9B",
      "pct": "+1.21%",
      "reported": "2026-09-30"
     }
@@ -249,44 +249,44 @@
    "symbol": "META",
    "name": "Meta Platforms, Inc.",
    "sector": "Comm Serv",
-   "holders": 6688,
+   "holders": 6690,
    "instPct": 77.9,
-   "valB": "$1.28T",
+   "valB": "$1.24T",
    "holderChg": "+2.7%",
    "trend": "Accumulation",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "173,396,976",
-     "val": "$111.0B",
+     "val": "$108.0B",
      "pct": "+2.70%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "143,440,997",
-     "val": "$91.8B",
+     "val": "$89.3B",
      "pct": "+0.92%",
      "reported": "2026-06-30"
     },
     {
      "holder": "FMR, LLC",
      "shares": "101,423,859",
-     "val": "$64.9B",
+     "val": "$63.1B",
      "pct": "+5.76%",
      "reported": "2026-09-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "92,033,963",
-     "val": "$58.9B",
+     "val": "$57.3B",
      "pct": "+3.97%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "53,944,315",
-     "val": "$34.5B",
+     "val": "$33.6B",
      "pct": "-1.83%",
      "reported": "2026-09-30"
     }
@@ -299,42 +299,42 @@
    "sector": "Financials",
    "holders": 6420,
    "instPct": 75.7,
-   "valB": "$690.0B",
+   "valB": "$692.2B",
    "holderChg": "-0.1%",
    "trend": "Neutral",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "206,290,537",
-     "val": "$70.8B",
+     "val": "$71.0B",
      "pct": "-0.93%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "161,586,023",
-     "val": "$55.4B",
+     "val": "$55.6B",
      "pct": "-2.23%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "125,209,293",
-     "val": "$43.0B",
+     "val": "$43.1B",
      "pct": "+0.75%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Bank of America Corporation",
      "shares": "69,666,753",
-     "val": "$23.9B",
+     "val": "$24.0B",
      "pct": "+6.10%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Morgan Stanley",
      "shares": "67,092,426",
-     "val": "$23.0B",
+     "val": "$23.1B",
      "pct": "-2.12%",
      "reported": "2026-06-30"
     }
@@ -345,44 +345,44 @@
    "symbol": "AVGO",
    "name": "Broadcom Inc.",
    "sector": "Tech",
-   "holders": 6285,
+   "holders": 6286,
    "instPct": 79.7,
-   "valB": "$1.34T",
+   "valB": "$1.37T",
    "holderChg": "+0.4%",
    "trend": "Neutral",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "398,213,826",
-     "val": "$140.2B",
+     "val": "$143.4B",
      "pct": "+3.18%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "309,168,582",
-     "val": "$108.8B",
+     "val": "$111.3B",
      "pct": "+0.37%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "196,900,541",
-     "val": "$69.3B",
+     "val": "$70.9B",
      "pct": "+2.88%",
      "reported": "2026-06-30"
     },
     {
      "holder": "FMR, LLC",
      "shares": "127,431,404",
-     "val": "$44.9B",
+     "val": "$45.9B",
      "pct": "-11.73%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Vanguard Portfolio Management LLC",
      "shares": "127,001,513",
-     "val": "$44.7B",
+     "val": "$45.7B",
      "pct": "-1.11%",
      "reported": "2026-06-30"
     }
@@ -395,42 +395,42 @@
    "sector": "Financials",
    "holders": 6037,
    "instPct": 89.3,
-   "valB": "$702.6B",
+   "valB": "$711.0B",
    "holderChg": "+0.7%",
    "trend": "Neutral",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "137,669,061",
-     "val": "$58.0B",
+     "val": "$58.7B",
      "pct": "+1.09%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "106,150,500",
-     "val": "$44.7B",
+     "val": "$45.3B",
      "pct": "-0.80%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "82,872,209",
-     "val": "$34.9B",
+     "val": "$35.3B",
      "pct": "+0.69%",
      "reported": "2026-06-30"
     },
     {
      "holder": "FMR, LLC",
      "shares": "47,947,240",
-     "val": "$20.2B",
+     "val": "$20.4B",
      "pct": "+11.69%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "46,646,920",
-     "val": "$19.7B",
+     "val": "$19.9B",
      "pct": "+3.01%",
      "reported": "2026-09-30"
     }
@@ -441,44 +441,44 @@
    "symbol": "BRK-B",
    "name": "Berkshire Hathaway Inc. New",
    "sector": "\u2014",
-   "holders": 5950,
+   "holders": 5951,
    "instPct": 67.5,
-   "valB": "$830.5B",
+   "valB": "$851.6B",
    "holderChg": "-0.3%",
    "trend": "Neutral",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "121,183,112",
-     "val": "$70.2B",
+     "val": "$71.9B",
      "pct": "-0.02%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "118,360,180",
-     "val": "$68.6B",
+     "val": "$70.3B",
      "pct": "+0.80%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "75,747,788",
-     "val": "$43.9B",
+     "val": "$45.0B",
      "pct": "+2.23%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "42,631,638",
-     "val": "$24.7B",
+     "val": "$25.3B",
      "pct": "+2.66%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Morgan Stanley",
      "shares": "26,667,029",
-     "val": "$15.4B",
+     "val": "$15.8B",
      "pct": "-0.70%",
      "reported": "2026-06-30"
     }
@@ -489,44 +489,44 @@
    "symbol": "LLY",
    "name": "Eli Lilly and Company",
    "sector": "Healthcare",
-   "holders": 5947,
+   "holders": 5946,
    "instPct": 85.9,
-   "valB": "$1.09T",
+   "valB": "$1.11T",
    "holderChg": "+0.1%",
    "trend": "Neutral",
    "topHolders": [
     {
      "holder": "Lilly Endowment, Inc",
      "shares": "90,066,978",
-     "val": "$127.7B",
+     "val": "$130.7B",
      "pct": "-0.34%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Blackrock Inc.",
      "shares": "67,540,400",
-     "val": "$95.8B",
+     "val": "$98.0B",
      "pct": "+1.75%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "53,528,868",
-     "val": "$75.9B",
+     "val": "$77.7B",
      "pct": "+0.31%",
      "reported": "2026-06-30"
     },
     {
      "holder": "PNC Financial Services Group, Inc.",
      "shares": "51,295,197",
-     "val": "$72.7B",
+     "val": "$74.5B",
      "pct": "-0.05%",
      "reported": "2026-09-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "36,215,754",
-     "val": "$51.4B",
+     "val": "$52.6B",
      "pct": "+1.70%",
      "reported": "2026-06-30"
     }
@@ -539,42 +539,42 @@
    "sector": "Healthcare",
    "holders": 5882,
    "instPct": 77.0,
-   "valB": "$514.3B",
+   "valB": "$526.8B",
    "holderChg": "+0.0%",
    "trend": "Neutral",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "212,098,264",
-     "val": "$58.9B",
+     "val": "$60.3B",
      "pct": "-0.60%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "157,226,374",
-     "val": "$43.6B",
+     "val": "$44.7B",
      "pct": "+0.40%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "133,776,025",
-     "val": "$37.1B",
+     "val": "$38.0B",
      "pct": "+0.22%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "65,497,363",
-     "val": "$18.2B",
+     "val": "$18.6B",
      "pct": "+10.85%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Vanguard Portfolio Management LLC",
      "shares": "64,370,816",
-     "val": "$17.9B",
+     "val": "$18.3B",
      "pct": "+1.35%",
      "reported": "2026-06-30"
     }
@@ -585,44 +585,44 @@
    "symbol": "WMT",
    "name": "Walmart Inc.",
    "sector": "Staples",
-   "holders": 5341,
+   "holders": 5340,
    "instPct": 38.6,
-   "valB": "$382.6B",
+   "valB": "$386.7B",
    "holderChg": "-0.9%",
    "trend": "Neutral",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "354,196,208",
-     "val": "$44.3B",
+     "val": "$44.8B",
      "pct": "+0.31%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "286,350,346",
-     "val": "$35.8B",
+     "val": "$36.2B",
      "pct": "+0.53%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "188,036,646",
-     "val": "$23.5B",
+     "val": "$23.8B",
      "pct": "+1.13%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Invesco Ltd.",
      "shares": "148,459,333",
-     "val": "$18.6B",
+     "val": "$18.8B",
      "pct": "+1.61%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "109,063,079",
-     "val": "$13.6B",
+     "val": "$13.8B",
      "pct": "+2.45%",
      "reported": "2026-09-30"
     }
@@ -633,44 +633,44 @@
    "symbol": "XOM",
    "name": "ExxonMobil Holdings Corporation",
    "sector": "Energy",
-   "holders": 5320,
+   "holders": 5323,
    "instPct": 69.3,
-   "valB": "$468.7B",
+   "valB": "$475.1B",
    "holderChg": "-0.9%",
    "trend": "Neutral",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "334,746,496",
-     "val": "$55.5B",
+     "val": "$56.2B",
      "pct": "+3.72%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "270,731,921",
-     "val": "$44.9B",
+     "val": "$45.4B",
      "pct": "-0.17%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "206,811,526",
-     "val": "$34.3B",
+     "val": "$34.7B",
      "pct": "-3.32%",
      "reported": "2026-06-30"
     },
     {
      "holder": "FMR, LLC",
      "shares": "145,933,748",
-     "val": "$24.2B",
+     "val": "$24.5B",
      "pct": "+5.95%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Vanguard Portfolio Management LLC",
      "shares": "116,693,258",
-     "val": "$19.3B",
+     "val": "$19.6B",
      "pct": "+0.92%",
      "reported": "2026-06-30"
     }
@@ -683,42 +683,42 @@
    "sector": "Cons Disc",
    "holders": 5290,
    "instPct": 45.1,
-   "valB": "$693.7B",
+   "valB": "$694.5B",
    "holderChg": "+7.2%",
    "trend": "Accumulation",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "214,123,129",
-     "val": "$83.1B",
+     "val": "$83.4B",
      "pct": "+2.90%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "184,023,551",
-     "val": "$71.4B",
+     "val": "$71.7B",
      "pct": "+0.64%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "117,456,756",
-     "val": "$45.6B",
+     "val": "$45.7B",
      "pct": "+2.41%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "69,899,419",
-     "val": "$27.1B",
+     "val": "$27.2B",
      "pct": "+1.43%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Barclays Plc",
      "shares": "60,376,672",
-     "val": "$23.4B",
+     "val": "$23.5B",
      "pct": "+424.01%",
      "reported": "2026-09-30"
     }
@@ -729,44 +729,44 @@
    "symbol": "AMD",
    "name": "Advanced Micro Devices, Inc.",
    "sector": "Tech",
-   "holders": 5218,
-   "instPct": 77.0,
-   "valB": "$670.9B",
+   "holders": 5221,
+   "instPct": 76.9,
+   "valB": "$718.8B",
    "holderChg": "+10.8%",
    "trend": "Accumulation",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "150,301,510",
-     "val": "$80.0B",
+     "val": "$85.7B",
      "pct": "+3.25%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "106,500,177",
-     "val": "$56.7B",
+     "val": "$60.7B",
      "pct": "+0.53%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "74,361,687",
-     "val": "$39.6B",
+     "val": "$42.4B",
      "pct": "-0.55%",
      "reported": "2026-06-30"
     },
     {
      "holder": "FMR, LLC",
      "shares": "53,290,183",
-     "val": "$28.4B",
+     "val": "$30.4B",
      "pct": "+108.50%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Invesco Ltd.",
      "shares": "53,171,203",
-     "val": "$28.3B",
+     "val": "$30.3B",
      "pct": "+5.41%",
      "reported": "2026-06-30"
     }
@@ -779,42 +779,42 @@
    "sector": "Staples",
    "holders": 5173,
    "instPct": 74.3,
-   "valB": "$354.9B",
+   "valB": "$361.4B",
    "holderChg": "+0.2%",
    "trend": "Neutral",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "34,202,834",
-     "val": "$36.9B",
+     "val": "$37.6B",
      "pct": "-2.13%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "28,976,605",
-     "val": "$31.2B",
+     "val": "$31.8B",
      "pct": "+0.45%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "18,384,951",
-     "val": "$19.8B",
+     "val": "$20.2B",
      "pct": "+1.28%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Invesco Ltd.",
      "shares": "13,989,137",
-     "val": "$15.1B",
+     "val": "$15.4B",
      "pct": "+2.64%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "10,769,612",
-     "val": "$11.6B",
+     "val": "$11.8B",
      "pct": "+1.34%",
      "reported": "2026-09-30"
     }
@@ -827,42 +827,42 @@
    "sector": "Staples",
    "holders": 5034,
    "instPct": 72.0,
-   "valB": "$279.0B",
+   "valB": "$282.2B",
    "holderChg": "+1.1%",
    "trend": "Accumulation",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "190,003,442",
-     "val": "$31.8B",
+     "val": "$32.1B",
      "pct": "+1.59%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "152,109,741",
-     "val": "$25.4B",
+     "val": "$25.7B",
      "pct": "+0.70%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "102,216,308",
-     "val": "$17.1B",
+     "val": "$17.3B",
      "pct": "+0.95%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "68,135,975",
-     "val": "$11.4B",
+     "val": "$11.5B",
      "pct": "+2.52%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Vanguard Portfolio Management LLC",
      "shares": "63,393,374",
-     "val": "$10.6B",
+     "val": "$10.7B",
      "pct": "+0.87%",
      "reported": "2026-06-30"
     }
@@ -875,42 +875,42 @@
    "sector": "Cons Disc",
    "holders": 4911,
    "instPct": 77.2,
-   "valB": "$267.7B",
+   "valB": "$271.4B",
    "holderChg": "+4.0%",
    "trend": "Accumulation",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "81,578,902",
-     "val": "$28.4B",
+     "val": "$28.7B",
      "pct": "+3.71%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "65,076,088",
-     "val": "$22.6B",
+     "val": "$22.9B",
      "pct": "+0.60%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "47,175,026",
-     "val": "$16.4B",
+     "val": "$16.6B",
      "pct": "+1.07%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Vanguard Portfolio Management LLC",
      "shares": "25,751,551",
-     "val": "$9.0B",
+     "val": "$9.1B",
      "pct": "+1.88%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Geode Capital Management, LLC",
      "shares": "25,559,066",
-     "val": "$8.9B",
+     "val": "$9.0B",
      "pct": "+1.17%",
      "reported": "2026-09-30"
     }
@@ -923,42 +923,42 @@
    "sector": "Financials",
    "holders": 4856,
    "instPct": 91.1,
-   "valB": "$521.8B",
+   "valB": "$525.3B",
    "holderChg": "-2.3%",
    "trend": "Distribution",
    "topHolders": [
     {
      "holder": "Blackrock Inc.",
      "shares": "66,393,565",
-     "val": "$43.6B",
+     "val": "$43.9B",
      "pct": "-0.92%",
      "reported": "2026-06-30"
     },
     {
      "holder": "Mastercard Foundation Asset Management Corp",
      "shares": "57,440,974",
-     "val": "$37.7B",
+     "val": "$38.0B",
      "pct": "-4.82%",
      "reported": "2026-09-30"
     },
     {
      "holder": "Vanguard Capital Management LLC",
      "shares": "52,122,015",
-     "val": "$34.2B",
+     "val": "$34.5B",
      "pct": "-0.41%",
      "reported": "2026-06-30"
     },
     {
      "holder": "State Street Corporation",
      "shares": "36,964,305",
-     "val": "$24.3B",
+     "val": "$24.5B",
      "pct": "+1.33%",
      "reported": "2026-06-30"
     },
     {
      "holder": "JPMORGAN CHASE & CO",
      "shares": "28,228,027",
-     "val": "$18.5B",
+     "val": "$18.7B",
      "pct": "-13.56%",
      "reported": "2026-06-30"
     }
@@ -969,24 +969,24 @@
   {
    "name": "Information Technology",
    "code": "XLK",
-   "netFlow": 86.48,
+   "netFlow": 89.13,
    "topBuyStocks": [
     {
      "ticker": "AMD",
      "shares": "+60.2M",
-     "value": "$32.0B",
+     "value": "$34.3B",
      "flow": "+10.81%"
     },
     {
      "ticker": "MSFT",
      "shares": "+57.5M",
-     "value": "$30.4B",
+     "value": "$30.2B",
      "flow": "+2.42%"
     },
     {
      "ticker": "AAPL",
      "shares": "+81.3M",
-     "value": "$28.8B",
+     "value": "$29.1B",
      "flow": "+1.76%"
     },
     {
@@ -998,7 +998,7 @@
     {
      "ticker": "AVGO",
      "shares": "+6.5M",
-     "value": "$2.3B",
+     "value": "$2.4B",
      "flow": "+0.39%"
     }
    ],
@@ -1012,27 +1012,27 @@
     {
      "ticker": "NVDA",
      "shares": "-26.5M",
-     "value": "$4.6B",
+     "value": "$4.4B",
      "flow": "-0.33%"
     }
    ],
-   "maxFlow": 86.48
+   "maxFlow": 89.13
   },
   {
    "name": "Communication Services",
    "code": "XLC",
-   "netFlow": 33.26,
+   "netFlow": 33.3,
    "topBuyStocks": [
     {
      "ticker": "GOOGL",
      "shares": "+75.1M",
-     "value": "$21.8B",
+     "value": "$22.2B",
      "flow": "+3.93%"
     },
     {
      "ticker": "META",
      "shares": "+20.1M",
-     "value": "$12.9B",
+     "value": "$12.5B",
      "flow": "+2.68%"
     },
     {
@@ -1044,13 +1044,13 @@
     {
      "ticker": "TMUS",
      "shares": "+5.6M",
-     "value": "$935M",
+     "value": "$962M",
      "flow": "+2.70%"
     },
     {
      "ticker": "DIS",
      "shares": "+3.7M",
-     "value": "$437M",
+     "value": "$438M",
      "flow": "+0.62%"
     }
    ],
@@ -1062,35 +1062,35 @@
      "flow": "-4.42%"
     }
    ],
-   "maxFlow": 86.48
+   "maxFlow": 89.13
   },
   {
    "name": "Consumer Discretionary",
    "code": "XLY",
-   "netFlow": 23.74,
+   "netFlow": 23.79,
    "topBuyStocks": [
     {
      "ticker": "TSLA",
      "shares": "+59.1M",
-     "value": "$22.9B",
+     "value": "$23.0B",
      "flow": "+7.22%"
     },
     {
      "ticker": "HD",
      "shares": "+13.3M",
-     "value": "$4.6B",
+     "value": "$4.7B",
      "flow": "+4.03%"
     },
     {
      "ticker": "F",
      "shares": "+74.9M",
-     "value": "$914M",
+     "value": "$900M",
      "flow": "+5.14%"
     },
     {
      "ticker": "NKE",
      "shares": "+16.8M",
-     "value": "$643M",
+     "value": "$639M",
      "flow": "+3.85%"
     }
    ],
@@ -1104,16 +1104,16 @@
     {
      "ticker": "BKNG",
      "shares": "-11.4M",
-     "value": "$1.8B",
+     "value": "$1.9B",
      "flow": "-3.61%"
     }
    ],
-   "maxFlow": 86.48
+   "maxFlow": 89.13
   },
   {
    "name": "Real Estate",
    "code": "XLRE",
-   "netFlow": 9.68,
+   "netFlow": 9.7,
    "topBuyStocks": [
     {
      "ticker": "WELL",
@@ -1142,7 +1142,7 @@
     {
      "ticker": "PLD",
      "shares": "+3.9M",
-     "value": "$506M",
+     "value": "$504M",
      "flow": "+1.00%"
     }
    ],
@@ -1160,17 +1160,17 @@
      "flow": "-0.69%"
     }
    ],
-   "maxFlow": 86.48
+   "maxFlow": 89.13
   },
   {
    "name": "Utilities",
    "code": "XLU",
-   "netFlow": 7.55,
+   "netFlow": 7.59,
    "topBuyStocks": [
     {
      "ticker": "AEP",
      "shares": "+27.5M",
-     "value": "$3.5B",
+     "value": "$3.6B",
      "flow": "+13.43%"
     },
     {
@@ -1188,13 +1188,13 @@
     {
      "ticker": "VST",
      "shares": "+1.9M",
-     "value": "$251M",
+     "value": "$249M",
      "flow": "+1.44%"
     },
     {
      "ticker": "DUK",
      "shares": "+936K",
-     "value": "$120M",
+     "value": "$121M",
      "flow": "+0.36%"
     }
    ],
@@ -1202,21 +1202,21 @@
     {
      "ticker": "CEG",
      "shares": "-3.1M",
-     "value": "$858M",
+     "value": "$873M",
      "flow": "-2.16%"
     }
    ],
-   "maxFlow": 86.48
+   "maxFlow": 89.13
   },
   {
    "name": "Industrials",
    "code": "XLI",
-   "netFlow": 7.27,
+   "netFlow": 7.29,
    "topBuyStocks": [
     {
      "ticker": "CAT",
      "shares": "+4.9M",
-     "value": "$2.9B",
+     "value": "$3.0B",
      "flow": "+2.97%"
     },
     {
@@ -1240,7 +1240,7 @@
     {
      "ticker": "RTX",
      "shares": "+1.3M",
-     "value": "$258M",
+     "value": "$259M",
      "flow": "+0.24%"
     }
    ],
@@ -1252,12 +1252,12 @@
      "flow": "-1.51%"
     }
    ],
-   "maxFlow": 86.48
+   "maxFlow": 89.13
   },
   {
    "name": "Materials",
    "code": "XLB",
-   "netFlow": 7.22,
+   "netFlow": 7.26,
    "topBuyStocks": [
     {
      "ticker": "LIN",
@@ -1280,13 +1280,13 @@
     {
      "ticker": "SHW",
      "shares": "+2.8M",
-     "value": "$994M",
+     "value": "$1.0B",
      "flow": "+3.39%"
     },
     {
      "ticker": "APD",
      "shares": "+2.9M",
-     "value": "$902M",
+     "value": "$908M",
      "flow": "+2.86%"
     }
    ],
@@ -1294,11 +1294,11 @@
     {
      "ticker": "NEM",
      "shares": "-1.9M",
-     "value": "$231M",
+     "value": "$222M",
      "flow": "-0.47%"
     }
    ],
-   "maxFlow": 86.48
+   "maxFlow": 89.13
   },
   {
    "name": "Health Care",
@@ -1308,25 +1308,25 @@
     {
      "ticker": "UNH",
      "shares": "+11.2M",
-     "value": "$4.4B",
+     "value": "$4.5B",
      "flow": "+3.29%"
     },
     {
      "ticker": "MRK",
      "shares": "+3.1M",
-     "value": "$452M",
+     "value": "$458M",
      "flow": "+0.34%"
     },
     {
      "ticker": "LLY",
      "shares": "+255K",
-     "value": "$362M",
+     "value": "$370M",
      "flow": "+0.06%"
     },
     {
      "ticker": "JNJ",
      "shares": "+34K",
-     "value": "$9M",
+     "value": "$10M",
      "flow": "+0.00%"
     }
    ],
@@ -1334,27 +1334,27 @@
     {
      "ticker": "ABBV",
      "shares": "-11.8M",
-     "value": "$3.4B",
+     "value": "$3.5B",
      "flow": "-1.91%"
     },
     {
      "ticker": "ISRG",
      "shares": "-270K",
-     "value": "$121M",
+     "value": "$119M",
      "flow": "-0.21%"
     }
    ],
-   "maxFlow": 86.48
+   "maxFlow": 89.13
   },
   {
    "name": "Consumer Staples",
    "code": "XLP",
-   "netFlow": -0.94,
+   "netFlow": -0.95,
    "topBuyStocks": [
     {
      "ticker": "PG",
      "shares": "+8.0M",
-     "value": "$1.3B",
+     "value": "$1.4B",
      "flow": "+1.07%"
     },
     {
@@ -1366,7 +1366,7 @@
     {
      "ticker": "COST",
      "shares": "+231K",
-     "value": "$249M",
+     "value": "$254M",
      "flow": "+0.16%"
     },
     {
@@ -1380,7 +1380,7 @@
     {
      "ticker": "KO",
      "shares": "-23.2M",
-     "value": "$2.2B",
+     "value": "$2.3B",
      "flow": "-1.37%"
     },
     {
@@ -1390,12 +1390,12 @@
      "flow": "-0.90%"
     }
    ],
-   "maxFlow": 86.48
+   "maxFlow": 89.13
   },
   {
    "name": "Energy",
    "code": "XLE",
-   "netFlow": -1.68,
+   "netFlow": -1.74,
    "topBuyStocks": [
     {
      "ticker": "CVX",
@@ -1412,13 +1412,13 @@
     {
      "ticker": "PSX",
      "shares": "+2.5M",
-     "value": "$644M",
+     "value": "$663M",
      "flow": "+1.52%"
     },
     {
      "ticker": "COP",
      "shares": "+399K",
-     "value": "$54M",
+     "value": "$55M",
      "flow": "+0.08%"
     }
    ],
@@ -1442,12 +1442,12 @@
      "flow": "-2.85%"
     }
    ],
-   "maxFlow": 86.48
+   "maxFlow": 89.13
   },
   {
    "name": "Financials",
    "code": "XLF",
-   "netFlow": -3.31,
+   "netFlow": -3.34,
    "topBuyStocks": [
     {
      "ticker": "V",
@@ -1458,7 +1458,7 @@
     {
      "ticker": "GS",
      "shares": "+828K",
-     "value": "$763M",
+     "value": "$764M",
      "flow": "+0.78%"
     },
     {
@@ -1478,103 +1478,103 @@
     {
      "ticker": "MS",
      "shares": "-3.4M",
-     "value": "$645M",
+     "value": "$649M",
      "flow": "-0.41%"
     },
     {
      "ticker": "JPM",
      "shares": "-996K",
-     "value": "$342M",
+     "value": "$343M",
      "flow": "-0.12%"
     }
    ],
-   "maxFlow": 86.48
+   "maxFlow": 89.13
   }
  ],
  "bubbles": [
   {
    "ticker": "NVDA",
-   "sizeB": 2982.4,
+   "sizeB": 2827.4,
    "qoqChg": -0.33,
-   "perf3M": -23.1
+   "perf3M": -26.9
   },
   {
    "ticker": "MSFT",
-   "sizeB": 2995.0,
+   "sizeB": 2969.0,
    "qoqChg": 2.42,
-   "perf3M": 6.6
+   "perf3M": 6.1
   },
   {
    "ticker": "AAPL",
-   "sizeB": 3446.6,
+   "sizeB": 3481.8,
    "qoqChg": 1.76,
-   "perf3M": 16.1
+   "perf3M": 16.9
   },
   {
    "ticker": "AMZN",
-   "sizeB": 1997.7,
+   "sizeB": 1994.7,
    "qoqChg": -0.43,
-   "perf3M": 1.5
+   "perf3M": 2.3
   },
   {
    "ticker": "GOOGL",
-   "sizeB": 2884.6,
+   "sizeB": 2932.3,
    "qoqChg": 3.93,
-   "perf3M": -16.0
+   "perf3M": -14.5
   },
   {
    "ticker": "META",
-   "sizeB": 1276.1,
+   "sizeB": 1240.4,
    "qoqChg": 2.68,
-   "perf3M": 7.7
+   "perf3M": 5.6
   },
   {
    "ticker": "AVGO",
-   "sizeB": 1337.7,
+   "sizeB": 1369.4,
    "qoqChg": 0.39,
-   "perf3M": -15.6
+   "perf3M": -8.2
   },
   {
    "ticker": "JPM",
-   "sizeB": 690.0,
+   "sizeB": 692.2,
    "qoqChg": -0.12,
-   "perf3M": -5.1
+   "perf3M": -4.7
   },
   {
    "ticker": "LLY",
-   "sizeB": 1085.4,
+   "sizeB": 1110.8,
    "qoqChg": 0.06,
-   "perf3M": 17.5
+   "perf3M": 23.0
   },
   {
    "ticker": "TSLA",
-   "sizeB": 693.7,
+   "sizeB": 694.5,
    "qoqChg": 7.22,
-   "perf3M": 14.2
+   "perf3M": 13.8
   },
   {
    "ticker": "XOM",
-   "sizeB": 468.7,
+   "sizeB": 475.1,
    "qoqChg": -0.86,
-   "perf3M": 5.2
+   "perf3M": 5.5
   },
   {
    "ticker": "CRM",
-   "sizeB": 155.0,
+   "sizeB": 155.3,
    "qoqChg": -9.49,
-   "perf3M": 7.2
+   "perf3M": 10.0
   }
  ],
  "bySymbol": {
   "AAPL": {
    "instPct": 67.0,
-   "holders": 7753,
+   "holders": 7755,
    "flowPct": 1.76,
    "trend": "Accumulation"
   },
   "ABBV": {
    "instPct": 77.5,
-   "holders": 5345,
+   "holders": 5346,
    "flowPct": -1.91,
    "trend": "Distribution"
   },
@@ -1585,8 +1585,8 @@
    "trend": "Accumulation"
   },
   "AMD": {
-   "instPct": 77.0,
-   "holders": 5218,
+   "instPct": 76.9,
+   "holders": 5221,
    "flowPct": 10.81,
    "trend": "Accumulation"
   },
@@ -1598,7 +1598,7 @@
   },
   "AMZN": {
    "instPct": 68.7,
-   "holders": 7944,
+   "holders": 7946,
    "flowPct": -0.43,
    "trend": "Neutral"
   },
@@ -1610,7 +1610,7 @@
   },
   "AVGO": {
    "instPct": 79.7,
-   "holders": 6285,
+   "holders": 6286,
    "flowPct": 0.39,
    "trend": "Neutral"
   },
@@ -1622,7 +1622,7 @@
   },
   "BAC": {
    "instPct": 72.7,
-   "holders": 4520,
+   "holders": 4521,
    "flowPct": 0.28,
    "trend": "Neutral"
   },
@@ -1634,7 +1634,7 @@
   },
   "BRK-B": {
    "instPct": 67.5,
-   "holders": 5950,
+   "holders": 5951,
    "flowPct": -0.32,
    "trend": "Neutral"
   },
@@ -1670,13 +1670,13 @@
   },
   "CSCO": {
    "instPct": 82.2,
-   "holders": 5114,
+   "holders": 5113,
    "flowPct": 0.02,
    "trend": "Neutral"
   },
   "CVX": {
    "instPct": 72.1,
-   "holders": 5128,
+   "holders": 5129,
    "flowPct": 0.99,
    "trend": "Neutral"
   },
@@ -1730,13 +1730,13 @@
   },
   "GOOGL": {
    "instPct": 80.7,
-   "holders": 7464,
+   "holders": 7466,
    "flowPct": 3.93,
    "trend": "Accumulation"
   },
   "GS": {
    "instPct": 75.6,
-   "holders": 3974,
+   "holders": 3973,
    "flowPct": 0.78,
    "trend": "Neutral"
   },
@@ -1754,13 +1754,13 @@
   },
   "INTC": {
    "instPct": 64.0,
-   "holders": 4453,
+   "holders": 4455,
    "flowPct": 0.42,
    "trend": "Neutral"
   },
   "ISRG": {
    "instPct": 90.9,
-   "holders": 3149,
+   "holders": 3148,
    "flowPct": -0.21,
    "trend": "Neutral"
   },
@@ -1790,7 +1790,7 @@
   },
   "LLY": {
    "instPct": 85.9,
-   "holders": 5947,
+   "holders": 5946,
    "flowPct": 0.06,
    "trend": "Neutral"
   },
@@ -1808,13 +1808,13 @@
   },
   "META": {
    "instPct": 77.9,
-   "holders": 6688,
+   "holders": 6690,
    "flowPct": 2.68,
    "trend": "Accumulation"
   },
   "MPC": {
    "instPct": 80.8,
-   "holders": 2704,
+   "holders": 2705,
    "flowPct": -2.84,
    "trend": "Distribution"
   },
@@ -1826,13 +1826,13 @@
   },
   "MS": {
    "instPct": 63.0,
-   "holders": 3448,
+   "holders": 3447,
    "flowPct": -0.41,
    "trend": "Neutral"
   },
   "MSFT": {
    "instPct": 76.2,
-   "holders": 8212,
+   "holders": 8214,
    "flowPct": 2.42,
    "trend": "Accumulation"
   },
@@ -1844,7 +1844,7 @@
   },
   "NEM": {
    "instPct": 83.0,
-   "holders": 2634,
+   "holders": 2635,
    "flowPct": -0.47,
    "trend": "Neutral"
   },
@@ -1886,7 +1886,7 @@
   },
   "PEP": {
    "instPct": 81.3,
-   "holders": 4282,
+   "holders": 4283,
    "flowPct": 1.71,
    "trend": "Accumulation"
   },
@@ -1916,7 +1916,7 @@
   },
   "RTX": {
    "instPct": 82.1,
-   "holders": 4128,
+   "holders": 4127,
    "flowPct": 0.24,
    "trend": "Neutral"
   },
@@ -1970,13 +1970,13 @@
   },
   "VLO": {
    "instPct": 89.2,
-   "holders": 2707,
+   "holders": 2708,
    "flowPct": -2.85,
    "trend": "Distribution"
   },
   "VST": {
    "instPct": 91.0,
-   "holders": 1915,
+   "holders": 1914,
    "flowPct": 1.44,
    "trend": "Accumulation"
   },
@@ -1994,13 +1994,13 @@
   },
   "WMT": {
    "instPct": 38.6,
-   "holders": 5341,
+   "holders": 5340,
    "flowPct": -0.9,
    "trend": "Neutral"
   },
   "XOM": {
    "instPct": 69.3,
-   "holders": 5320,
+   "holders": 5323,
    "flowPct": -0.86,
    "trend": "Neutral"
   }
