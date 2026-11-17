@@ -1,19 +1,19 @@
 {
- "asOf": "2026-11-16",
+ "asOf": "2026-11-17",
  "source": "FRED (Federal Reserve Bank of St. Louis), CFTC Commitments of Traders (legacy, futures only)",
  "rates": {
   "fed": {
    "value": "3.75 - 4.00%",
-   "date": "2026-11-16"
+   "date": "2026-11-17"
   },
   "ecb": {
    "value": "2.50%",
-   "date": "2026-11-16",
+   "date": "2026-11-17",
    "label": "ECB deposit"
   },
   "us10y": {
-   "value": "5.10%",
-   "date": "2026-11-12",
+   "value": "5.15%",
+   "date": "2026-11-13",
    "label": "US 10Y"
   }
  },
@@ -51,26 +51,6 @@
  ],
  "spx": {
   "points": [
-   [
-    "2025-10-13",
-    6654.72
-   ],
-   [
-    "2025-10-20",
-    6735.13
-   ],
-   [
-    "2025-10-27",
-    6875.16
-   ],
-   [
-    "2025-11-03",
-    6851.97
-   ],
-   [
-    "2025-11-10",
-    6832.43
-   ],
    [
     "2025-11-17",
     6672.41
@@ -272,11 +252,11 @@
     7549.94
    ],
    [
-    "2026-11-13",
-    7561.67
+    "2026-11-16",
+    7416.59
    ]
   ],
-  "chg12m": 12.2
+  "chg12m": null
  },
  "liquidity": {
   "fedAssetsT": 6.76,
@@ -294,34 +274,34 @@
   {
    "symbol": "ES",
    "name": "E-mini S&P 500",
-   "netCommPct": 0.3,
-   "percentile": 42,
+   "netCommPct": 0.7,
+   "percentile": 50,
    "signal": "Neutral",
-   "reportDate": "2026-11-03"
+   "reportDate": "2026-11-10"
   },
   {
    "symbol": "NQ",
    "name": "E-mini Nasdaq 100",
-   "netCommPct": -21.6,
-   "percentile": 12,
+   "netCommPct": -17.3,
+   "percentile": 25,
    "signal": "Short bias",
-   "reportDate": "2026-11-03"
+   "reportDate": "2026-11-10"
   },
   {
    "symbol": "6E",
    "name": "Euro FX",
-   "netCommPct": 14.3,
-   "percentile": 98,
+   "netCommPct": 12.2,
+   "percentile": 92,
    "signal": "Extreme long",
-   "reportDate": "2026-11-03"
+   "reportDate": "2026-11-10"
   },
   {
    "symbol": "CL",
    "name": "WTI Crude Oil",
-   "netCommPct": -5.8,
-   "percentile": 67,
-   "signal": "Neutral",
-   "reportDate": "2026-11-03"
+   "netCommPct": -5.3,
+   "percentile": 77,
+   "signal": "Long bias",
+   "reportDate": "2026-11-10"
   }
  ]
 }
