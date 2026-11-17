@@ -207,7 +207,7 @@ export default function Home() {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000);
+      const timeoutId = setTimeout(() => controller.abort(), 75000); // Render free tier can take ~50s to wake
       const res = await fetch(
         `${API_URL}/api/analyze/${cleanSym}?timeframe=${encodeURIComponent(tf)}`,
         { signal: controller.signal }
