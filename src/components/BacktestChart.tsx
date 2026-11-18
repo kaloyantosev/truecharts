@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   createChart,
   ColorType,
@@ -10,6 +10,18 @@ import {
   ISeriesApi,
 } from "lightweight-charts";
 import BacktestDomWidget, { DomRow, SinclairStats } from "./BacktestDomWidget";
+// Same engine file the desktop injector runs inside TradingView: levels, gamma regime and calibrated odds.
+import TCEngine, { EngineInput } from "@/lib/tc_engine";
+
+// The replay opens at 09:40 ET: two 5m bars (09:30, 09:35) are complete, the decision bar is next.
+const DECISION_BARS = 2;
+
+const SCENARIO_COLOR: Record<string, string> = {
+  RANGE: "#10b981",
+  MILD_POS: "#34d399",
+  MILD_NEG: "#fb923c",
+  EXPANSION: "#ef4444",
+};
 
 // Read a design token (CSS custom property) for canvas-drawn chart elements.
 const cssVar = (name: string, fallback: string) =>
@@ -69,10 +81,23 @@ export default function BacktestChart({
   const [domData, setDomData] = useState<{ "0dte": DomRow[]; weekly: DomRow[] } | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Full day candles & step-by-step replay state (starts at 3 candles!)
+  // Full day candles & step-by-step replay state (starts at 09:40 = 2 candles)
   const [candlesData, setCandlesData] = useState<any[]>([]);
-  const [visibleCount, setVisibleCount] = useState<number>(3);
-  const [levelsData, setLevelsData] = useState<PriceLevel[]>([]);
+  const [visibleCount, setVisibleCount] = useState<number>(DECISION_BARS);
+  const [engineBase, setEngineBase] = useState<Omit<EngineInput, "bars"> | null>(null);
+  const [intradaySynthetic, setIntradaySynthetic] = useState<boolean>(false);
+
+  // Levels and scenario from the engine, recomputed as the replay reveals bars (opening ranges appear only
+  // once complete, touched levels are marked). Nothing after the last visible bar is used.
+  const analysis = useMemo(() => {
+    if (!engineBase || candlesData.length === 0) return null;
+    const bars = candlesData.slice(0, visibleCount).map((c) => [c.time, c.open, c.high, c.low, c.close]);
+    return TCEngine.analyze({ ...engineBase, bars });
+  }, [engineBase, candlesData, visibleCount]);
+  const levelsData: PriceLevel[] = useMemo(
+    () => (analysis?.levels || []).map((l) => ({ price: l.price, title: l.label, color: l.color })),
+    [analysis]
+  );
 
   // Interactive Tools: Cursor, Ruler (Measure), Long Position, Short Position
   const [activeTool, setActiveTool] = useState<ToolMode>("cursor");
@@ -189,18 +214,32 @@ export default function BacktestChart({
       setDomData(data.dom);
 
       const loadedCandles = Array.isArray(data.candles) ? data.candles : [];
-      const loadedLevels = Array.isArray(data.levels) ? data.levels : [];
+      const toRows = (rows: DomRow[] | undefined) =>
+        (rows || []).map((r) => ({ strike: r.strike, put_oi: r.put_oi, call_oi: r.call_oi, put_vol: r.put_vol, call_vol: r.call_vol }));
 
       setCandlesData(loadedCandles);
-      setLevelsData(loadedLevels);
+      setIntradaySynthetic(Boolean(data.intradaySynthetic));
+      setEngineBase(
+        loadedCandles.length
+          ? {
+              ticker,
+              open: loadedCandles[0].open,
+              daily: data.daily || [],
+              prevDay: data.prevDay || undefined,
+              iv: data.iv ?? null,
+              weekly: toRows(data.dom?.weekly),
+              zdte: toRows(data.dom?.["0dte"]),
+            }
+          : null
+      );
 
-      // Start each day at the first 3 candles (visibleCount = 3)
-      const initialBars = Math.min(3, loadedCandles.length || 3);
+      // Start each day at 09:40 ET (2 complete candles); levels follow from the engine
+      const initialBars = Math.min(DECISION_BARS, loadedCandles.length || DECISION_BARS);
       setVisibleCount(initialBars);
       isInitialLoadRef.current = true;
 
       if (seriesRef.current && loadedCandles.length > 0) {
-        renderChartData(loadedCandles, initialBars, loadedLevels, true);
+        renderChartData(loadedCandles, initialBars, [], true);
         isInitialLoadRef.current = false;
       }
     } catch (err) {
@@ -346,12 +385,12 @@ export default function BacktestChart({
   );
 
   const stepBackward = useCallback(() => {
-    setVisibleCount((prev) => Math.max(3, prev - 1));
+    setVisibleCount((prev) => Math.max(DECISION_BARS, prev - 1));
   }, []);
 
   const resetToThree = useCallback(() => {
     isInitialLoadRef.current = true;
-    setVisibleCount(Math.min(3, candlesData.length || 3));
+    setVisibleCount(Math.min(DECISION_BARS, candlesData.length || DECISION_BARS));
   }, [candlesData.length]);
 
   const showAllCandles = useCallback(() => {
@@ -812,18 +851,18 @@ export default function BacktestChart({
 
           <button
             onClick={resetToThree}
-            title="Reset to first 3 candles"
+            title="Back to 09:40 ET (first two 5m candles complete)"
             className="px-2 py-1 rounded bg-[var(--hover)] hover:bg-[var(--line)] text-[var(--fg)] border border-[var(--line)] text-[10.5px] font-bold transition-colors"
           >
-            ⏮ First 3
+            ⏮ 09:40
           </button>
 
           <button
             onClick={stepBackward}
-            disabled={visibleCount <= 3}
+            disabled={visibleCount <= DECISION_BARS}
             title="Step back 1 candle"
             className={`px-2 py-1 rounded border text-[10.5px] font-bold transition-colors ${
-              visibleCount > 3
+              visibleCount > DECISION_BARS
                 ? "bg-[var(--hover)] hover:bg-[var(--line)] text-[var(--fg)] border-[var(--line)]"
                 : "bg-black/30 text-[var(--muted)] border-[var(--line)] cursor-not-allowed"
             }`}
@@ -984,13 +1023,50 @@ export default function BacktestChart({
       <div className="relative flex-1 w-full flex flex-row min-h-0 bg-black overflow-hidden">
         {/* Left Column: Dedicated Fixed Space for Options DOM Only */}
         <div className="w-[316px] min-w-[316px] max-w-[316px] h-full bg-[var(--surface)] border-r border-[var(--line)] p-2 flex flex-col z-10 overflow-hidden">
-          <BacktestDomWidget
-            ticker={ticker}
-            selectedDate={selectedDate}
-            sinclair={sinclair}
-            domData={domData}
-            spot={spotPrice}
-          />
+          {/* Scenario panel (engine) */}
+          {(analysis?.scenario || intradaySynthetic) && (
+            <div className="mb-2 max-h-[45%] overflow-y-auto flex-shrink-0 font-mono text-[10px] leading-snug">
+              {intradaySynthetic && (
+                <div className="mb-1.5 px-2 py-1 rounded border border-[var(--warn)]/60 bg-[var(--warn)]/10 text-[var(--warn)] font-bold">
+                  Intraday path reconstructed from daily OHLC (not real tape). Daily high/low/close and option OI are
+                  real; intraday reactions on this date are not. Real 5m tape: 2026-04-17 onward.
+                </div>
+              )}
+              {analysis?.scenario && (
+                <div
+                  className="px-2 py-1.5 rounded bg-black/30"
+                  style={{
+                    border: `1px solid ${SCENARIO_COLOR[analysis.scenario.code] || "#94a3b8"}55`,
+                    borderLeft: `3px solid ${SCENARIO_COLOR[analysis.scenario.code] || "#94a3b8"}`,
+                  }}
+                >
+                  <div className="flex justify-between items-center mb-0.5 gap-2">
+                    <span className="font-bold text-[11px]" style={{ color: SCENARIO_COLOR[analysis.scenario.code] || "#94a3b8" }}>
+                      {analysis.scenario.title}
+                    </span>
+                    <span className="text-[var(--muted)] whitespace-nowrap">
+                      {analysis.gammaFlip ? `flip $${analysis.gammaFlip.toFixed(2)}` : "flip n/a"}
+                    </span>
+                  </div>
+                  {analysis.scenario.lines.map((l, i) => (
+                    <div key={i} className="text-[var(--fg)]/85">· {l}</div>
+                  ))}
+                  {analysis.notes.map((n, i) => (
+                    <div key={`n${i}`} className="text-[var(--muted)] mt-0.5">{n}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex-1 min-h-0">
+            <BacktestDomWidget
+              ticker={ticker}
+              selectedDate={selectedDate}
+              sinclair={sinclair}
+              domData={domData}
+              spot={spotPrice}
+            />
+          </div>
         </div>
 
         {/* Right Column: Candlestick Chart Canvas + Interactive Overlays */}

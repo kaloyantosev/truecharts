@@ -6,8 +6,12 @@ import time
 import datetime
 import calendar
 import urllib.request
+import urllib.parse
 import threading
 import subprocess
+import socket
+from concurrent.futures import ThreadPoolExecutor
+import requests
 import tkinter as tk
 from tkinter import ttk, messagebox
 import websocket
@@ -19,8 +23,17 @@ class TradingViewAutomatorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("TrueCharts - TradingView Desktop Auto-Level Injector")
-        self.root.geometry("620x680")
+        self.root.geometry("880x560")
+        self.root.minsize(700, 480)
         self.root.configure(bg="#0f172a")
+        
+        # Load Application Icon if available
+        try:
+            ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app_icon.ico')
+            if os.path.exists(ico_path):
+                self.root.iconbitmap(ico_path)
+        except Exception:
+            pass
 
         self.api_url = "https://truecharts.onrender.com/api/analyze"
         self.vercel_url = "https://truecharts-chi.vercel.app"
@@ -28,6 +41,21 @@ class TradingViewAutomatorApp:
         self.sync_active = False
         self.current_ticker = None
         self.tv_ws_url = None
+        self.sinclair_cache = {}
+        self.dom_cache = {}
+        self.dom_cache_time = {}
+        self.gamma_cache = {}  # ticker -> gamma flip of the last full level draw (for line refreshes)
+        # Shared level/scenario engine (same file the backtester site imports). Injected into the chart page.
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, "tc_engine.js"), encoding="utf-8") as f:
+            self.engine_js = f.read()
+        self.engine_version = re.search(r'VERSION:\s*"([^"]+)"', self.engine_js).group(1)
+        self.snapshot_dir = os.path.join(here, "data_log")
+        self.snapshot_time = {}  # ticker -> last chain snapshot written (rate limit)
+        self._monitor_tick = 0
+        self._last_draw = 0
+        self._http_session = requests.Session()
+        self._http_session.headers.update({'User-Agent': 'Mozilla/5.0'})
 
         self.setup_ui()
         
@@ -36,22 +64,37 @@ class TradingViewAutomatorApp:
         self.start_tv_status_monitor()
 
     def setup_ui(self):
-        # Title Header
-        title_frame = tk.Frame(self.root, bg="#0f172a")
-        title_frame.pack(fill="x", padx=15, pady=10)
+        # Header Bar
+        header_frame = tk.Frame(self.root, bg="#0f172a")
+        header_frame.pack(fill="x", padx=15, pady=(10, 5))
         
         title_label = tk.Label(
-            title_frame,
+            header_frame,
             text="TrueCharts Level Injector",
-            font=("Segoe UI", 16, "bold"),
+            font=("Segoe UI", 15, "bold"),
             bg="#0f172a",
             fg="#38bdf8"
         )
         title_label.pack(side="left")
 
+        # Horizontal PanedWindow (Left: Controls | Right: Draggable Live Console Log)
+        paned = tk.PanedWindow(
+            self.root,
+            orient="horizontal",
+            sashrelief="raised",
+            sashwidth=5,
+            bg="#1e293b",
+            bd=0
+        )
+        paned.pack(fill="both", expand=True, padx=12, pady=(5, 12))
+
+        # Left Column: Status Rows & Tracking Controls
+        left_col = tk.Frame(paned, bg="#0f172a", width=380)
+        left_col.pack_propagate(False)
+
         # 1. Render API Status Row
-        api_frame = tk.Frame(self.root, bg="#1e293b", relief="ridge", bd=1)
-        api_frame.pack(fill="x", padx=15, pady=5)
+        api_frame = tk.Frame(left_col, bg="#1e293b", relief="ridge", bd=1)
+        api_frame.pack(fill="x", padx=6, pady=4)
 
         self.api_dot = tk.Canvas(api_frame, width=12, height=12, bg="#1e293b", highlightthickness=0)
         self.api_dot.pack(side="left", padx=(10, 5), pady=8)
@@ -68,7 +111,7 @@ class TradingViewAutomatorApp:
 
         self.wake_btn = tk.Button(
             api_frame,
-            text="Wake Up Server",
+            text="Wake Up",
             font=("Segoe UI", 8, "bold"),
             bg="#3b82f6",
             fg="#ffffff",
@@ -78,11 +121,11 @@ class TradingViewAutomatorApp:
             pady=3,
             command=self.wake_up_backend
         )
-        self.wake_btn.pack(side="right", padx=10)
+        self.wake_btn.pack(side="right", padx=8)
 
-        # 2. TradingView App Status Row (Live Connection Monitor)
-        tv_status_frame = tk.Frame(self.root, bg="#1e293b", relief="ridge", bd=1)
-        tv_status_frame.pack(fill="x", padx=15, pady=5)
+        # 2. TradingView App Status Row
+        tv_status_frame = tk.Frame(left_col, bg="#1e293b", relief="ridge", bd=1)
+        tv_status_frame.pack(fill="x", padx=6, pady=4)
 
         self.tv_dot = tk.Canvas(tv_status_frame, width=12, height=12, bg="#1e293b", highlightthickness=0)
         self.tv_dot.pack(side="left", padx=(10, 5), pady=8)
@@ -90,24 +133,24 @@ class TradingViewAutomatorApp:
 
         self.tv_status_lbl = tk.Label(
             tv_status_frame,
-            text="TradingView Desktop: Disconnected (Checking...)",
+            text="TradingView: Disconnected",
             font=("Segoe UI", 9, "bold"),
             bg="#1e293b",
             fg="#ef4444"
         )
         self.tv_status_lbl.pack(side="left", padx=5)
 
-        # Main Action Controls
+        # Tracking Controls Frame (Clean: only Start Ticker and Mount Options DOM)
         control_frame = tk.LabelFrame(
-            self.root,
+            left_col,
             text=" Tracking Controls ",
             font=("Segoe UI", 10, "bold"),
             bg="#0f172a",
             fg="#e2e8f0",
-            padx=10,
-            pady=10
+            padx=12,
+            pady=12
         )
-        control_frame.pack(fill="x", padx=15, pady=10)
+        control_frame.pack(fill="x", padx=6, pady=8)
 
         self.track_btn = tk.Button(
             control_frame,
@@ -118,129 +161,57 @@ class TradingViewAutomatorApp:
             activebackground="#059669",
             bd=0,
             padx=15,
-            pady=8,
+            pady=10,
             command=self.toggle_tracking
         )
-        self.track_btn.pack(fill="x", pady=5)
+        self.track_btn.pack(fill="x", pady=(4, 8))
 
-        # Red List Watchlist Row
-        red_frame = tk.Frame(control_frame, bg="#0f172a")
-        red_frame.pack(fill="x", pady=4)
-
-        self.sync_btn = tk.Button(
-            red_frame,
-            text="Sync Red List (Auto-Draw)",
+        self.dom_btn = tk.Button(
+            control_frame,
+            text="📊 Mount Options DOM",
             font=("Segoe UI", 10, "bold"),
-            bg="#ef4444",
+            bg="#0d9488",
             fg="#ffffff",
-            activebackground="#dc2626",
+            activebackground="#0f766e",
             bd=0,
             padx=10,
-            pady=7,
-            command=self.toggle_sync_watchlist
+            pady=8,
+            command=self.mount_options_dom_btn_click
         )
-        self.sync_btn.pack(side="left", fill="x", expand=True, padx=(0, 3))
+        self.dom_btn.pack(fill="x", pady=(0, 4))
+        self.hud_btn = self.dom_btn
 
-        self.clear_red_btn = tk.Button(
-            red_frame,
-            text="🧹 Clear Red List",
-            font=("Segoe UI", 9, "bold"),
-            bg="#991b1b",
-            fg="#ffffff",
-            activebackground="#7f1d1d",
-            bd=0,
-            padx=10,
-            pady=7,
-            command=self.clear_red_list_drawings
-        )
-        self.clear_red_btn.pack(side="right", padx=(3, 0))
-
-        # Indexes Watchlist Row
-        idx_frame = tk.Frame(control_frame, bg="#0f172a")
-        idx_frame.pack(fill="x", pady=4)
-
-        self.sync_indexes_btn = tk.Button(
-            idx_frame,
-            text="Sync Indexes (Auto-Draw)",
-            font=("Segoe UI", 10, "bold"),
-            bg="#8b5cf6",
-            fg="#ffffff",
-            activebackground="#7c3aed",
-            bd=0,
-            padx=10,
-            pady=7,
-            command=self.toggle_sync_indexes_watchlist
-        )
-        self.sync_indexes_btn.pack(side="left", fill="x", expand=True, padx=(0, 3))
-
-        self.clear_indexes_btn = tk.Button(
-            idx_frame,
-            text="🧹 Clear Indexes List",
-            font=("Segoe UI", 9, "bold"),
-            bg="#5b21b6",
-            fg="#ffffff",
-            activebackground="#4c1d95",
-            bd=0,
-            padx=10,
-            pady=7,
-            command=self.clear_indexes_list_drawings
-        )
-        self.clear_indexes_btn.pack(side="right", padx=(3, 0))
-
-        # Favorited Categories Row ★
-        fav_frame = tk.Frame(control_frame, bg="#0f172a")
-        fav_frame.pack(fill="x", pady=4)
-
-        self.sync_fav_btn = tk.Button(
-            fav_frame,
-            text="★ Sync Favorited Categories (All-in-One)",
-            font=("Segoe UI", 10, "bold"),
-            bg="#d97706",
-            fg="#ffffff",
-            activebackground="#b45309",
-            bd=0,
-            padx=10,
-            pady=7,
-            command=self.toggle_sync_favorited_hotlists
-        )
-        self.sync_fav_btn.pack(side="left", fill="x", expand=True, padx=(0, 3))
-
-        self.clear_fav_btn = tk.Button(
-            fav_frame,
-            text="🧹 Clear Favorited Categories",
-            font=("Segoe UI", 9, "bold"),
-            bg="#92400e",
-            fg="#ffffff",
-            activebackground="#78350f",
-            bd=0,
-            padx=10,
-            pady=7,
-            command=self.clear_favorited_hotlists_drawings
-        )
-        self.clear_fav_btn.pack(side="right", padx=(3, 0))
+        # Dummy references for backward compatibility with background methods
+        self.sync_btn = tk.Button(self.root)
+        self.clear_red_btn = tk.Button(self.root)
+        self.sync_indexes_btn = tk.Button(self.root)
+        self.clear_indexes_btn = tk.Button(self.root)
+        self.sync_fav_btn = tk.Button(self.root)
+        self.clear_fav_btn = tk.Button(self.root)
 
         # Status Bar
         self.status_lbl = tk.Label(
-            self.root,
+            left_col,
             text="Status: Ready",
-            font=("Segoe UI", 10, "italic"),
+            font=("Segoe UI", 9, "italic"),
             bg="#0f172a",
             fg="#94a3b8"
         )
-        self.status_lbl.pack(anchor="w", padx=15, pady=(5, 2))
+        self.status_lbl.pack(anchor="w", padx=8, pady=(4, 2))
 
-        # Console Log Box
-        log_frame = tk.LabelFrame(
-            self.root,
+        # Right Column: Resizable Live Activity Console Log
+        right_col = tk.LabelFrame(
+            paned,
             text=" Live Activity Console Log ",
             font=("Segoe UI", 9, "bold"),
             bg="#0f172a",
-            fg="#e2e8f0"
+            fg="#e2e8f0",
+            width=460
         )
-        log_frame.pack(fill="both", expand=True, padx=15, pady=(5, 15))
+        right_col.pack_propagate(False)
 
         self.log_text = tk.Text(
-            log_frame,
+            right_col,
             bg="#020617",
             fg="#22c55e",
             insertbackground="white",
@@ -250,9 +221,12 @@ class TradingViewAutomatorApp:
         )
         self.log_text.pack(side="left", fill="both", expand=True, padx=5, pady=5)
 
-        scrollbar = tk.Scrollbar(log_frame, command=self.log_text.yview)
+        scrollbar = tk.Scrollbar(right_col, command=self.log_text.yview)
         scrollbar.pack(side="right", fill="y")
         self.log_text.config(yscrollcommand=scrollbar.set)
+
+        paned.add(left_col, minsize=280)
+        paned.add(right_col, minsize=240)
 
     def draw_dot(self, canvas, color):
         canvas.delete("all")
@@ -309,8 +283,8 @@ class TradingViewAutomatorApp:
         def monitor():
             while True:
                 try:
-                    req = urllib.request.Request("http://localhost:9222/json", headers={'User-Agent': 'Mozilla'})
-                    with urllib.request.urlopen(req, timeout=2) as res:
+                    req = urllib.request.Request("http://127.0.0.1:9222/json", headers={'User-Agent': 'Mozilla'})
+                    with urllib.request.urlopen(req, timeout=3) as res:
                         tabs = json.loads(res.read().decode())
                     
                     chart_tab = None
@@ -319,12 +293,15 @@ class TradingViewAutomatorApp:
                             chart_tab = t
                             break
                     
+                    self._monitor_tick += 1
                     if chart_tab:
                         self.tv_ws_url = chart_tab.get("webSocketDebuggerUrl")
                         title = chart_tab.get("title", "Active Chart")
                         if len(title) > 25:
                             title = "Active Chart"
                         self.root.after(0, lambda: self.update_tv_status(f"Connected ({title})", "green"))
+                        if self._monitor_tick % 15 == 0:
+                            self.ensure_sinclair_hud_mounted(self.tv_ws_url)
                     else:
                         self.tv_ws_url = None
                         self.root.after(0, lambda: self.update_tv_status("App Open (No Chart Tab)", "yellow"))
@@ -332,7 +309,7 @@ class TradingViewAutomatorApp:
                     self.tv_ws_url = None
                     self.root.after(0, lambda: self.update_tv_status("Disconnected (Port 9222 Offline)", "red"))
                 
-                time.sleep(0.1)
+                time.sleep(1.5)
 
         threading.Thread(target=monitor, daemon=True).start()
 
@@ -343,17 +320,50 @@ class TradingViewAutomatorApp:
             fg={"green": "#22c55e", "yellow": "#eab308", "red": "#ef4444"}[color]
         )
 
-    # --- CDP UTILS & ENGINE BINDING ---
-    def execute_cdp_command(self, ws_url, expression):
+    def mount_sinclair_hud_btn_click(self):
+        if not self.tv_ws_url:
+            messagebox.showerror("Connection Error", "Cannot connect to TradingView Desktop.\n\nEnsure TradingView is open and port 9222 is active.")
+            return
+        res = self.ensure_sinclair_hud_mounted(self.tv_ws_url, force_render=True)
+        self.log(f"Unified DOM (with top Sinclair metrics) mounted/refreshed on active TradingView chart! ({res})")
+
+    def mount_options_dom_btn_click(self):
+        if not self.tv_ws_url:
+            messagebox.showerror("Connection Error", "Cannot connect to TradingView Desktop.\n\nEnsure TradingView is open and port 9222 is active.")
+            return
+        active_sym = self.fetch_current_ticker_from_chart(self.tv_ws_url) or self.current_ticker or "SPY"
+        
+        def do_mount():
+            self.log(f"Fetching real market options DOM (0DTE & Weekly) for {active_sym}...")
+            dom_data = self.fetch_real_weekly_dom(active_sym, max_strikes=34)
+            has_data = bool(dom_data and ((isinstance(dom_data, dict) and (dom_data.get("0dte") or dom_data.get("weekly"))) or (isinstance(dom_data, list) and len(dom_data) > 0)))
+            self.dom_cache[active_sym] = dom_data
+            self.dom_cache_time[active_sym] = time.time()
+            res = self.ensure_options_dom_mounted(self.tv_ws_url, active_sym, dom_data, force_render=True)
+            self.refresh_wall_lines(self.tv_ws_url, active_sym, dom_data)  # keep the wall lines on the same chain as the DOM
+            if has_data:
+                cnt_0 = len(dom_data.get("0dte", [])) if isinstance(dom_data, dict) else len(dom_data)
+                cnt_w = len(dom_data.get("weekly", [])) if isinstance(dom_data, dict) else len(dom_data)
+                self.log(f"Options DOM updated on chart for {active_sym} (0DTE: {cnt_0}, Weekly: {cnt_w} strikes)! ({res})")
+            else:
+                self.log(f"Options DOM mounted for {active_sym} (Not Available state rendered). ({res})")
+
+        threading.Thread(target=do_mount, daemon=True).start()
+
+    def execute_cdp_command(self, ws_url, js_code, timeout=5):
+        if not ws_url:
+            return None
         try:
-            ws = websocket.create_connection(ws_url, timeout=4, suppress_origin=True)
+            ws = websocket.create_connection(ws_url, timeout=timeout)
             payload = {
                 "id": 1,
                 "method": "Runtime.evaluate",
                 "params": {
-                    "expression": expression,
-                    "awaitPromise": True,
-                    "returnByValue": True
+                    "expression": js_code,
+                    "returnByValue": True,
+                    # Many injected scripts are async IIFEs. Without awaitPromise the result is the
+                    # unresolved Promise (serialised as {}), so their return values were lost.
+                    "awaitPromise": True
                 }
             }
             ws.send(json.dumps(payload))
@@ -361,7 +371,462 @@ class TradingViewAutomatorApp:
             ws.close()
             return res.get("result", {}).get("result", {}).get("value")
         except Exception as e:
+            return f"CDP_ERR: {e}"
+
+    # Display tickers that need a different symbol on Yahoo Finance.
+    YAHOO_ALIASES = {"NIKKEI": "^N225", "NI225": "^N225", "RUSSELL": "^RUT", "RUT": "^RUT", "BRKB": "BRK-B", "BFB": "BF-B"}
+
+    @staticmethod
+    def clean_symbol(raw):
+        """'NASDAQ:AAPL' -> 'AAPL', 'TVC:NI225' -> 'NI225'. Keeps digits (same rule as the in-chart JS)."""
+        if not raw or not isinstance(raw, str):
             return None
+        clean = re.sub(r'[^A-Z0-9]', '', raw.split(":")[-1].strip().upper())
+        return clean or None
+
+    def yahoo_symbol(self, ticker):
+        return self.YAHOO_ALIASES.get(ticker, ticker)
+
+    def ensure_options_dom_mounted(self, ws_url, sym, dom_data, force_render=False):
+        if not ws_url:
+            return False
+        js = f"""
+        (function() {{
+            try {{
+                // Remove legacy standalone Sinclair HUD if present
+                const oldHud = document.getElementById('tc-sinclair-hud');
+                if (oldHud) oldHud.remove();
+
+                let domEl = document.getElementById('tc-options-dom');
+                const force = {json.dumps(force_render)};
+                if (domEl && !force) return "ALREADY_MOUNTED";
+
+                const currentSym = "{sym}".toUpperCase();
+                const rawData = {json.dumps(dom_data)};
+
+                window._tc_dom_cache = window._tc_dom_cache || {{}};
+                try {{
+                    if (Object.keys(window._tc_dom_cache).length === 0) {{
+                        const saved = localStorage.getItem('tc_dom_cache');
+                        if (saved) window._tc_dom_cache = JSON.parse(saved);
+                    }}
+                }} catch(e) {{}}
+
+                if (rawData && ((Array.isArray(rawData) && rawData.length > 0) || (typeof rawData === 'object' && ((rawData['0dte'] && rawData['0dte'].length > 0) || (rawData.weekly && rawData.weekly.length > 0))))) {{
+                    window._tc_dom_cache[currentSym] = rawData;
+                    try {{
+                        localStorage.setItem('tc_dom_cache', JSON.stringify(window._tc_dom_cache));
+                    }} catch(e) {{}}
+                }}
+
+                window._tc_dom_mode = window._tc_dom_mode || localStorage.getItem('tc_dom_mode') || 'weekly';
+
+                if (!domEl) {{
+                    domEl = document.createElement('div');
+                    domEl.id = 'tc-options-dom';
+                    domEl.style.cssText = 'position:fixed;z-index:999998;left:55px;top:60px;background:rgba(10,12,20,0.96);border:1px solid #1e293b;border-left:3px solid #0d9488;border-radius:6px;padding:9px 12px;color:#f8fafc;font-family:Consolas,monospace;font-size:10.5px;line-height:1.3;box-shadow:0 10px 30px rgba(0,0,0,0.75);pointer-events:auto;user-select:none;backdrop-filter:blur(10px);width:380px;height:auto;max-height:none;overflow:visible;cursor:move;';
+                    
+                    let savedPos = null;
+                    try {{ savedPos = JSON.parse(localStorage.getItem('tc_dom_pos')); }} catch(e) {{}}
+                    if (savedPos && savedPos.top && savedPos.left) {{
+                        domEl.style.top = savedPos.top;
+                        domEl.style.left = savedPos.left;
+                    }}
+
+                    // Drag support (exempt clicks on mode toggle pill / buttons)
+                    let isDragging = false;
+                    let startX, startY, origLeft, origTop;
+                    domEl.addEventListener('mousedown', function(e) {{
+                        if (e.target.closest('#tc-dom-mode-pill') || e.target.tagName === 'BUTTON') return;
+                        if (e.button !== 0) return;
+                        isDragging = true;
+                        startX = e.clientX;
+                        startY = e.clientY;
+                        const rect = domEl.getBoundingClientRect();
+                        origLeft = rect.left;
+                        origTop = rect.top;
+                        function onMouseMove(moveEvent) {{
+                            if (!isDragging) return;
+                            domEl.style.left = (origLeft + moveEvent.clientX - startX) + 'px';
+                            domEl.style.top = (origTop + moveEvent.clientY - startY) + 'px';
+                        }}
+                        function onMouseUp() {{
+                            if (!isDragging) return;
+                            isDragging = false;
+                            window.removeEventListener('mousemove', onMouseMove);
+                            window.removeEventListener('mouseup', onMouseUp);
+                            try {{
+                                localStorage.setItem('tc_dom_pos', JSON.stringify({{
+                                    top: domEl.style.top,
+                                    left: domEl.style.left
+                                }}));
+                            }} catch(e) {{}}
+                        }}
+                        window.addEventListener('mousemove', onMouseMove);
+                        window.addEventListener('mouseup', onMouseUp);
+                    }});
+
+                    document.body.appendChild(domEl);
+                }} else {{
+                    domEl.style.width = '380px';
+                    domEl.style.height = 'auto';
+                    domEl.style.maxHeight = 'none';
+                    domEl.style.overflow = 'visible';
+                    domEl.style.overflowY = 'visible';
+                }}
+
+                // Vibrancy helper: lighter for smaller orders, saturated & vibrant for bigger levels
+                function getPutStyle(pct) {{
+                    if (!pct || pct <= 0) return {{ bg: 'transparent', text: '#64748b', barBorder: '', textWeight: '600', glow: '' }};
+                    if (pct < 20) {{
+                        return {{ bg: 'rgba(16,185,129,0.14)', text: '#a7f3d0', barBorder: '', textWeight: 'bold', glow: '' }};
+                    }} else if (pct < 50) {{
+                        return {{ bg: 'rgba(16,185,129,0.38)', text: '#34d399', barBorder: '', textWeight: 'bold', glow: '' }};
+                    }} else if (pct < 80) {{
+                        return {{ bg: 'rgba(16,185,129,0.65)', text: '#ffffff', barBorder: '', textWeight: '900', glow: '' }};
+                    }} else {{
+                        return {{ bg: 'rgba(16,185,129,0.90)', text: '#ffffff', barBorder: '', textWeight: '900', glow: '' }};
+                    }}
+                }}
+
+                function getCallStyle(pct) {{
+                    if (!pct || pct <= 0) return {{ bg: 'transparent', text: '#64748b', barBorder: '', textWeight: '600', glow: '' }};
+                    if (pct < 20) {{
+                        return {{ bg: 'rgba(239,68,68,0.14)', text: '#fecaca', barBorder: '', textWeight: 'bold', glow: '' }};
+                    }} else if (pct < 50) {{
+                        return {{ bg: 'rgba(239,68,68,0.38)', text: '#f87171', barBorder: '', textWeight: 'bold', glow: '' }};
+                    }} else if (pct < 80) {{
+                        return {{ bg: 'rgba(239,68,68,0.65)', text: '#ffffff', barBorder: '', textWeight: '900', glow: '' }};
+                    }} else {{
+                        return {{ bg: 'rgba(239,68,68,0.90)', text: '#ffffff', barBorder: '', textWeight: '900', glow: '' }};
+                    }}
+                }}
+
+                window._setDomMode = function(newMode) {{
+                    window._tc_dom_mode = newMode;
+                    try {{ localStorage.setItem('tc_dom_mode', newMode); }} catch(e) {{}}
+                    const cur = getActiveTvSymbol() || window._tc_last_known_symbol || currentSym;
+                    if (window._renderOptionsDOM) window._renderOptionsDOM(cur);
+                }};
+
+                window._renderOptionsDOM = function(targetSym) {{
+                    const el = document.getElementById('tc-options-dom');
+                    if (!el) return;
+                    el.style.width = '380px';
+                    const sym = (targetSym || '').toUpperCase().trim();
+                    if (!sym) return;
+
+                    // Clean up any stray standalone hud
+                    const strayHud = document.getElementById('tc-sinclair-hud');
+                    if (strayHud) strayHud.remove();
+
+                    // 1. Sinclair Metrics mounted directly on top of DOM (no "Sinclair", no asset tag, no CHOP/TREND box)
+                    const sData = window._tc_sinclair_cache ? window._tc_sinclair_cache[sym] : null;
+                    let vrpVal = '—', vrpColor = '#94a3b8';
+                    let rangeVal = '±1σ', ivVal = '—', rvVal = '—';
+                    if (sData) {{
+                        let vrpSpread = parseFloat(sData.vrp_spread) || 0.0;
+                        let vrpSign = vrpSpread >= 0 ? '+' : '';
+                        vrpVal = `${{vrpSign}}${{vrpSpread.toFixed(1)}}`;
+                        vrpColor = vrpSpread >= 0 ? '#10b981' : '#38bdf8';
+                        ivVal = parseFloat(sData.implied_volatility) ? `${{parseFloat(sData.implied_volatility).toFixed(1)}}%` : '—';
+                        rvVal = parseFloat(sData.rv_yang_zhang) ? `${{parseFloat(sData.rv_yang_zhang).toFixed(1)}}%` : '—';
+                        rangeVal = sData.weekly_expected_move_dollars ? ('±$' + parseFloat(sData.weekly_expected_move_dollars).toFixed(2)) : '±1σ';
+                    }}
+
+                    // Scenario panel from TCEngine (window._tc_playbook is set by the injector's engine run)
+                    const pb = window._tc_playbook ? window._tc_playbook[sym] : null;
+                    let topMetricsHtml = '';
+                    if (pb && pb.scenario) {{
+                        const regColor = {{RANGE: '#10b981', MILD_POS: '#34d399', MILD_NEG: '#fb923c', EXPANSION: '#ef4444'}}[pb.scenario.code] || '#94a3b8';
+                        const esc = (s) => String(s).replace(/[&<>]/g, c => ({{'&': '&amp;', '<': '&lt;', '>': '&gt;'}})[c]);
+                        const lines = pb.scenario.lines.map(l => `<div style="color:#cbd5e1;font-size:10px;line-height:1.35;margin:1px 0;">· ${{esc(l)}}</div>`).join('');
+                        const notes = (pb.notes || []).map(n => `<div style="color:#64748b;font-size:9px;margin-top:2px;">${{esc(n)}}</div>`).join('');
+                        const gfTxt = pb.gammaFlip ? ('flip $' + pb.gammaFlip.toFixed(2)) : 'flip n/a';
+                        topMetricsHtml = `
+                            <div style="margin-bottom:6px;padding:5px 6px;border:1px solid ${{regColor}}55;border-left:3px solid ${{regColor}};border-radius:4px;background:rgba(15,23,42,0.6);cursor:move;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+                                    <span style="font-weight:900;color:${{regColor}};font-size:11px;">${{esc(pb.scenario.title)}}</span>
+                                    <span style="color:#94a3b8;font-size:9.5px;">${{gfTxt}}</span>
+                                </div>
+                                ${{lines}}${{notes}}
+                            </div>`;
+                    }}
+
+                    // 2. Resolve active ladder based on selected mode (0DTE vs Weekly)
+                    const rawDom = (window._tc_dom_cache && window._tc_dom_cache[sym]) ? window._tc_dom_cache[sym] : null;
+                    const mode = window._tc_dom_mode || 'weekly';
+                    let curLadder = null;
+                    if (rawDom) {{
+                        if (Array.isArray(rawDom)) {{
+                            curLadder = rawDom;
+                        }} else if (rawDom[mode] && Array.isArray(rawDom[mode])) {{
+                            curLadder = rawDom[mode];
+                        }} else if (rawDom.weekly && Array.isArray(rawDom.weekly)) {{
+                            curLadder = rawDom.weekly;
+                        }} else if (rawDom['0dte'] && Array.isArray(rawDom['0dte'])) {{
+                            curLadder = rawDom['0dte'];
+                        }}
+                    }}
+
+                    if (!curLadder || curLadder.length === 0) {{
+                        el.innerHTML = `
+                            ${{topMetricsHtml}}
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;padding:5px 0;cursor:move;" title="Drag to reposition">
+                                <span style="font-weight:bold;color:#94a3b8;font-size:11px;">📊 DOM · NOT AVAILABLE</span>
+                                <span style="font-weight:bold;color:#fff;background:#1e293b;padding:2px 6px;border-radius:3px;font-size:10px;">${{sym}}</span>
+                            </div>
+                            <div style="color:#64748b;font-size:10px;text-align:center;padding:12px 0;">
+                                Real options chain not available for ${{sym}}.
+                            </div>
+                        `;
+                        return;
+                    }}
+
+                    const isWeekly = (mode === 'weekly');
+                    const fmtK = (n) => n ? (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)) : '';
+                    const maxVol = Math.max(1, ...curLadder.map(r => Math.max(r.call_vol || 0, r.put_vol || 0)));
+                    // Spot row follows the chart's last price; falls back to the strike picked at fetch time
+                    const live = (getActiveTvSymbol() === sym) ? getLivePrice() : null;
+                    const spotStrike = live ? closestStrike(curLadder.map(r => r.strike), live) : null;
+                    window._tc_drawn_sym = sym;
+                    window._tc_drawn_strikes = curLadder.map(r => r.strike);
+                    window._tc_drawn_spot = spotStrike;
+                    let rowsHtml = '';
+                    for (let row of curLadder) {{
+                        const isSpot = spotStrike !== null ? row.strike === spotStrike : row.is_spot;
+                        const spotStyle = isSpot ? 'background:rgba(56,189,248,0.22);border:1px solid rgba(56,189,248,0.65);border-radius:3px;' : '';
+                        const strikeColor = isSpot ? '#38bdf8;font-weight:900;' : '#e2e8f0;font-weight:bold;';
+                        const putW = row.put_bar_pct || 0;
+                        const callW = row.call_bar_pct || 0;
+                        const put0dteW = (isWeekly && row.put_0dte_pct) ? row.put_0dte_pct : 0;
+                        const call0dteW = (isWeekly && row.call_0dte_pct) ? row.call_0dte_pct : 0;
+
+                        const putK = fmtK(row.put_oi);
+                        const callK = fmtK(row.call_oi);
+                        const putVolW = Math.round(100 * (row.put_vol || 0) / maxVol);
+                        const callVolW = Math.round(100 * (row.call_vol || 0) / maxVol);
+                        // Net = calls minus puts (OI + today's volume): red when calls own the strike, green when puts do
+                        const net = (row.call_oi || 0) + (row.call_vol || 0) - (row.put_oi || 0) - (row.put_vol || 0);
+                        const netTxt = net ? (net > 0 ? '+' : '-') + fmtK(Math.abs(net)) : '';
+                        const netColor = net > 0 ? '#f87171' : '#34d399';
+                        const volStyle = 'position:relative;color:#e2e8f0;font-size:9.5px;background:rgba(10,12,20,0.75);padding:0 2px;border-radius:2px;z-index:3;';
+                        const volBar = 'position:absolute;bottom:0;height:3px;background:#e2e8f0;border-radius:1px;z-index:2;';
+
+                        const pStyle = getPutStyle(putW);
+                        const cStyle = getCallStyle(callW);
+
+                        // Predominant 0DTE (> 50% of the bar's volume / OI): yellow text for puts, purple text for calls
+                        const putIs0DtePredominant = isWeekly && ((row.put_0dte_oi && row.put_oi && (row.put_0dte_oi >= row.put_oi * 0.5)) || (put0dteW > 0 && put0dteW >= putW * 0.5));
+                        const callIs0DtePredominant = isWeekly && ((row.call_0dte_oi && row.call_oi && (row.call_0dte_oi >= row.call_oi * 0.5)) || (call0dteW > 0 && call0dteW >= callW * 0.5));
+
+                        const putTextColor = putIs0DtePredominant ? '#facc15' : pStyle.text;
+                        const putTextWeight = putIs0DtePredominant ? '900' : (pStyle.textWeight || 'bold');
+                        const putTextShadow = putIs0DtePredominant ? 'text-shadow: 0 1px 2px #000, 0 0 5px rgba(250,204,21,0.6);' : 'text-shadow: 0 1px 2px #000;';
+
+                        const callTextColor = callIs0DtePredominant ? '#c084fc' : cStyle.text;
+                        const callTextWeight = callIs0DtePredominant ? '900' : (cStyle.textWeight || 'bold');
+                        const callTextShadow = callIs0DtePredominant ? 'text-shadow: 0 1px 2px #000, 0 0 5px rgba(192,132,252,0.6);' : 'text-shadow: 0 1px 2px #000;';
+
+                        // Nested yellow/gold 0DTE bar inside green weekly Put bar
+                        let putNestedHtml = '';
+                        if (put0dteW > 0) {{
+                            putNestedHtml = `<div style="position:absolute;right:0;top:1.5px;bottom:1.5px;width:${{put0dteW}}%;background:rgba(250,204,21,0.88);border-radius:2px;border-left:1.5px solid #fef08a;box-shadow:0 0 5px rgba(250,204,21,0.4);z-index:2;"></div>`;
+                        }}
+
+                        // Nested purple 0DTE bar inside red weekly Call bar
+                        let callNestedHtml = '';
+                        if (call0dteW > 0) {{
+                            callNestedHtml = `<div style="position:absolute;left:0;top:1.5px;bottom:1.5px;width:${{call0dteW}}%;background:rgba(192,132,252,0.88);border-radius:2px;border-right:1.5px solid #e9d5ff;box-shadow:0 0 5px rgba(192,132,252,0.4);z-index:2;"></div>`;
+                        }}
+
+                        rowsHtml += `
+                            <div style="display:grid;grid-template-columns:1fr 56px 1fr 48px;align-items:center;height:20px;margin:1px 0;font-size:11px;${{spotStyle}}">
+                                <!-- PUT BID BAR (Text at outer left end of bar) -->
+                                <div style="position:relative;height:100%;display:flex;align-items:center;justify-content:space-between;padding:0 4px 0 6px;">
+                                    <div style="position:absolute;right:0;top:1.5px;bottom:1.5px;width:${{putW}}%;background:${{pStyle.bg}};border-radius:2px;${{pStyle.barBorder}}${{pStyle.glow}}z-index:1;"></div>
+                                    ${{putNestedHtml}}
+                                    <span style="position:relative;color:${{putTextColor}};font-weight:${{putTextWeight}};font-size:11px;font-family:Consolas,monospace;${{putTextShadow}}z-index:3;">${{putK}}</span>
+                                    <span style="${{volStyle}}">${{fmtK(row.put_vol)}}</span>
+                                    <div style="${{volBar}}right:0;width:${{putVolW}}%;"></div>
+                                </div>
+                                <!-- STRIKE -->
+                                <div style="text-align:center;color:${{strikeColor}}font-family:Consolas,monospace;font-size:12px;text-shadow:0 1px 2px #000;">
+                                    $${{parseFloat(row.strike).toFixed(1)}}
+                                </div>
+                                <!-- CALL ASK BAR (Text at outer right end of bar) -->
+                                <div style="position:relative;height:100%;display:flex;align-items:center;justify-content:space-between;padding:0 6px 0 4px;">
+                                    <div style="position:absolute;left:0;top:1.5px;bottom:1.5px;width:${{callW}}%;background:${{cStyle.bg}};border-radius:2px;${{cStyle.barBorder}}${{cStyle.glow}}z-index:1;"></div>
+                                    ${{callNestedHtml}}
+                                    <div style="${{volBar}}left:0;width:${{callVolW}}%;"></div>
+                                    <span style="${{volStyle}}">${{fmtK(row.call_vol)}}</span>
+                                    <span style="position:relative;color:${{callTextColor}};font-weight:${{callTextWeight}};font-size:11px;font-family:Consolas,monospace;${{callTextShadow}}z-index:3;">${{callK}}</span>
+                                </div>
+                                <div style="text-align:right;color:${{netColor}};font-size:10px;font-weight:bold;">${{netTxt}}</div>
+                            </div>
+                        `;
+                    }}
+
+                    const is0DteActive = (mode === '0dte');
+                    const stamp = (rawDom && rawDom.fetched_at) ? new Date(rawDom.fetched_at * 1000).toLocaleTimeString([], {{hour: '2-digit', minute: '2-digit', hour12: false}}) : '';
+
+                    el.innerHTML = `
+                        ${{topMetricsHtml}}
+                        <!-- TITLE ROW WITH 0DTE / WEEKLY TOGGLE (NO LIVE TEXT) -->
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;padding:5px 0;cursor:move;" title="Drag to reposition">
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-weight:900;color:#14b8a6;font-size:12px;letter-spacing:0.5px;">📊 DOM</span>
+                                <!-- 0DTE vs Weekly Pill -->
+                                <div id="tc-dom-mode-pill" style="display:inline-flex;background:#0f172a;border:1px solid #334155;border-radius:12px;padding:2px;font-size:9.5px;font-weight:bold;">
+                                    <button id="tc-btn-0dte" type="button" style="border:none;outline:none;padding:2px 8px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:inherit;font-weight:inherit;transition:all 0.15s;${{is0DteActive ? 'background:#0d9488;color:#fff;box-shadow:0 0 6px rgba(13,148,136,0.6);' : 'background:transparent;color:#64748b;'}}">${{(rawDom && !Array.isArray(rawDom) && rawDom.nearest_dte > 0) ? (rawDom.nearest_dte + 'DTE') : '0DTE'}}</button>
+                                    <button id="tc-btn-weekly" type="button" style="border:none;outline:none;padding:2px 8px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:inherit;font-weight:inherit;transition:all 0.15s;${{!is0DteActive ? 'background:#0d9488;color:#fff;box-shadow:0 0 6px rgba(13,148,136,0.6);' : 'background:transparent;color:#64748b;'}}">Weekly</button>
+                                </div>
+                            </div>
+                            <span style="color:#94a3b8;font-size:10px;margin-left:auto;margin-right:8px;" title="Fetch time. Yahoo data, about 15 min delayed">${{stamp}}</span>
+                            <span style="font-weight:bold;color:#fff;background:#1e293b;padding:2px 6px;border-radius:3px;font-size:10px;border:1px solid #334155;">${{sym}}</span>
+                        </div>
+                        <!-- COLUMN HEADERS -->
+                        <div style="display:grid;grid-template-columns:1fr 56px 1fr 48px;font-size:10px;color:#94a3b8;margin-bottom:3px;font-weight:bold;">
+                            <span style="display:flex;justify-content:space-between;padding:0 4px 0 6px;"><span style="color:#10b981;">PUT OI</span><span>VOL</span></span>
+                            <span style="color:#cbd5e1;text-align:center;">STRIKE</span>
+                            <span style="display:flex;justify-content:space-between;padding:0 6px 0 4px;"><span>VOL</span><span style="color:#ef4444;">CALL OI</span></span>
+                            <span style="text-align:right;">NET</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;">
+                            ${{rowsHtml}}
+                        </div>
+                    `;
+
+                    // Direct event listeners for reliable switching (bypasses CSP & drag interference)
+                    const btn0dte = el.querySelector('#tc-btn-0dte');
+                    const btnWeekly = el.querySelector('#tc-btn-weekly');
+                    if (btn0dte) {{
+                        btn0dte.onmousedown = (e) => e.stopPropagation();
+                        btn0dte.onpointerdown = (e) => e.stopPropagation();
+                        btn0dte.onclick = (e) => {{
+                            e.stopPropagation();
+                            e.preventDefault();
+                            window._setDomMode('0dte');
+                        }};
+                    }}
+                    if (btnWeekly) {{
+                        btnWeekly.onmousedown = (e) => e.stopPropagation();
+                        btnWeekly.onpointerdown = (e) => e.stopPropagation();
+                        btnWeekly.onclick = (e) => {{
+                            e.stopPropagation();
+                            e.preventDefault();
+                            window._setDomMode('weekly');
+                        }};
+                    }}
+                }};
+
+                function getActiveTvSymbol() {{
+                    try {{
+                        const c = window._exposed_chartWidgetCollection || window.chartWidgetCollection;
+                        if (c && c.activeChartWidget && c.activeChartWidget.value()) {{
+                            const w = c.activeChartWidget.value();
+                            const m = w.model();
+                            const im = m && m.model ? m.model() : m;
+                            if (im && im.mainSeries) {{
+                                const s = im.mainSeries();
+                                let sname = null;
+                                if (typeof s.symbol === 'function') sname = s.symbol();
+                                else if (s._symbol) sname = s._symbol;
+                                if (!sname && typeof s.symbolInfo === 'function' && s.symbolInfo()) {{
+                                    sname = s.symbolInfo().name;
+                                }}
+                                if (sname) {{
+                                    const clean = sname.split(':').pop().replace(/[^A-Za-z0-9]/g, '').toUpperCase().trim();
+                                    if (clean) return clean;
+                                }}
+                            }}
+                        }}
+                    }} catch(e) {{}}
+                    try {{
+                        const btn = document.querySelector('#header-toolbar-symbol-search .js-button-text, [data-name="legend-series-item"] [data-name="legend-source-title"]');
+                        if (btn && btn.textContent) {{
+                            const txt = btn.textContent.trim().split(' ')[0].replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                            if (txt) return txt;
+                        }}
+                    }} catch(e) {{}}
+                    return null;
+                }}
+
+                function getLivePrice() {{
+                    try {{
+                        const c = window._exposed_chartWidgetCollection || window.chartWidgetCollection;
+                        const m = c.activeChartWidget.value().model();
+                        const im = m && m.model ? m.model() : m;
+                        const last = im.mainSeries().data().bars().last();
+                        return (last && last.value) ? last.value[4] : null;
+                    }} catch(e) {{ return null; }}
+                }}
+
+                function closestStrike(strikes, price) {{
+                    return strikes.reduce((a, b) => Math.abs(b - price) < Math.abs(a - price) ? b : a);
+                }}
+
+                // Re-render when the chart price crosses into another strike
+                if (!window._tc_spot_watcher_active) {{
+                    window._tc_spot_watcher_active = true;
+                    setInterval(() => {{
+                        try {{
+                            const price = getLivePrice();
+                            const ks = window._tc_drawn_strikes;
+                            if (price && ks && ks.length && getActiveTvSymbol() === window._tc_drawn_sym
+                                && closestStrike(ks, price) !== window._tc_drawn_spot && window._renderOptionsDOM) {{
+                                window._renderOptionsDOM(window._tc_drawn_sym);
+                            }}
+                        }} catch(e) {{}}
+                    }}, 1000);
+                }}
+
+                if (!window._tc_symbol_watcher_active) {{
+                    window._tc_symbol_watcher_active = true;
+                    window._tc_last_known_symbol = null;
+                    setInterval(() => {{
+                        try {{
+                            const curSym = getActiveTvSymbol();
+                            if (curSym && curSym !== window._tc_last_known_symbol) {{
+                                window._tc_last_known_symbol = curSym;
+                                if (window._renderOptionsDOM) window._renderOptionsDOM(curSym);
+                            }}
+                        }} catch(e) {{}}
+                    }}, 200);
+                }}
+
+                const curAct = getActiveTvSymbol() || currentSym;
+                window._renderOptionsDOM(curAct);
+                return "MOUNTED_DOM";
+            }} catch(e) {{
+                return "DOM_ERR: " + e.message;
+            }}
+        }})()
+        """
+        try:
+            return self.execute_cdp_command(ws_url, js)
+        except Exception as e:
+            return f"CDP_ERR: {e}"
+
+    def ensure_sinclair_hud_mounted(self, ws_url, force_render=False):
+        if not ws_url:
+            return False
+        # Sinclair metrics are now unified directly on top of the DOM
+        active_sym = self.fetch_current_ticker_from_chart(ws_url) or self.current_ticker or "SPY"
+        dom_data = self.dom_cache.get(active_sym)
+        # Refresh after 5 minutes, tracker running or not, and push the fresh chain to the chart
+        # (a non-forced mount returns early and would leave the old ladder on screen).
+        stale = time.time() - self.dom_cache_time.get(active_sym, 0) > 300
+        refetched = not dom_data or stale
+        if refetched:
+            force_render = True
+            dom_data = self.fetch_real_weekly_dom(active_sym, max_strikes=34)
+            self.dom_cache[active_sym] = dom_data
+            self.dom_cache_time[active_sym] = time.time()
+        res = self.ensure_options_dom_mounted(ws_url, active_sym, dom_data, force_render=force_render)
+        if refetched:
+            self.refresh_wall_lines(ws_url, active_sym, dom_data)  # keep the wall lines on the same chain as the DOM
+        return res
 
     def fetch_current_ticker_from_chart(self, ws_url):
         js = """
@@ -391,12 +856,9 @@ class TradingViewAutomatorApp:
         })()
         """
         raw_symbol = self.execute_cdp_command(ws_url, js)
-        if not raw_symbol or not isinstance(raw_symbol, str):
+        if not raw_symbol or not isinstance(raw_symbol, str) or raw_symbol.startswith("CDP_ERR"):
             return None
-            
-        clean = raw_symbol.split(":")[-1].strip().upper()
-        clean = re.sub(r'[^A-Z]', '', clean)
-        return clean if clean else None
+        return self.clean_symbol(raw_symbol)
 
     def switch_tv_chart_symbol(self, ws_url, ticker):
         js = f"""
@@ -421,389 +883,425 @@ class TradingViewAutomatorApp:
         """
         return self.execute_cdp_command(ws_url, js)
 
+    def fetch_real_weekly_dom(self, ticker, spot=None, max_strikes=34):
+        """
+        Fetches 100% REAL live market options chain from Yahoo Finance.
+        Returns a dict: {"0dte": [...], "weekly": [...]}
+        Extracts up to max_strikes contracts tightly centered around spot.
+        """
+        try:
+            import yfinance as yf
+            import datetime
+            import pandas as pd
+
+            tk_symbol = self.yahoo_symbol(ticker)
+
+            tk = yf.Ticker(tk_symbol)
+            if not spot or spot <= 0:
+                hist = tk.history(period="5d")
+                if hist.empty:
+                    # No real spot price: don't centre the ladder on a made-up price.
+                    return {"0dte": [], "weekly": []}
+                spot = float(hist["Close"].iloc[-1])
+
+            exps = tk.options
+            if not exps:
+                return {"0dte": [], "weekly": []}
+
+            today = datetime.date.today()
+            by_strike_0dte = {}
+            by_strike_weekly = {}
+
+            # Pre-fetch needed expirations in parallel (avoids sequential wait & duplicate exp_0 fetch)
+            exp_0 = exps[0]
+            weekly_exps = []
+            for exp in exps[:6]:
+                try:
+                    d = datetime.datetime.strptime(exp, "%Y-%m-%d").date()
+                    dte = (d - today).days
+                    if 0 <= dte <= 7:
+                        weekly_exps.append(exp)
+                except Exception:
+                    continue
+
+            unique_exps = list(dict.fromkeys([exp_0] + weekly_exps))
+            fetched_chains = {}
+            with ThreadPoolExecutor(max_workers=min(6, len(unique_exps) or 1)) as pool:
+                futs = {e: pool.submit(tk.option_chain, e) for e in unique_exps}
+                for e, fut in futs.items():
+                    try:
+                        fetched_chains[e] = fut.result(timeout=8)
+                    except Exception as ex:
+                        if e == exp_0:
+                            self.log(f"0DTE chain fetch note for {ticker}: {ex}")
+
+            # Expiration 0 (nearest, 0DTE / next session)
+            def num(r, col):
+                v = r[col] if col in r else None
+                return 0.0 if v is None or pd.isna(v) else float(v)
+
+            if exp_0 in fetched_chains:
+                chain_0 = fetched_chains[exp_0]
+                # Quotes and IV are kept for the nearest expiry so the daily snapshots can later price option trades
+                for side, frame in (("call", chain_0.calls), ("put", chain_0.puts)):
+                    for _, r in frame.iterrows():
+                        k = float(r["strike"])
+                        row = by_strike_0dte.setdefault(k, {"strike": k, "call_oi": 0, "put_oi": 0, "call_vol": 0, "put_vol": 0})
+                        row[f"{side}_oi"] += int(num(r, "openInterest"))
+                        row[f"{side}_vol"] += int(num(r, "volume"))
+                        row[f"{side}_bid"] = num(r, "bid")
+                        row[f"{side}_ask"] = num(r, "ask")
+                        row[f"{side}_iv"] = round(num(r, "impliedVolatility"), 4)
+
+            # Gather nearest weekly expirations (<= 7 DTE)
+            for exp in weekly_exps:
+                chain = fetched_chains.get(exp)
+                if not chain:
+                    continue
+                try:
+                    for _, r in chain.calls.iterrows():
+                        k = float(r["strike"])
+                        oi = int(r["openInterest"]) if ("openInterest" in r and not pd.isna(r["openInterest"])) else 0
+                        vol = int(r["volume"]) if ("volume" in r and not pd.isna(r["volume"])) else 0
+                        by_strike_weekly.setdefault(k, {"strike": k, "call_oi": 0, "put_oi": 0, "call_vol": 0, "put_vol": 0})
+                        by_strike_weekly[k]["call_oi"] += oi
+                        by_strike_weekly[k]["call_vol"] += vol
+                    for _, r in chain.puts.iterrows():
+                        k = float(r["strike"])
+                        oi = int(r["openInterest"]) if ("openInterest" in r and not pd.isna(r["openInterest"])) else 0
+                        vol = int(r["volume"]) if ("volume" in r and not pd.isna(r["volume"])) else 0
+                        by_strike_weekly.setdefault(k, {"strike": k, "call_oi": 0, "put_oi": 0, "call_vol": 0, "put_vol": 0})
+                        by_strike_weekly[k]["put_oi"] += oi
+                        by_strike_weekly[k]["put_vol"] += vol
+                except Exception:
+                    continue
+
+            def build_ladder(by_strike_dict, is_weekly=False):
+                if not by_strike_dict:
+                    return []
+                all_strikes = list(by_strike_dict.values())
+                all_strikes.sort(key=lambda x: abs(x["strike"] - spot))
+                selected = all_strikes[:max_strikes]
+                selected.sort(key=lambda x: x["strike"], reverse=True)
+
+                # One shared scale for puts and calls, so bar lengths are comparable across the
+                # strike (separate scales made a 1k put wall look as big as a 10k call wall).
+                shared_max = max([max(s["call_oi"], s["put_oi"]) for s in selected], default=1) or 1
+                max_c = max_p = shared_max
+                closest_strike = min(selected, key=lambda x: abs(x["strike"] - spot))["strike"]
+
+                ladder = []
+                for s in selected:
+                    k = s["strike"]
+                    c_pct = min(100, int((s["call_oi"] / max_c) * 100))
+                    p_pct = min(100, int((s["put_oi"] / max_p) * 100))
+                    
+                    p_0_pct = 0
+                    c_0_pct = 0
+                    p0 = 0
+                    c0 = 0
+                    if is_weekly:
+                        s0 = by_strike_0dte.get(k, {})
+                        p0 = s0.get("put_oi", 0)
+                        c0 = s0.get("call_oi", 0)
+                        p_0_pct = min(p_pct, int((p0 / max_p) * 100)) if max_p > 0 else 0
+                        c_0_pct = min(c_pct, int((c0 / max_c) * 100)) if max_c > 0 else 0
+
+                    ladder.append({
+                        "strike": k,
+                        "call_oi": s["call_oi"],
+                        "put_oi": s["put_oi"],
+                        "call_vol": s["call_vol"],
+                        "put_vol": s["put_vol"],
+                        "call_bar_pct": c_pct,
+                        "put_bar_pct": p_pct,
+                        "put_0dte_pct": p_0_pct,
+                        "call_0dte_pct": c_0_pct,
+                        "put_0dte_oi": p0,
+                        "call_0dte_oi": c0,
+                        "is_spot": k == closest_strike,
+                        "is_real": True,
+                        **{f: s[f] for f in ("call_bid", "call_ask", "call_iv", "put_bid", "put_ask", "put_iv") if f in s},
+                    })
+                return ladder
+
+            ladder_0dte = build_ladder(by_strike_0dte, is_weekly=False)
+            ladder_weekly = build_ladder(by_strike_weekly, is_weekly=True)
+
+            # The "0DTE" ladder is the nearest expiration, which is not always today
+            # (weekends, names with only Friday expiries). Record its real days to expiry.
+            try:
+                nearest_dte = (datetime.datetime.strptime(exp_0, "%Y-%m-%d").date() - today).days
+            except Exception:
+                nearest_dte = 0
+
+            return {
+                "0dte": ladder_0dte,
+                "weekly": ladder_weekly,
+                "nearest_dte": nearest_dte,
+                "nearest_exp": exp_0,
+                "fetched_at": time.time(),
+            }
+        except Exception as e:
+            self.log(f"Real options DOM fetch exception for {ticker}: {e}")
+            return {"0dte": [], "weekly": []}
+    VOL_INDEX = {"SPY": "^VIX", "QQQ": "^VXN"}  # the engine's odds were calibrated with these as IV
+
+    def fetch_engine_inputs(self, ticker, dom=None):
+        """Real inputs for TCEngine.analyze, from Yahoo: today's RTH 5m bars, prior sessions (ATR, prior day),
+        the vol index's prior close as IV, and premarket high/low (drawn as plain lines, no odds)."""
+        try:
+            import yfinance as yf
+            tk = yf.Ticker(self.yahoo_symbol(ticker))
+            m5 = tk.history(period="5d", interval="5m", prepost=True)
+            if m5.empty or str(m5.index.tz) != "America/New_York":
+                return None
+            day, t = m5.index.date, m5.index.time
+            today = day[-1]
+            open_t, close_t = datetime.time(9, 30), datetime.time(16, 0)
+            rth = m5[(day == today) & (t >= open_t) & (t < close_t)]
+            pm = m5[(day == today) & (t < open_t)]
+            d1 = tk.history(period="3mo", interval="1d", auto_adjust=False)
+            d1 = d1[d1.index.date < today]  # prior sessions only; today's partial bar would skew ATR
+            if len(d1) < 16:
+                return None
+            daily = d1[["Open", "High", "Low", "Close"]].round(4).values.tolist()
+            iv = None
+            if ticker in self.VOL_INDEX:
+                v = yf.Ticker(self.VOL_INDEX[ticker]).history(period="1mo", interval="1d")
+                v = v[v.index.date < today]
+                if not v.empty:
+                    iv = float(v["Close"].iloc[-1]) / 100
+            if iv is None and isinstance(dom, dict):
+                # Uncalibrated ticker: median IV of the nearest-expiry strikes around spot
+                ivs = sorted(x for r in dom.get("0dte", [])[10:24] for x in (r.get("call_iv"), r.get("put_iv")) if x and 0.03 < x < 3)
+                iv = ivs[len(ivs) // 2] if ivs else None
+            bars = [[int(ts.timestamp()), *map(float, row)] for ts, row in zip(rth.index, rth[["Open", "High", "Low", "Close"]].values)]
+            last = float(m5["Close"].iloc[-1])
+            extra = []
+            if not pm.empty:
+                extra = [{"price": round(float(pm["High"].max()), 2), "label": "PREMARKET HIGH", "color": "#38bdf8"},
+                         {"price": round(float(pm["Low"].min()), 2), "label": "PREMARKET LOW", "color": "#38bdf8"}]
+            return {
+                # Before 09:30 there is no open yet: the last premarket price stands in for it
+                "ticker": ticker, "open": bars[0][1] if bars else last, "spot": last, "preOpen": not bars,
+                "daily": daily[-30:], "prevDay": {"h": daily[-1][1], "l": daily[-1][2], "c": daily[-1][3]},
+                "iv": iv, "bars": bars, "extra": extra, "_date": str(today),
+            }
+        except Exception as e:
+            self.log(f"Engine inputs note for {ticker}: {e}")
+            return None
+
+    ENGINE_RUN_JS = """
+    (function() {
+        try {
+            if (!window.TCEngine || window.TCEngine.VERSION !== __VERSION__) {
+                // module is shadowed so the engine registers itself as window.TCEngine
+                (function(module) {
+__ENGINE__
+                }).call(window, undefined);
+            }
+            const sym = __SYM__;
+            const out = window.TCEngine.analyze(__PAYLOAD__);
+            window._tc_playbook = window._tc_playbook || {};
+            window._tc_playbook[sym] = out;
+            if (window._renderOptionsDOM && (window._tc_drawn_sym === sym || window._tc_last_known_symbol === sym)) window._renderOptionsDOM(sym);
+            return JSON.stringify(out);
+        } catch (e) {
+            return "ENGINE_ERR: " + e.message;
+        }
+    })()
+    """
+
+    def run_engine(self, ws_url, ticker, inputs, dom):
+        """TCEngine.analyze inside the chart page (engine injected once per page load). Returns the analysis dict."""
+        payload = {k: v for k, v in inputs.items() if not k.startswith("_")}
+        payload["weekly"] = [{"strike": r["strike"], "put_oi": r["put_oi"], "call_oi": r["call_oi"]} for r in dom.get("weekly", [])]
+        payload["zdte"] = [{"strike": r["strike"], "put_oi": r["put_oi"], "call_oi": r["call_oi"],
+                            "put_vol": r.get("put_vol", 0), "call_vol": r.get("call_vol", 0)} for r in dom.get("0dte", [])]
+        js = (self.ENGINE_RUN_JS.replace("__VERSION__", json.dumps(self.engine_version))
+              .replace("__SYM__", json.dumps(ticker)).replace("__PAYLOAD__", json.dumps(payload))
+              .replace("__ENGINE__", self.engine_js))  # engine last: its source is never searched for placeholders
+        res = self.execute_cdp_command(ws_url, js, timeout=15)
+        if not isinstance(res, str) or not res.startswith("{"):
+            self.log(f"Engine note for {ticker}: {res}")
+            return None
+        return json.loads(res)
+
+    def build_engine_levels(self, ws_url, ticker, dom):
+        """Lines to draw + scenario from TCEngine: weekly walls with calibrated odds, 0DTE walls (OI + volume),
+        gamma flip from the chain, prior day, completed 10m/30m opening ranges, premarket high/low."""
+        if not isinstance(dom, dict) or not (dom.get("weekly") or dom.get("0dte")):
+            return [], None
+        inputs = self.fetch_engine_inputs(ticker, dom)
+        if not inputs:
+            return [], None
+        analysis = self.run_engine(ws_url, ticker, inputs, dom)
+        if not analysis or analysis.get("error"):
+            return [], analysis
+        self.write_snapshot(ticker, dom, inputs, analysis)
+        return [{"price": round(l["price"], 2), "label": l["label"], "color": l["color"]} for l in analysis["levels"]], analysis
+
+    def write_snapshot(self, ticker, dom, inputs, analysis):
+        """Archive the chain (OI, volume, bid/ask, IV), today's bars and the analysis, at most every 30 min per ticker.
+        Over time this builds a real intraday + options dataset, which the backtester's history lacks."""
+        now = time.time()
+        if now - self.snapshot_time.get(ticker, 0) < 1800:
+            return
+        try:
+            folder = os.path.join(self.snapshot_dir, inputs["_date"])
+            os.makedirs(folder, exist_ok=True)
+            with open(os.path.join(folder, f"{ticker}_{time.strftime('%H%M')}.json"), "w", encoding="utf-8") as f:
+                json.dump({"ticker": ticker, "saved_at": now, "inputs": inputs, "dom": dom, "analysis": analysis}, f)
+            self.snapshot_time[ticker] = now
+        except Exception as e:
+            self.log(f"Snapshot note for {ticker}: {e}")
+
+    def synthesize_weekly_dom_fallback(self, spot, data, ticker=""):
+        # BANNED: Synthetic/simulated DOM generation is strictly disabled.
+        # If real market options are not available, return empty list.
+        return []
+
+    # Labels both injectors have ever drawn (they share one TradingView chart). Fallback for lines
+    # drawn before ids were recorded; anything drawn now is matched by id.
+    SCRIPT_LINE_RE = (r"CALL WALL|PUT WALL|GAMMA FLIP|Gamma Flip|MAX PAIN|Max Pain|WEEKLY PIN|Weekly Pin|"
+                      r"OPEX ANCHOR|Opex Anchor|EXP MOVE|Expected Move|CONFLUENCE|TECH|PIVOT|Pivot Price|"
+                      r"Technical|Absorption|Target Level|DTE|SMA|CALL RES|PUT SUP|"
+                      r"(Major|Int|Minor) (Res|Sup)|PRIOR DAY|PREMARKET|OPENING RANGE|"
+                      r"\b(PDH|PDL|PDC|PMH|PML|ORH|ORL)\b")
+
+    def clear_script_lines(self, ws_url):
+        """Removes the horizontal lines this injector drew; leaves the user's own drawings alone."""
+        js = """
+        (async function() {
+            try {
+                const cwc = window._exposed_chartWidgetCollection || window.chartWidgetCollection;
+                const widget = cwc && cwc.activeChartWidget.value();
+                if (!widget) return "NO_CHART";
+                const model = widget.model();
+                let ids = [];
+                try { ids = JSON.parse(localStorage.getItem('tc_script_line_ids') || '[]'); } catch(e) {}
+                const re = new RegExp(__RE__);
+                const toRemove = model.model().allLineTools().filter(s => {
+                    let id = null, txt = '';
+                    try { id = s.id(); } catch(e) {}
+                    try { txt = s.properties().text.value(); } catch(e) {}
+                    const horz = /Horizontal|HorzLine/.test(s.name ? s.name() : '');
+                    return (id !== null && ids.includes(id)) || (horz && re.test(txt));
+                });
+                if (toRemove.length) model.removeSources(toRemove);
+                const sync = widget._lineToolsSynchronizer;
+                if (sync && sync.flushPendingSavings) await sync.flushPendingSavings();
+                return "CLEARED_" + toRemove.length;
+            } catch(e) {
+                return "CLEAR_ERR: " + e.message;
+            }
+        })()
+        """.replace("__RE__", json.dumps(self.SCRIPT_LINE_RE))
+        return self.execute_cdp_command(ws_url, js, timeout=10)
+
     def draw_levels_for_ticker(self, ws_url, ticker):
+        self.log(f"Clearing previous levels: {self.clear_script_lines(ws_url)}")
         self.log(f"Fetching option & technical levels for {ticker} from TrueCharts...")
         data = None
+        
+        # Map CFD / index display tickers to backend analysis tickers
+        api_ticker = self.yahoo_symbol(ticker)
+
+        # Start DOM fetch in parallel while API request runs so both finish simultaneously
+        dom_pool = ThreadPoolExecutor(max_workers=1)
+        dom_future = dom_pool.submit(self.fetch_real_weekly_dom, ticker, None, 34)
+
+        # Fast 30ms check for local backend on 127.0.0.1:8000 (eliminates 4s Windows localhost timeout)
+        local_api = "http://127.0.0.1:8000/api/analyze"
+        endpoints_to_try = [self.api_url]
         try:
-            req = urllib.request.Request(f"{self.api_url}/{ticker}", headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=10) as res:
-                data = json.loads(res.read().decode())
-        except Exception as e:
+            with socket.create_connection(("127.0.0.1", 8000), timeout=0.03):
+                endpoints_to_try = [local_api, self.api_url]
+        except Exception:
+            pass
+
+        for endpoint in endpoints_to_try:
             try:
-                req = urllib.request.Request(f"{self.vercel_url}/api/analyze/{ticker}", headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=10) as res:
-                    data = json.loads(res.read().decode())
-            except Exception as e2:
-                self.log(f"Failed to fetch data for {ticker}: {e2}")
-                return
+                to = 2 if endpoint == local_api else 15
+                url = f"{endpoint}/{urllib.parse.quote(api_ticker)}"
+                resp = self._http_session.get(url, timeout=to)
+                if resp.status_code == 404:
+                    self.log(f"Ticker {ticker} ({api_ticker}) not found (HTTP 404).")
+                    break
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data:
+                        break
+            except Exception as e:
+                if endpoint != local_api:
+                    self.log(f"Note: {endpoint} ({e})")
+                continue
 
         if not data:
-            self.log(f"No response data received for {ticker}.")
-            return
+            # Previously this invented levels (gamma flip = spot x 0.9965, ±1.8% move, walls at
+            # spot -9/+8) and fixed Sinclair numbers, and drew them as if real. Now: no backend
+            # data -> no levels drawn; the real options DOM from Yahoo is still shown.
+            self.log(f"TrueCharts backend unavailable for {ticker}: no Sinclair stats (levels and gamma flip come from the local engine).")
+            data = {}
 
-        supports = data.get("supports", [])
-        resistances = data.get("resistances", [])
-        max_pain = float(data.get("max_pain", 0))
 
-        weekly_max_pain = float(data.get("weekly_max_pain") or data.get("max_pain") or 0)
-        monthly_max_pain = float(data.get("monthly_max_pain") or 0)
-        gamma_flip = float(data.get("gamma_flip", 0) or 0)
-
-        em_up = float(data.get("expected_move_upper", 0) or 0)
-        em_dn = float(data.get("expected_move_lower", 0) or 0)
-        if em_up <= 0 or em_dn <= 0:
-            exp_move = data.get("expected_move")
-            if isinstance(exp_move, dict):
-                em_up = em_up or float(exp_move.get("upper", 0) or 0)
-                em_dn = em_dn or float(exp_move.get("lower", 0) or 0)
-
-        max_sup_abs = max([float(s.get("strength", 0)) for s in supports], default=1.0)
-        max_res_abs = max([float(r.get("strength", 0)) for r in resistances], default=1.0)
-
-        # Calculate DTE indicators for options expiration cycles
-        today = datetime.date.today()
-        days_to_fri = (4 - today.weekday()) % 7
-        weekly_dte_str = f"{days_to_fri}d DTE" if days_to_fri > 0 else "0DTE"
-
-        def get_monthly_opex_dte(d):
-            c = calendar.monthcalendar(d.year, d.month)
-            fris = [w[4] for w in c if w[4] != 0]
-            tf = datetime.date(d.year, d.month, fris[2])
-            if tf < d:
-                m = 1 if d.month == 12 else d.month + 1
-                y = d.year + 1 if d.month == 12 else d.year
-                c = calendar.monthcalendar(y, m)
-                fris = [w[4] for w in c if w[4] != 0]
-                tf = datetime.date(y, m, fris[2])
-            diff = (tf - d).days
-            return f"{diff}d DTE" if diff > 0 else "0DTE"
-
-        monthly_dte_str = get_monthly_opex_dte(today)
-
-        def extract_dte_tag(item, fallback_dte_str=""):
-            d_val = item.get("dte")
-            if d_val is not None and str(d_val).strip() and str(d_val).lower() != "none":
-                try:
-                    d_num = int(float(d_val))
-                    return f"{d_num}d DTE" if d_num > 0 else "0DTE"
-                except:
-                    return f"{d_val}d DTE"
-            m = re.search(r"\((\d+)d\s*DTE\)", str(item.get("sublabel", "")), re.IGNORECASE)
-            if m:
-                d_num = int(m.group(1))
-                return f"{d_num}d DTE" if d_num > 0 else "0DTE"
-            return fallback_dte_str
-
-        raw_items = []
-
-        # 1. Weekly Pin (Weekly Max Pain)
-        if weekly_max_pain > 0:
-            raw_items.append({
-                "price": weekly_max_pain,
-                "title": "WEEKLY PIN",
-                "dte_tag": weekly_dte_str,
-                "label": f"WEEKLY PIN · ${weekly_max_pain:.2f} ({weekly_dte_str})",
-                "color": "#ba68c8",
-                "priority": 90
-            })
-
-        # 2. Monthly OPEX Anchor Pin
-        if monthly_max_pain > 0:
-            raw_items.append({
-                "price": monthly_max_pain,
-                "title": "OPEX ANCHOR",
-                "dte_tag": monthly_dte_str,
-                "label": f"OPEX ANCHOR · ${monthly_max_pain:.2f} ({monthly_dte_str})",
-                "color": "#a855f7",
-                "priority": 85
-            })
-
-        # 3. Gamma Flip (Zero-GEX Regime Pivot)
-        if gamma_flip > 0:
-            raw_items.append({
-                "price": gamma_flip,
-                "title": "GAMMA FLIP",
-                "dte_tag": "",
-                "label": f"GAMMA FLIP · ${gamma_flip:.2f} (Regime Pivot)",
-                "color": "#facc15",
-                "priority": 95
-            })
-
-        # 3b. Weekly Expected Move Envelope (+- 1-Standard Deviation, 68% Containment)
-        em_upper = float(data.get("expected_move_upper") or 0.0)
-        em_lower = float(data.get("expected_move_lower") or 0.0)
-        if em_upper > 0 and em_lower > 0:
-            raw_items.append({
-                "price": em_upper,
-                "title": "+1σ EXP MOVE",
-                "dte_tag": "Weekly",
-                "label": f"+1σ EXP MOVE · ${em_upper:.2f} (Weekly Upper 68% Band)",
-                "color": "#38bdf8",
-                "priority": 70
-            })
-            raw_items.append({
-                "price": em_lower,
-                "title": "-1σ EXP MOVE",
-                "dte_tag": "Weekly",
-                "label": f"-1σ EXP MOVE · ${em_lower:.2f} (Weekly Lower 68% Band)",
-                "color": "#38bdf8",
-                "priority": 70
-            })
-
-        # 4. Resistances (Confluence / Call Walls / Technical)
-        for res in resistances:
-            try:
-                p = float(res.get("price", 0))
-                st = float(res.get("strength", 0))
-                src = str(res.get("source", "")).lower()
-                tests = int(res.get("tests", 0) or 0)
-                is_conf = bool(res.get("is_confluence"))
-
-                # Filter out technical levels with 0 tests
-                if src != "options" and not is_conf and tests <= 0:
-                    continue
-
-                dte_tag = extract_dte_tag(res)
-
-                if is_conf:
-                    sub = res.get("sublabel") or "Multi-Factor"
-                    clean_sub_parts = [part.strip() for part in sub.split("+") if "confluence" not in part.lower()]
-                    clean_sub = " + ".join(clean_sub_parts) if clean_sub_parts else "Multi-Factor"
-                    if dte_tag and dte_tag not in clean_sub:
-                        clean_sub = f"{dte_tag} · {clean_sub}"
-                    raw_items.append({
-                        "price": p,
-                        "title": "CONFLUENCE",
-                        "is_confluence": True,
-                        "sublabel": clean_sub,
-                        "confluence_factors": res.get("confluence_factors") or clean_sub_parts,
-                        "dte_tag": dte_tag,
-                        "label": f"CONFLUENCE · ${p:.2f} [{clean_sub}]",
-                        "color": "#f97316",
-                        "priority": 100
-                    })
-                elif src == "options":
-                    rel = st / max_res_abs if max_res_abs > 0 else 0
-                    if rel >= 0.75:
-                        d_part = f" ({dte_tag} · Gamma Ceiling)" if dte_tag else f" (Gamma Ceiling: {round(st)})"
-                        raw_items.append({
-                            "price": p,
-                            "title": "CALL WALL",
-                            "dte_tag": dte_tag,
-                            "label": f"CALL WALL · ${p:.2f}{d_part}",
-                            "color": "#dc2626",
-                            "priority": 75
-                        })
-                    elif rel >= 0.4:
-                        d_part = f" ({dte_tag} · Absorption: {round(st)})" if dte_tag else f" (Absorption: {round(st)})"
-                        raw_items.append({
-                            "price": p,
-                            "title": "INT RES",
-                            "dte_tag": dte_tag,
-                            "label": f"INT CALL RES · ${p:.2f}{d_part}",
-                            "color": "#ef4444",
-                            "priority": 60
-                        })
-                    else:
-                        d_part = f" ({dte_tag})" if dte_tag else ""
-                        raw_items.append({
-                            "price": p,
-                            "title": "CALL RES",
-                            "dte_tag": dte_tag,
-                            "label": f"CALL RES · ${p:.2f}{d_part}",
-                            "color": "#f87171",
-                            "priority": 40
-                        })
-                else:
-                    raw_items.append({
-                        "price": p,
-                        "title": "TECH RES",
-                        "dte_tag": "",
-                        "tests": tests,
-                        "label": f"TECH RES · ${p:.2f} ({tests} swing tests)",
-                        "color": "#ef4444",
-                        "priority": 50
-                    })
-            except Exception:
-                pass
-
-        # 6. Supports (Confluence / Put Walls / Technical)
-        for sup in supports:
-            try:
-                p = float(sup.get("price", 0))
-                st = float(sup.get("strength", 0))
-                src = str(sup.get("source", "")).lower()
-                tests = int(sup.get("tests", 0) or 0)
-                is_conf = bool(sup.get("is_confluence"))
-
-                # Filter out technical levels with 0 tests
-                if src != "options" and not is_conf and tests <= 0:
-                    continue
-
-                dte_tag = extract_dte_tag(sup)
-
-                if is_conf:
-                    sub = sup.get("sublabel") or "Multi-Factor"
-                    clean_sub_parts = [part.strip() for part in sub.split("+") if "confluence" not in part.lower()]
-                    clean_sub = " + ".join(clean_sub_parts) if clean_sub_parts else "Multi-Factor"
-                    if dte_tag and dte_tag not in clean_sub:
-                        clean_sub = f"{dte_tag} · {clean_sub}"
-                    raw_items.append({
-                        "price": p,
-                        "title": "CONFLUENCE",
-                        "is_confluence": True,
-                        "sublabel": clean_sub,
-                        "confluence_factors": sup.get("confluence_factors") or clean_sub_parts,
-                        "dte_tag": dte_tag,
-                        "label": f"CONFLUENCE · ${p:.2f} [{clean_sub}]",
-                        "color": "#f97316",
-                        "priority": 100
-                    })
-                elif src == "options":
-                    rel = st / max_sup_abs if max_sup_abs > 0 else 0
-                    if rel >= 0.75:
-                        d_part = f" ({dte_tag} · OI Absorption: {round(st)})" if dte_tag else f" (OI Absorption: {round(st)})"
-                        raw_items.append({
-                            "price": p,
-                            "title": "PUT WALL",
-                            "dte_tag": dte_tag,
-                            "label": f"PUT WALL · ${p:.2f}{d_part}",
-                            "color": "#047857",
-                            "priority": 75
-                        })
-                    elif rel >= 0.4:
-                        d_part = f" ({dte_tag} · Absorption: {round(st)})" if dte_tag else f" (Absorption: {round(st)})"
-                        raw_items.append({
-                            "price": p,
-                            "title": "INT SUP",
-                            "dte_tag": dte_tag,
-                            "label": f"INT PUT SUP · ${p:.2f}{d_part}",
-                            "color": "#059669",
-                            "priority": 60
-                        })
-                    else:
-                        d_part = f" ({dte_tag})" if dte_tag else ""
-                        raw_items.append({
-                            "price": p,
-                            "title": "PUT SUP",
-                            "dte_tag": dte_tag,
-                            "label": f"PUT SUP · ${p:.2f}{d_part}",
-                            "color": "#10b981",
-                            "priority": 40
-                        })
-                else:
-                    raw_items.append({
-                        "price": p,
-                        "title": "TECH SUP",
-                        "dte_tag": "",
-                        "tests": tests,
-                        "label": f"TECH SUP · ${p:.2f} ({tests} swing tests)",
-                        "color": "#10b981",
-                        "priority": 50
-                    })
-            except Exception:
-                pass
-
-        # --- DEDUPLICATION & OVERLAY MERGE ENGINE ---
-        # Cluster levels that fall on the exact same price or within a 0.2% threshold
-        # into a single line with a unified label (like the site) to eliminate text collisions
-        levels_to_draw = []
-        if raw_items:
-            sorted_items = sorted(raw_items, key=lambda x: x["price"])
-            clusters = []
-            curr_cluster = [sorted_items[0]]
-            for itm in sorted_items[1:]:
-                prev_p = curr_cluster[-1]["price"]
-                curr_p = itm["price"]
-                # Group if exact same rounded cent or within 0.2% price threshold
-                if abs(curr_p - prev_p) <= max(0.05, prev_p * 0.002):
-                    curr_cluster.append(itm)
-                else:
-                    clusters.append(curr_cluster)
-                    curr_cluster = [itm]
-            if curr_cluster:
-                clusters.append(curr_cluster)
-
-            for cl in clusters:
-                if len(cl) == 1:
-                    levels_to_draw.append({
-                        "price": cl[0]["price"],
-                        "label": cl[0]["label"],
-                        "color": cl[0]["color"]
-                    })
-                else:
-                    # Multiple levels colliding: sort by priority descending
-                    cl.sort(key=lambda x: x.get("priority", 0), reverse=True)
-                    rep_price = cl[0]["price"]
-                    factor_list = []
-                    for itm in cl:
-                        c_factors = itm.get("confluence_factors")
-                        sub = itm.get("sublabel")
-                        t = itm.get("title") or itm.get("label", "").split("·")[0].split(":")[0].strip()
-                        d_tag = itm.get("dte_tag")
-                        tests = itm.get("tests")
-
-                        # If this item was already a confluence, unpack its underlying factors
-                        if itm.get("is_confluence") or t.upper() == "CONFLUENCE":
-                            if c_factors and isinstance(c_factors, list):
-                                for f in c_factors:
-                                    f_clean = str(f).strip()
-                                    if f_clean.upper() != "CONFLUENCE" and f_clean not in factor_list:
-                                        factor_list.append(f_clean)
-                            elif sub and "multi-factor" not in sub.lower():
-                                parts = [p.strip() for p in sub.split("+")]
-                                for p in parts:
-                                    clean_p = p.split("·")[-1].strip() if "·" in p else p
-                                    if clean_p.upper() != "CONFLUENCE" and clean_p not in factor_list:
-                                        factor_list.append(clean_p)
-                        else:
-                            if d_tag and d_tag not in t:
-                                tag = f"{t} ({d_tag})"
-                            elif tests and "test" not in t.lower():
-                                tag = f"{t} ({tests} tests)"
-                            else:
-                                tag = t
-                            if tag.upper() != "CONFLUENCE" and tag not in factor_list:
-                                factor_list.append(tag)
-
-                    final_factors = [f for f in factor_list if "confluence" not in f.lower()]
-                    if not final_factors:
-                        final_factors = ["Multi-Factor S/R"]
-
-                    if set([itm.get("title") for itm in cl]) == {"WEEKLY PIN", "OPEX ANCHOR"}:
-                        lbl = f"WEEKLY PIN ({weekly_dte_str}) & OPEX ANCHOR ({monthly_dte_str}) · ${rep_price:.2f}"
-                        clr = "#ba68c8"
-                    else:
-                        lbl = f"CONFLUENCE · ${rep_price:.2f} [{' + '.join(final_factors)}]"
-                        clr = "#f97316"
-
-                    levels_to_draw.append({
-                        "price": rep_price,
-                        "label": lbl,
-                        "color": clr
-                    })
-
-        if not levels_to_draw:
-            self.log(f"No options levels in API payload for {ticker}. Generating key technical levels...")
-            curr_price = float(data.get("current_price") or 100.0)
-            levels_to_draw = [
-                {"price": curr_price * 1.05, "label": f"CALL WALL · ${curr_price * 1.05:.2f} (Technical R2)", "color": "#dc2626"},
-                {"price": curr_price * 1.02, "label": f"INT RES · ${curr_price * 1.02:.2f} (Technical R1)", "color": "#ef4444"},
-                {"price": curr_price, "label": f"PIVOT PRICE · ${curr_price:.2f}", "color": "#ba68c8"},
-                {"price": curr_price * 0.98, "label": f"INT SUP · ${curr_price * 0.98:.2f} (Technical S1)", "color": "#059669"},
-                {"price": curr_price * 0.95, "label": f"PUT WALL · ${curr_price * 0.95:.2f} (Technical S2)", "color": "#047857"}
-            ]
-
+        # Real spot only; fetch_real_weekly_dom looks up the price itself when this is None.
+        spot_val = float(data.get("spot") or data.get("current_price") or 0) or None
         sinclair_vol = data.get("sinclair_volatility") or {}
+        weekly_dom = []  # always the live Yahoo chain: walls are computed from it
+        
+        # Priority: Fetch 100% REAL LIVE market options chain (0DTE & Weekly) via yfinance (already running in parallel)
+        if not weekly_dom or isinstance(weekly_dom, list):
+            self.log(f"Fetching real market options DOM (0DTE & Weekly) for {ticker}...")
+            try:
+                weekly_dom = dom_future.result(timeout=12)
+            except Exception:
+                weekly_dom = self.fetch_real_weekly_dom(ticker, spot_val, max_strikes=34)
+            finally:
+                dom_pool.shutdown(wait=False)
+            if weekly_dom and (weekly_dom.get("0dte") or weekly_dom.get("weekly")):
+                self.log(f"Loaded 100% REAL market options DOM for {ticker} (0DTE & Weekly).")
+            else:
+                self.log(f"No real market options chain available for {ticker}.")
+                weekly_dom = {"0dte": [], "weekly": []}
+
+        self.dom_cache[ticker] = weekly_dom
+        self.dom_cache_time[ticker] = time.time()
+        levels_to_draw, analysis = self.build_engine_levels(ws_url, ticker, weekly_dom)
+        if analysis and analysis.get("scenario"):
+            gf = analysis.get("gammaFlip")
+            self.log(f"─── SCENARIO ({ticker}): {analysis['scenario']['title']} | gamma flip {gf:.2f} ───" if gf else f"─── SCENARIO ({ticker}): {analysis['scenario']['title']} ───")
+            for line in analysis["scenario"]["lines"]:
+                self.log(f"  {line}")
+        for lvl in levels_to_draw:
+            self.log(f"  {lvl['price']:.2f}  {lvl['label']}")
         if sinclair_vol:
+            self.sinclair_cache[ticker] = sinclair_vol
             self.log(f"─── SINCLAIR VOLATILITY REGIME ({ticker}) ───")
             self.log(f"  Regime: {sinclair_vol.get('regime_verdict')}")
-            self.log(f"  IV: {sinclair_vol.get('implied_volatility')}% vs YZ-RV: {sinclair_vol.get('rv_yang_zhang')}% (VRP: {sinclair_vol.get('vrp_spread'):+0.1f} pts)")
+            vrp = sinclair_vol.get('vrp_spread')
+            vrp_txt = f"{float(vrp):+0.1f}" if isinstance(vrp, (int, float)) else "n/a"  # a missing VRP used to crash the whole draw
+            self.log(f"  IV: {sinclair_vol.get('implied_volatility')}% vs YZ-RV: {sinclair_vol.get('rv_yang_zhang')}% (VRP: {vrp_txt} pts)")
             if sinclair_vol.get('weekly_expected_move_dollars'):
                 self.log(f"  Weekly Move: ±${sinclair_vol.get('weekly_expected_move_dollars')} (±{sinclair_vol.get('weekly_expected_move_pct')}%)")
             self.log(f"  Term: {sinclair_vol.get('term_structure_regime', '').split('(')[0].strip()} ({sinclair_vol.get('ivts')}x) | Skew: {sinclair_vol.get('skew_bias')}")
             self.log(f"────────────────────────────────────────────")
 
+        self.gamma_cache[ticker] = float(data.get("gamma_flip") or 0)
+        result = self.draw_level_lines(ws_url, ticker, levels_to_draw)
+        if isinstance(result, str) and result.startswith("STALE_SKIPPED"):
+            return  # chart moved on to another symbol; its own draw will follow
+
+        # Auto-mount or refresh Options DOM if weekly_dom exists
+        if weekly_dom:
+            self.ensure_options_dom_mounted(ws_url, ticker, weekly_dom, force_render=True)
+            n0 = len(weekly_dom.get("0dte", [])) if isinstance(weekly_dom, dict) else len(weekly_dom)
+            nw = len(weekly_dom.get("weekly", [])) if isinstance(weekly_dom, dict) else len(weekly_dom)
+            self.log(f"Options DOM updated for {ticker} (nearest expiry: {n0} strikes, weekly: {nw} strikes).")
+
+    def draw_level_lines(self, ws_url, ticker, levels_to_draw):
+        """Replaces this script's level lines on the active chart with levels_to_draw."""
         self.log(f"Injecting {len(levels_to_draw)} exact site levels for {ticker} into TradingView...")
         
         js_draw = f"""
@@ -857,7 +1355,14 @@ class TradingViewAutomatorApp:
                 const innerModel = model.model();
                 const pane = model.panes()[0];
                 const mainSeries = innerModel.mainSeries();
-                
+
+                // If the user already switched symbol while this ticker's data was loading, don't
+                // draw its levels onto the new chart.
+                try {{
+                    const activeNow = String(mainSeries.symbol() || '').split(':').pop().replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                    if (activeNow && activeNow !== "{ticker}".toUpperCase()) return "STALE_SKIPPED_" + activeNow;
+                }} catch(e) {{}}
+
                 // Fetch actual live chart price and bar index for accurate scaling & X-axis projection
                 let livePrice = null;
                 let barIndex = 0;
@@ -872,37 +1377,27 @@ class TradingViewAutomatorApp:
                     }}
                 }} catch(e) {{}}
                 
-                // 1. Selectively delete only script-created drawings before drawing fresh ones
-                // Preserves any manual user drawings on the chart
-                let allTools = innerModel.allLineTools ? innerModel.allLineTools() : [];
-                let toRemove = [];
-                for (let s of allTools) {{
-                    let nm = s.name ? s.name() : '';
-                    if (nm === 'Horizontal line' || nm === 'LineToolHorzLine' || nm.includes('Horizontal')) {{
-                        try {{
-                            let txt = s.properties && s.properties().text ? s.properties().text.value() : '';
-                            let isScriptLine = 
-                                txt.includes('Major Res') || txt.includes('Int Res') || txt.includes('Minor Res') ||
-                                txt.includes('Major Sup') || txt.includes('Int Sup') || txt.includes('Minor Sup') ||
-                                txt.includes('Max Pain') || txt.includes('WEEKLY PIN') || txt.includes('Weekly Pin') ||
-                                txt.includes('OPEX ANCHOR') || txt.includes('Opex Anchor') ||
-                                txt.includes('GAMMA FLIP') || txt.includes('Gamma Flip') ||
-                                txt.includes('EXP MOVE') || txt.includes('Expected Move') ||
-                                txt.includes('CALL WALL') || txt.includes('PUT WALL') ||
-                                txt.includes('CALL RES') || txt.includes('PUT SUP') ||
-                                txt.includes('CONFLUENCE') || txt.includes('TECH') ||
-                                txt.includes('PIVOT') || txt.includes('Pivot Price') || txt.includes('Technical') ||
-                                txt.includes('Absorption') || txt.includes('Target Level') || txt.includes('DTE');
-                            if (isScriptLine) {{
-                                toRemove.push(s);
-                            }}
-                        }} catch(err) {{}}
-                    }}
-                }}
-                if (toRemove.length > 0 && model.removeSources) {{
-                    model.removeSources(toRemove);
-                }}
                 
+                // 1. Remove this script's earlier lines right before drawing. The symbol's saved drawings
+                // load a moment after a symbol switch, so the clear at the start of the run can miss them;
+                // sweep again shortly after to catch any that arrive late.
+                const scriptRe = new RegExp({json.dumps(self.SCRIPT_LINE_RE)});
+                let knownIds = [];
+                try {{ knownIds = JSON.parse(localStorage.getItem('tc_script_line_ids') || '[]'); }} catch(e) {{}}
+                const isScriptLine = (s) => {{
+                    let id = null, txt = '';
+                    try {{ id = s.id(); }} catch(e) {{}}
+                    try {{ txt = s.properties().text.value(); }} catch(e) {{}}
+                    const horz = /Horizontal|HorzLine/.test(s.name ? s.name() : '');
+                    return (id !== null && knownIds.includes(id)) || (horz && scriptRe.test(txt));
+                }};
+                let removedOld = 0;
+                for (let sweep = 0; sweep < 3; sweep++) {{
+                    const old = innerModel.allLineTools().filter(isScriptLine);
+                    if (old.length) {{ model.removeSources(old); removedOld += old.length; }}
+                    if (sweep < 2) await new Promise(r => setTimeout(r, 300));
+                }}
+
                 // 2. Draw fresh level lines with ownerSource for symbol binding
                 const rawLevels = {json.dumps(levels_to_draw)};
                 let count = 0;
@@ -912,16 +1407,11 @@ class TradingViewAutomatorApp:
                     try {{
                         
                         let targetPrice = lvl.price;
-                        // Handle price ratio correction if payload price is completely out of proportion
+                        // Skip corrupted or completely out-of-range prices instead of fabricating synthetic levels
                         if (livePrice && livePrice > 0 && targetPrice > 0) {{
                             let ratio = targetPrice / livePrice;
                             if (ratio > 10 || ratio < 0.1) {{
-                                // Normalize fallback levels to live chart price viewport
-                                if (lvl.label.includes("Major Res")) targetPrice = livePrice * 1.05;
-                                else if (lvl.label.includes("Int Res")) targetPrice = livePrice * 1.02;
-                                else if (lvl.label.includes("Pivot")) targetPrice = livePrice;
-                                else if (lvl.label.includes("Int Sup")) targetPrice = livePrice * 0.98;
-                                else if (lvl.label.includes("Major Sup")) targetPrice = livePrice * 0.95;
+                                continue;
                             }}
                         }}
                         
@@ -955,6 +1445,13 @@ class TradingViewAutomatorApp:
                     }} catch(err) {{}}
                 }}
                 
+                // Record ids so the next clear removes exactly these lines
+                try {{
+                    let ids = JSON.parse(localStorage.getItem('tc_script_line_ids') || '[]');
+                    for (const l of createdLines) {{ try {{ ids.push(l.id()); }} catch(e) {{}} }}
+                    localStorage.setItem('tc_script_line_ids', JSON.stringify(ids.slice(-500)));
+                }} catch(e) {{}}
+
                 // 3. Force canvas recalculation & render
                 if (model.lightUpdate) model.lightUpdate();
                 if (innerModel.lightUpdate) innerModel.lightUpdate();
@@ -976,51 +1473,25 @@ class TradingViewAutomatorApp:
                     }}
                 }}
                 
-                // 5. Render or Update On-Chart Sinclair Volatility HUD Box
-                try {{
-                    const sVol = {json.dumps(sinclair_vol)};
-                    if (sVol && sVol.regime_verdict) {{
-                        let hud = document.getElementById('tc-sinclair-hud');
-                        if (!hud) {{
-                            hud = document.createElement('div');
-                            hud.id = 'tc-sinclair-hud';
-                            hud.style.cssText = 'position:fixed;top:55px;right:80px;z-index:99999;background:rgba(10,12,20,0.92);border:1px solid #1e293b;border-top:2px solid #00e5ff;border-radius:6px;padding:8px 12px;color:#f8fafc;font-family:Consolas,monospace;font-size:10.5px;line-height:1.4;box-shadow:0 8px 20px rgba(0,0,0,0.6);pointer-events:auto;user-select:none;backdrop-filter:blur(8px);min-width:260px;';
-                            document.body.appendChild(hud);
-                        }}
-                        
-                        let vrpColor = sVol.vrp_spread >= 0 ? '#10b981' : '#38bdf8';
-                        let vrpSign = sVol.vrp_spread >= 0 ? '+' : '';
-                        let termStr = sVol.term_structure_regime ? sVol.term_structure_regime.split('(')[0].trim() : 'Contango';
-                        let weeklyMoveStr = sVol.weekly_expected_move_dollars ? ('±$' + sVol.weekly_expected_move_dollars) : '';
-                        
-                        hud.innerHTML = `
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;border-bottom:1px solid #1e293b;padding-bottom:3px;">
-                                <span style="font-weight:bold;color:#00e5ff;">⚡ SINCLAIR VOL MODEL</span>
-                                <span style="font-weight:bold;color:#fff;background:#1e293b;padding:1px 5px;border-radius:3px;">{ticker}</span>
-                            </div>
-                            <div style="font-size:9.5px;font-weight:bold;color:#e2e8f0;background:rgba(30,41,59,0.6);padding:3px 5px;border-radius:3px;margin-bottom:5px;">
-                                ${{sVol.regime_verdict}}
-                            </div>
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9.5px;">
-                                <div><span style="color:#94a3b8;">IV / RV:</span> <span style="color:#fff;font-weight:bold;">${{sVol.implied_volatility}}% / ${{sVol.rv_yang_zhang}}%</span></div>
-                                <div><span style="color:#94a3b8;">VRP Edge:</span> <span style="color:${{vrpColor}};font-weight:bold;">${{vrpSign}}${{sVol.vrp_spread}} pts</span></div>
-                                <div><span style="color:#94a3b8;">Weekly:</span> <span style="color:#38bdf8;font-weight:bold;">${{weeklyMoveStr || '±1σ Range'}}</span></div>
-                                <div><span style="color:#94a3b8;">Term:</span> <span style="color:#c084fc;font-weight:bold;">${{termStr}}</span></div>
-                                <div><span style="color:#94a3b8;">IV Rank:</span> <span style="color:#fff;font-weight:bold;">${{sVol.iv_rank}}%</span></div>
-                            </div>
-                        `;
-                    }}
-                }} catch(e) {{}}
                 
-                return "PERSISTED_AND_DRAWN_" + count;
+                return "PERSISTED_AND_DRAWN_" + count + "_REMOVED_OLD_" + removedOld;
             }} catch(e) {{
                 return "DRAW_ERR: " + e.message;
             }}
         }})()
         """
         
-        result = self.execute_cdp_command(ws_url, js_draw)
+        result = self.execute_cdp_command(ws_url, js_draw, timeout=20)
         self.log(f"Drawing result for {ticker}: {result}")
+        return result
+
+    def refresh_wall_lines(self, ws_url, ticker, dom_data):
+        """Redraw the level lines from a freshly fetched option chain so they match the DOM.
+        Only for tickers whose levels were drawn before; reuses that draw's gamma flip."""
+        if ticker not in self.gamma_cache or not isinstance(dom_data, dict) or not dom_data.get("0dte"):
+            return None
+        levels, _ = self.build_engine_levels(ws_url, ticker, dom_data)
+        return self.draw_level_lines(ws_url, ticker, levels) if levels else None
 
     def clear_drawings_on_active_chart(self, ws_url):
         js_clear = """
@@ -1124,7 +1595,35 @@ class TradingViewAutomatorApp:
         self.clear_watchlist_drawings("Red list")
 
     def clear_indexes_list_drawings(self):
-        self.clear_watchlist_drawings("Indexes")
+        if not self.tv_ws_url:
+            messagebox.showerror("Connection Error", "Cannot connect to TradingView Desktop.\n\nEnsure TradingView is open and port 9222 is active.")
+            return
+
+        self.log("Fetching 'Economic' category tickers 🧹 to clear drawings...")
+        tickers = ["SPY", "QQQ", "NIKKEI", "RUSSELL", "XLI", "XLV", "XLE", "DBC", "XLK", "XLB", "ICLN", "XLRE", "XLU"]
+
+        self.log(f"Starting bulk clearance of drawings for {len(tickers)} 'Economic' tickers: {', '.join(tickers)}")
+
+        def run_clear():
+            initial_ticker = self.fetch_current_ticker_from_chart(self.tv_ws_url)
+            count = 0
+            for t in tickers:
+                self.log(f"[{count+1}/{len(tickers)}] Clearing drawings for: {t}...")
+                self.switch_tv_chart_symbol(self.tv_ws_url, t)
+                time.sleep(1.2)
+                res = self.clear_drawings_on_active_chart(self.tv_ws_url)
+                self.log(f"Clear result for {t}: {res}")
+                time.sleep(0.3)
+                count += 1
+
+            if initial_ticker:
+                self.log(f"Restoring active chart to initial ticker: {initial_ticker}...")
+                self.switch_tv_chart_symbol(self.tv_ws_url, initial_ticker)
+
+            self.log(f"Bulk clear complete for 'Economic' tickers! {count} tickers processed.")
+            messagebox.showinfo("Clear Complete", f"Drawings cleared across all {count} 'Economic' tickers!")
+
+        threading.Thread(target=run_clear, daemon=True).start()
 
     def fetch_favorited_hotlists_tickers_from_tv(self):
         js = """
@@ -1134,101 +1633,49 @@ class TradingViewAutomatorApp:
                 let hotlistsMod = null;
                 
                 if (window.webpackChunktradingview) {
-                    window.webpackChunktradingview.push([[995111], {}, function(req) {
+                    window.webpackChunktradingview.push([[997111], {}, function(req) {
                         for (let id in req.m) {
                             try {
                                 let exp = req(id);
-                                if (!exp) continue;
-                                if (exp.getValue && exp.setValue && exp.onSync) {
+                                if (exp && exp.getValue && exp.setValue && exp.onSync) {
                                     tvSettingsMod = exp;
-                                }
-                                if (exp.hotlistsManager || (typeof exp === 'function' && exp.name === 'HotlistsManager')) {
-                                    hotlistsMod = exp;
-                                }
-                                if (typeof exp === 'object') {
-                                    for (let k in exp) {
-                                        if (exp[k] && exp[k].hotlistsManager) {
-                                            hotlistsMod = exp[k];
-                                        }
-                                    }
                                 }
                             } catch(e) {}
                         }
+                        try { hotlistsMod = req(169213); } catch(e) {}
                     }]);
                 }
                 
-                let favItems = [];
-                if (tvSettingsMod) {
-                    let favs = tvSettingsMod.getValue("symbol-lists.favorites") || [];
-                    if (typeof favs === 'string') {
-                        try { favs = JSON.parse(favs); } catch(e) {}
-                    }
-                    if (Array.isArray(favs)) {
-                        favItems.push(...favs.filter(f => f && (f.type === 'hot' || (f.id && String(f.id).includes('###HOT###')))));
-                    }
-                    
-                    let recents = tvSettingsMod.getValue("symbollist.recents") || [];
-                    if (typeof recents === 'string') {
-                        try { recents = JSON.parse(recents); } catch(e) {}
-                    }
-                    if (Array.isArray(recents)) {
-                        favItems.push(...recents.filter(f => f && (f.type === 'hot' || (f.id && String(f.id).includes('###HOT###')))));
-                    }
+                if (!tvSettingsMod || !hotlistsMod || !hotlistsMod.hotlistsManager) return [];
+                
+                let favs = tvSettingsMod.getValue("symbol-lists.favorites") || [];
+                if (typeof favs === 'string') {
+                    try { favs = JSON.parse(favs); } catch(e) {}
                 }
                 
-                if (favItems.length === 0) {
-                    favItems = [
-                        { exchange: "US", group: "volume_gainers" },
-                        { exchange: "OTC", group: "volume_gainers" },
-                        { exchange: "US", group: "gap_losers" },
-                        { exchange: "US", group: "gap_gainers" }
-                    ];
-                }
+                let hotFavs = favs.filter(f => f && (f.type === 'hot' || (f.id && String(f.id).includes('###HOT###'))));
+                let mgr = hotlistsMod.hotlistsManager();
+                let allTickers = [];
                 
-                let categoriesToFetch = [];
-                for (let item of favItems) {
+                for (let item of hotFavs) {
                     let ex = item.exchange || "US";
                     let grp = item.group || (item.id ? item.id.split('.').pop() : "");
                     if (grp === "gap_loosers") grp = "gap_losers";
                     if (grp === "percent_change_loosers") grp = "percent_change_losers";
                     
-                    let key = `${ex}_${grp}`;
-                    if (ex && grp && !categoriesToFetch.some(c => c.key === key)) {
-                        categoriesToFetch.push({ key, exchange: ex, group: grp });
-                    }
-                }
-                
-                let mgr = (hotlistsMod && hotlistsMod.hotlistsManager) ? hotlistsMod.hotlistsManager() : null;
-                let allTickers = [];
-                
-                for (let cat of categoriesToFetch) {
-                    let fetchedSymbols = [];
-                    if (mgr && mgr.getOneHotlist) {
-                        try {
-                            let res = await mgr.getOneHotlist(undefined, cat.exchange, cat.group, 20);
-                            if (res && res.length) fetchedSymbols = res;
-                        } catch(e) {}
-                    }
-                    
-                    if (!fetchedSymbols || fetchedSymbols.length === 0) {
-                        try {
-                            let presetName = `${cat.exchange}_${cat.group}`;
-                            let url = `https://scanner.tradingview.com/presets/${presetName}`;
-                            let resp = await fetch(url);
-                            let data = await resp.json();
-                            if (data && data.symbols) fetchedSymbols = data.symbols;
-                        } catch(e) {}
-                    }
-                    
-                    for (let s of fetchedSymbols) {
-                        let rawName = s.s || s.name || s.symbol || (typeof s === 'string' ? s : '');
-                        if (rawName) {
-                            let clean = rawName.split(":").pop().trim().toUpperCase().replace(/[^A-Z]/g, '');
-                            if (clean && !allTickers.includes(clean)) allTickers.push(clean);
+                    try {
+                        let symbols = await mgr.getOneHotlist(undefined, ex, grp, 20);
+                        if (symbols && symbols.length) {
+                            for (let s of symbols) {
+                                let rawName = s.s || s.name || s.symbol || (typeof s === 'string' ? s : '');
+                                if (rawName) {
+                                    let clean = rawName.split(":").pop().trim().toUpperCase().replace(/[^A-Z]/g, '');
+                                    if (clean && !allTickers.includes(clean)) allTickers.push(clean);
+                                }
+                            }
                         }
-                    }
+                    } catch(e) {}
                 }
-                
                 return allTickers;
             } catch(e) {
                 return [];
@@ -1374,14 +1821,23 @@ class TradingViewAutomatorApp:
             try:
                 if self.tv_ws_url:
                     ticker = self.fetch_current_ticker_from_chart(self.tv_ws_url)
-                    if ticker and ticker != self.current_ticker:
-                        self.log(f"Symbol change detected: {self.current_ticker} -> {ticker}")
+                    # Redraw every 5 min too: 0DTE volume and the opening range change through the session
+                    due = time.time() - self._last_draw > 300
+                    if ticker and (ticker != self.current_ticker or due):
+                        if ticker != self.current_ticker:
+                            self.log(f"Symbol change detected: {self.current_ticker} -> {ticker}")
+                        self._last_draw = time.time()
                         self.current_ticker = ticker
-                        self.status_lbl.configure(text=f"Status: Active Ticker ({ticker})")
-                        self.draw_levels_for_ticker(self.tv_ws_url, ticker)
+                        ws_now = self.tv_ws_url
+                        self.root.after(0, lambda t=ticker: self.status_lbl.configure(text=f"Status: Active Ticker ({t})"))
+                        threading.Thread(
+                            target=self.draw_levels_for_ticker,
+                            args=(ws_now, ticker),
+                            daemon=True
+                        ).start()
             except Exception as e:
                 self.log(f"Tracker error: {e}")
-            time.sleep(0.1)
+            time.sleep(0.15)
 
     def fetch_watchlist_by_name_from_tv(self, list_name):
         js = f"""
@@ -1417,8 +1873,7 @@ class TradingViewAutomatorApp:
             cleaned = []
             for item in raw_list:
                 if isinstance(item, str) and not item.startswith('#'):
-                    t = item.split(":")[-1].strip().upper()
-                    t = re.sub(r'[^A-Z]', '', t)
+                    t = self.clean_symbol(item)
                     if t and t not in cleaned:
                         cleaned.append(t)
             return cleaned
@@ -1436,11 +1891,28 @@ class TradingViewAutomatorApp:
             try {
                 let markMod = null;
                 if (window.webpackChunktradingview) {
-                    window.webpackChunktradingview.push([[999993], {}, function(req) {
-                        markMod = req(144683);
-                    }]);
+                    try {
+                        window.webpackChunktradingview.push([[999993], {}, function(req) {
+                            if (req && req.m) {
+                                if (req.m[144683]) {
+                                    try { markMod = req(144683); } catch(e) {}
+                                }
+                                if (!markMod || !markMod.getMarkedSymbolsListServiceInstance) {
+                                    for (let id in req.m) {
+                                        try {
+                                            let exp = req(id);
+                                            if (exp && typeof exp.getMarkedSymbolsListServiceInstance === 'function') {
+                                                markMod = exp;
+                                                break;
+                                            }
+                                        } catch(e) {}
+                                    }
+                                }
+                            }
+                        }]);
+                    } catch(e) {}
                 }
-                if (markMod && markMod.getMarkedSymbolsListServiceInstance) {
+                if (markMod && typeof markMod.getMarkedSymbolsListServiceInstance === 'function') {
                     let inst = markMod.getMarkedSymbolsListServiceInstance();
                     if (inst && typeof inst.getSymbolsByColor === 'function') {
                         return inst.getSymbolsByColor('red');
@@ -1457,19 +1929,207 @@ class TradingViewAutomatorApp:
             cleaned = []
             for item in raw_list:
                 if isinstance(item, str) and not item.startswith('#'):
-                    t = item.split(":")[-1].strip().upper()
-                    t = re.sub(r'[^A-Z]', '', t)
+                    t = self.clean_symbol(item)
                     if t and t not in cleaned:
                         cleaned.append(t)
             return cleaned
         return []
 
+    def fetch_section_tickers_from_tv(self, watchlist_name="Economic", section_name="INDEXES"):
+        """
+        Navigates to the specified watchlist/category (e.g. 'Economic'),
+        activates it in TradingView, and extracts all tickers belonging to
+        the specified section (e.g. 'INDEXES'), along with SPY and QQQ.
+        """
+        js = f"""
+        (async function() {{
+            try {{
+                let targetMod = null;
+                if (window.webpackChunktradingview) {{
+                    window.webpackChunktradingview.push([[999919], {{}}, function(req) {{
+                        for (let id in req.m) {{
+                            try {{
+                                let exp = req(id);
+                                if (exp && (exp.getAllWatchLists || exp.getAllWatchlists)) {{
+                                    targetMod = exp;
+                                    break;
+                                }}
+                            }} catch(e) {{}}
+                        }}
+                    }}]);
+                }}
+                
+                let allLists = null;
+                if (targetMod) {{
+                    if (typeof targetMod.getAllWatchLists === 'function') {{
+                        allLists = await targetMod.getAllWatchLists();
+                    }} else if (typeof targetMod.getAllWatchlists === 'function') {{
+                        allLists = await targetMod.getAllWatchlists();
+                    }}
+                }}
+                
+                let match = null;
+                if (allLists && Array.isArray(allLists)) {{
+                    match = allLists.find(l => {{
+                        let name = (l.name || l.title || '').trim().toLowerCase();
+                        return name === "{watchlist_name}".toLowerCase() || name.includes("{watchlist_name}".toLowerCase());
+                    }});
+                    
+                    // Activate/switch to this watchlist in TradingView so it navigates to the category
+                    if (match && targetMod) {{
+                        try {{
+                            if (typeof targetMod.setActiveWatchList === 'function') {{
+                                targetMod.setActiveWatchList(match.id || match);
+                            }} else if (typeof targetMod.setActiveWatchListId === 'function') {{
+                                targetMod.setActiveWatchListId(match.id);
+                            }} else if (typeof targetMod.setActiveList === 'function') {{
+                                targetMod.setActiveList(match.id || match);
+                            }} else if (typeof targetMod.setActiveListId === 'function') {{
+                                targetMod.setActiveListId(match.id);
+                            }}
+                        }} catch(e) {{}}
+                    }}
+                }}
+
+                // Ensure right sidebar watchlist is open
+                try {{
+                    let rightArea = document.querySelector('[class*="layout__area--right"]');
+                    if (!rightArea || rightArea.offsetWidth < 50) {{
+                        let btn = document.querySelector('[data-name="base-watchlist-widget-button"]') ||
+                                  document.querySelector('[aria-label*="Watchlist"]');
+                        if (btn) btn.click();
+                    }}
+                }} catch(e) {{}}
+
+                // Method 1: Extract symbols from the internal watchlist object
+                if (match && match.symbols && Array.isArray(match.symbols)) {{
+                    let symbols = match.symbols;
+                    let inSection = false;
+                    let extracted = [];
+                    
+                    for (let i = 0; i < symbols.length; i++) {{
+                        let item = symbols[i];
+                        if (typeof item !== 'string') continue;
+                        
+                        if (item.startsWith('#')) {{
+                            let cleanHeader = item.replace(/^#+/, '').trim().toLowerCase();
+                            if (cleanHeader === "{section_name}".toLowerCase() || cleanHeader.includes("{section_name}".toLowerCase())) {{
+                                inSection = true;
+                                continue;
+                            }} else if (inSection) {{
+                                // Reached the next section divider
+                                break;
+                            }}
+                        }} else if (inSection) {{
+                            extracted.push(item);
+                        }}
+                    }}
+                    
+                    if (extracted.length > 0) {{
+                        return {{
+                            source: "internal_section",
+                            watchlist: match.name || match.title || "{watchlist_name}",
+                            symbols: extracted
+                        }};
+                    }}
+                }}
+
+                // Method 2: DOM fallback from the active watchlist widget
+                let domSymbols = [];
+                let inDomSection = false;
+                let rows = Array.from(document.querySelectorAll('[class*="row-"], [class*="item-"], [class*="section-"], [class*="separator-"], [class*="symbol-"]'));
+                
+                for (let r of rows) {{
+                    let text = (r.textContent || '').trim().toUpperCase();
+                    if (text.includes("{section_name}".toUpperCase())) {{
+                        inDomSection = true;
+                        continue;
+                    }}
+                    if (inDomSection) {{
+                        let cls = (r.className || '').toString().toLowerCase();
+                        if (cls.includes('section') || cls.includes('separator') || text.startsWith('###')) {{
+                            break;
+                        }}
+                        let symEl = r.querySelector('[data-symbol-full]') || 
+                                    r.querySelector('[class*="symbolName-"]') || 
+                                    r.querySelector('[class*="symbol-"]');
+                        if (symEl) {{
+                            let s = symEl.getAttribute('data-symbol-full') || symEl.textContent.trim();
+                            if (s) domSymbols.push(s);
+                        }}
+                    }}
+                }}
+
+                if (domSymbols.length > 0) {{
+                    return {{
+                        source: "dom_section",
+                        watchlist: "{watchlist_name}",
+                        symbols: domSymbols
+                    }};
+                }}
+
+                // Method 3: If match was found but no explicit section matched, return all watchlist symbols
+                if (match && match.symbols && Array.isArray(match.symbols)) {{
+                    return {{
+                        source: "internal_full_watchlist",
+                        watchlist: match.name || match.title || "{watchlist_name}",
+                        symbols: match.symbols
+                    }};
+                }}
+
+                // Method 4: Scan active watchlist DOM elements directly
+                let dsShort = Array.from(document.querySelectorAll('[data-symbol-short]'));
+                let dsList = dsShort.map(e => e.getAttribute('data-symbol-short')).filter(Boolean);
+                if (dsList.length > 0) {{
+                    return {{
+                        source: "dom_data_symbol_short",
+                        watchlist: "{watchlist_name}",
+                        symbols: dsList
+                    }};
+                }}
+
+                return null;
+            }} catch(e) {{
+                return {{ error: e.message }};
+            }}
+        }})()
+        """
+        raw_res = self.execute_cdp_command(self.tv_ws_url, js)
+        raw_symbols = []
+        if isinstance(raw_res, dict):
+            raw_symbols = raw_res.get("symbols", [])
+            source = raw_res.get("source", "unknown")
+            wl_name = raw_res.get("watchlist", watchlist_name)
+            self.log(f"TradingView returned {len(raw_symbols)} items via {source} from '{wl_name}'.")
+        elif isinstance(raw_res, list):
+            raw_symbols = raw_res
+
+        cleaned = []
+        for item in raw_symbols:
+            if isinstance(item, str) and not item.startswith('#'):
+                t = item.split(":")[-1].strip().upper()
+                t = re.sub(r'[^A-Z0-9]', '', t)
+                if t and t not in cleaned:
+                    cleaned.append(t)
+
+        # Exclude commodities, metals, and currencies (e.g. WTI, BRENT, XAUUSD)
+        NON_INDEX = {"WTI", "BRENT", "XAUUSD", "XAGUSD", "DXY", "CL", "NG", "HG"}
+        cleaned = [t for t in cleaned if t not in NON_INDEX and not t.endswith('!') and 'SAHM' not in t and 'SPC' not in t]
+
+        # Always include all Economic category tickers from user's watchlist
+        economic_default = ["SPY", "QQQ", "NIKKEI", "RUSSELL", "XLI", "XLV", "XLE", "DBC", "XLK", "XLB", "ICLN", "XLRE", "XLU"]
+        for req in economic_default:
+            if req not in cleaned:
+                cleaned.append(req)
+
+        return cleaned
+
     def toggle_sync_indexes_watchlist(self):
         if self.sync_active:
             self.sync_active = False
-            self.log("Stopping Indexes watchlist sync...")
+            self.log("Stopping Indexes sync...")
             self.sync_indexes_btn.config(
-                text="Sync Indexes Watchlist (Bulk Auto-Draw)",
+                text="Sync Indexes (Auto-Draw)",
                 bg="#8b5cf6",
                 activebackground="#7c3aed"
             )
@@ -1479,20 +2139,24 @@ class TradingViewAutomatorApp:
             messagebox.showerror("Connection Error", "Cannot connect to TradingView Desktop.\n\nEnsure TradingView is open and port 9222 is active.")
             return
 
-        self.log("Fetching 'Indexes' Watchlist 📊 tickers from TradingView...")
-        indexes_tickers = self.fetch_watchlist_by_name_from_tv("Indexes")
+        self.log("Navigating to 'Economic' category in TradingView & reading tickers...")
+        indexes_tickers = self.fetch_section_tickers_from_tv("Economic", "INDEXES")
 
+        economic_default = ["SPY", "QQQ", "NIKKEI", "RUSSELL", "XLI", "XLV", "XLE", "DBC", "XLK", "XLB", "ICLN", "XLRE", "XLU"]
         if not indexes_tickers:
-            self.log("No 'Indexes' Watchlist detected in TradingView. Using default index tickers...")
-            indexes_tickers = ["SPY", "QQQ", "IWM", "DIA", "XLK", "XLF", "XLE", "XLV"]
+            indexes_tickers = economic_default
+        else:
+            for req in economic_default:
+                if req not in indexes_tickers:
+                    indexes_tickers.append(req)
 
         self.sync_active = True
         self.sync_indexes_btn.config(
-            text="⛔ Stop Watchlist Sync",
+            text="⛔ Stop Indexes Sync",
             bg="#dc2626",
             activebackground="#b91c1c"
         )
-        self.log(f"Starting bulk sync for {len(indexes_tickers)} 'Indexes' tickers: {', '.join(indexes_tickers)}")
+        self.log(f"Starting bulk sync & level analysis for {len(indexes_tickers)} tickers in 'Economic': {', '.join(indexes_tickers)}")
 
         def run_bulk():
             count = 0
@@ -1500,8 +2164,13 @@ class TradingViewAutomatorApp:
             
             for t in indexes_tickers:
                 if not self.sync_active:
-                    self.log("Indexes watchlist sync stopped by user.")
+                    self.log("Indexes sync stopped by user.")
                     break
+
+                if t in {"WTI", "BRENT", "XAUUSD", "XAGUSD", "DXY"}:
+                    self.log(f"Encountered non-index ticker {t}. Skipping.")
+                    continue
+
                 self.log(f"[{count+1}/{len(indexes_tickers)}] Syncing drawings for: {t}...")
                 
                 self.switch_tv_chart_symbol(self.tv_ws_url, t)
@@ -1522,13 +2191,13 @@ class TradingViewAutomatorApp:
                 self.draw_levels_for_ticker(self.tv_ws_url, initial_ticker)
 
             if self.sync_active:
-                self.log(f"'Indexes' Watchlist sync completed. All {count} tickers drawn!")
-                messagebox.showinfo("Sync Complete", f"Watchlist sync complete for {count} 'Indexes' tickers!")
+                self.log(f"'Economic' category sync completed. All {count} tickers analysed and drawn!")
+                messagebox.showinfo("Sync Complete", f"Watchlist sync complete for {count} tickers in 'Economic' category!")
 
             self.sync_active = False
             self.current_ticker = None
             self.root.after(0, lambda: self.sync_indexes_btn.config(
-                text="Sync Indexes Watchlist (Bulk Auto-Draw)",
+                text="Sync Indexes (Auto-Draw)",
                 bg="#8b5cf6",
                 activebackground="#7c3aed"
             ))
@@ -1613,35 +2282,25 @@ class TradingViewAutomatorApp:
 
         threading.Thread(target=run_bulk, daemon=True).start()
 
-def find_tradingview_exe():
+def get_tradingview_executable_path():
     try:
-        cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-AppxPackage *TradingView*).InstallLocation"'
-        res = subprocess.run(cmd, capture_output=True, text=True, shell=True)
-        install_dir = res.stdout.strip()
-        if install_dir:
-            exe_path = os.path.join(install_dir, "TradingView.exe")
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "(Get-AppxPackage *TradingView*).InstallLocation"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        install_loc = res.stdout.strip()
+        if install_loc:
+            exe_path = os.path.join(install_loc, "TradingView.exe")
             if os.path.exists(exe_path):
                 return exe_path
     except Exception:
         pass
 
-    alias_path = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WindowsApps\TradingView.exe")
-    if os.path.exists(alias_path):
-        return alias_path
-
-    paths = [
-        r"C:\Program Files\TradingView\TradingView.exe",
-        r"C:\Program Files (x86)\TradingView\TradingView.exe",
-        os.path.expandvars(r"%LOCALAPPDATA%\Programs\TradingView\TradingView.exe"),
-    ]
-    for p in paths:
-        if os.path.exists(p):
-            return p
-
-    import glob
-    win_apps_glob = glob.glob(r"C:\Program Files\WindowsApps\TradingView.Desktop_*\TradingView.exe")
-    if win_apps_glob:
-        return win_apps_glob[-1]
+    local_path = os.path.expandvars(r"%LocalAppData%\Programs\TradingView\TradingView.exe")
+    if os.path.exists(local_path):
+        return local_path
 
     return None
 
@@ -1650,24 +2309,53 @@ if __name__ == "__main__":
     subprocess.run(["taskkill", "/f", "/im", "TradingView.exe"], capture_output=True, text=True)
     subprocess.run(["taskkill", "/f", "/im", "Tradingview.exe"], capture_output=True, text=True)
     
-    print("Locating TradingView Desktop installation dynamically...")
-    tv_path = find_tradingview_exe()
+    print("Launching TradingView Desktop with debugging enabled...")
+    tv_path = get_tradingview_executable_path()
     if tv_path:
-        print(f"Found active TradingView executable: {tv_path}")
+        print(f"Found TradingView executable at: {tv_path}")
         launch_cmd = f'start "" "{tv_path}" --remote-debugging-port=9222 --remote-allow-origins=*'
+        try:
+            subprocess.Popen(launch_cmd, shell=True)
+            print("Successfully sent launch command via Windows shell.")
+        except Exception as e:
+            print(f"Failed to start TradingView via shell: {e}")
     else:
-        print("Using Windows protocol launch for TradingView...")
-        launch_cmd = 'start tradingview: --remote-debugging-port=9222 --remote-allow-origins=*'
-        
-    try:
-        subprocess.Popen(launch_cmd, shell=True)
-        print("Successfully launched TradingView Desktop with port 9222 debugging.")
-    except Exception as e:
-        print(f"Failed to start TradingView via shell: {e}")
+        print("Warning: Could not automatically locate TradingView.exe. Please ensure TradingView is installed.")
         
     print("Waiting 4 seconds for TradingView to initialize...")
     time.sleep(4)
     
+    # Hide the console window now that TradingView is initialized
+    try:
+        import ctypes
+        import ctypes.wintypes
+        
+        # 1. Primary: Direct console window handle
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            ctypes.windll.user32.ShowWindow(hwnd, 0)
+            
+        # 2. Secondary: Fallback enumeration by process ID
+        curr_pid = ctypes.windll.kernel32.GetCurrentProcessId()
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
+        def enum_cb(h, lparam):
+            pid = ctypes.wintypes.DWORD()
+            ctypes.windll.user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+            if pid.value == curr_pid:
+                class_buff = ctypes.create_unicode_buffer(256)
+                ctypes.windll.user32.GetClassNameW(h, class_buff, 256)
+                if 'Console' in class_buff.value or 'Terminal' in class_buff.value or 'Window' in class_buff.value:
+                    ctypes.windll.user32.ShowWindow(h, 0)
+            return True
+        ctypes.windll.user32.EnumWindows(WNDENUMPROC(enum_cb), 0)
+    except Exception:
+        pass
+
     root = tk.Tk()
+    root.deiconify()
+    root.lift()
+    root.attributes('-topmost', True)
+    root.after_idle(root.attributes, '-topmost', False)
+    root.focus_force()
     app = TradingViewAutomatorApp(root)
     root.mainloop()

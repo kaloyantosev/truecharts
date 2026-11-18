@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import spyData from "@/data/backtest/SPY.json";
 import qqqData from "@/data/backtest/QQQ.json";
+import volIndex from "@/data/backtest/vol_index.json";
+
+// Session [o, h, l, c] from a day's 5m candles (daily OHLC is real on every date; checked against Yahoo).
+function dayOhlc(candles: number[][]): number[] {
+  return [
+    candles[0][1],
+    Math.max(...candles.map((b) => b[2])),
+    Math.min(...candles.map((b) => b[3])),
+    candles[candles.length - 1][4],
+  ];
+}
+
+// Close of the vol index on the last session before `date` (known before the open).
+function priorClose(series: Record<string, number>, date: string): number | null {
+  let best: string | null = null;
+  for (const d in series) if (d < date && (best === null || d > best)) best = d;
+  return best ? series[best] : null;
+}
 
 function unpackDom(rawDom: any, spot: number) {
   if (!rawDom) return { "0dte": [], weekly: [] };
@@ -109,6 +127,21 @@ export async function GET(req: NextRequest) {
     const spot = dayData.spot ?? dayData.spot_at_0940 ?? (candles[2] ? candles[2].close : 0);
     const dom = unpackDom(dayData.dom, spot);
 
+    // Engine inputs: up to 30 prior sessions (ATR, prior day) and the vol index prior close as IV
+    const idx = availableDates.indexOf(selectedDate);
+    const days = dataset.days as Record<string, { candles?: number[][] }>;
+    const daily = availableDates
+      .slice(Math.max(0, idx - 30), idx)
+      .map((d: string) => days[d]?.candles)
+      .filter((c): c is number[][] => Array.isArray(c) && c.length > 0)
+      .map(dayOhlc);
+    const prev = daily[daily.length - 1];
+    const vix = priorClose((volIndex as Record<string, Record<string, number>>)[ticker === "QQQ" ? "VXN" : "VIX"], selectedDate);
+    // Most dates' 5m paths were reconstructed from daily OHLC (every bar has the same volume, opens equal the
+    // prior close, no opening volatility spike). Real tape starts 2026-04-17. Flag it so nobody reads reactions off it.
+    const vols = new Set(rawCandles.map((b: number[] | { volume?: number }) => (Array.isArray(b) ? b[5] : b.volume)));
+    const intradaySynthetic = rawCandles.length > 10 && vols.size === 1;
+
     const payload = {
       ticker,
       availableDates,
@@ -119,6 +152,10 @@ export async function GET(req: NextRequest) {
       levels: dayData.levels,
       dom,
       candles,
+      daily,
+      prevDay: prev ? { h: prev[1], l: prev[2], c: prev[3] } : null,
+      iv: vix ? vix / 100 : null,
+      intradaySynthetic,
       summary: {
         sessionHours: "09:30 - 16:00 US Eastern (RTH only)",
         sofiaHours: "16:30 - 23:00 Europe/Sofia",
