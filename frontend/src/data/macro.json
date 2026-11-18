@@ -1,19 +1,19 @@
 {
- "asOf": "2026-11-17",
+ "asOf": "2026-11-18",
  "source": "FRED (Federal Reserve Bank of St. Louis), CFTC Commitments of Traders (legacy, futures only)",
  "rates": {
   "fed": {
    "value": "3.75 - 4.00%",
-   "date": "2026-11-17"
+   "date": "2026-11-18"
   },
   "ecb": {
    "value": "2.50%",
-   "date": "2026-11-17",
+   "date": "2026-11-18",
    "label": "ECB deposit"
   },
   "us10y": {
-   "value": "5.15%",
-   "date": "2026-11-13",
+   "value": "5.12%",
+   "date": "2026-11-16",
    "label": "US 10Y"
   }
  },
