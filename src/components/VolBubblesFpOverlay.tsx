@@ -309,8 +309,10 @@ export default function VolBubblesFpOverlay({
     gridStep = Math.max(0.01, Math.round(Math.max(avgStep, screenStep) / 0.01) * 0.01);
   }
 
-  const showFpCells = settings.showFootprint && barPx >= 36;
-  const cellWidth = Math.max(24, Math.min(barPx * 0.88, 92));
+  const showFpCells = settings.showFootprint && barPx >= 46;
+  const cellWidth = Math.max(30, Math.min(barPx * 0.88, 96));
+  const compactCellText = cellWidth < 58;
+  const cellFontSize = cellWidth < 48 ? "7.5px" : cellWidth < 60 ? "8.5px" : "9.5px";
 
   // Bottom FPBS strip geometry (3 rows of 14px each, right above the time axis)
   const fpbsRowH = 14;
@@ -558,8 +560,11 @@ export default function VolBubblesFpOverlay({
             const boxH = Math.max(10, Math.abs(yBot - yTop));
             const rowDelta = bv - sv;
             const isPoc = r === pocIdx;
-            const buyImb = sv <= 0 ? bv > 0 : bv >= sv * 4.0;
-            const sellImb = bv <= 0 ? sv > 0 : sv >= bv * 4.0;
+            // Only flag row-level 4x Bid/Ask imbalances when true intrabar data is present;
+            // with 5m OHLCV-only fallback, applying bar-level buyFrac to every row would falsely flood the whole candle.
+            const hasIntrabar = false;
+            const buyImb = hasIntrabar && (sv <= 0 ? bv > 0 : bv >= sv * 4.0);
+            const sellImb = hasIntrabar && (bv <= 0 ? sv > 0 : sv >= bv * 4.0);
             const isImb = buyImb || sellImb;
             const intensity = maxRowDelta > 0 ? Math.min(1, Math.abs(rowDelta) / maxRowDelta) : 0;
 
@@ -575,6 +580,9 @@ export default function VolBubblesFpOverlay({
               ? axiaBlueBg(intensity)
               : axiaRedBg(intensity);
             const txtC = isImb || isPoc ? "#ffffff" : axiaContrastText(intensity);
+            const cellLabel = compactCellText
+              ? `${fmtVol(sv)}×${fmtVol(bv)}`
+              : `${fmtVol(sv)} x ${fmtVol(bv)}`;
 
             return (
               <div
@@ -588,7 +596,7 @@ export default function VolBubblesFpOverlay({
                   background: bgCol,
                   border: `${isImb ? 2 : 1}px solid #000000`,
                   color: txtC,
-                  fontSize: boxH < 13 ? "8.5px" : "9.5px",
+                  fontSize: boxH < 13 ? "7.5px" : cellFontSize,
                   fontWeight: isImb || isPoc ? 700 : 400,
                   fontFamily: "Consolas, monospace",
                   display: "flex",
@@ -598,7 +606,7 @@ export default function VolBubblesFpOverlay({
                   overflow: "hidden",
                 }}
               >
-                {fmtVol(sv)} x {fmtVol(bv)}
+                {cellLabel}
               </div>
             );
           });
