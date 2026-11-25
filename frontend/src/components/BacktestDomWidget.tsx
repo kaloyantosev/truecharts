@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useRef, useEffect } from "react";
 
 export interface DomRow {
   strike: number;
@@ -33,70 +33,85 @@ interface BacktestDomWidgetProps {
     weekly: DomRow[];
   };
   spot: number;
+  isBlindMode?: boolean;
 }
 
-function getPutStyle(pct: number) {
-  if (!pct || pct <= 0) return { bg: "transparent", text: "var(--muted)", barBorder: "", textWeight: "600" };
-  if (pct < 20) {
-    return { bg: "rgba(16,185,129,0.14)", text: "#a7f3d0", barBorder: "", textWeight: "bold" };
-  } else if (pct < 50) {
-    return { bg: "rgba(16,185,129,0.38)", text: "#34d399", barBorder: "", textWeight: "bold" };
-  } else if (pct < 80) {
-    return { bg: "rgba(16,185,129,0.65)", text: "#ffffff", barBorder: "", textWeight: "900" };
-  } else {
-    return { bg: "rgba(16,185,129,0.90)", text: "#ffffff", barBorder: "", textWeight: "900" };
-  }
+function fmtK(n: number): string {
+  if (!n) return "";
+  return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(Math.round(n));
 }
 
-function getCallStyle(pct: number) {
-  if (!pct || pct <= 0) return { bg: "transparent", text: "var(--muted)", barBorder: "", textWeight: "600" };
-  if (pct < 20) {
-    return { bg: "rgba(239,68,68,0.14)", text: "#fecaca", barBorder: "", textWeight: "bold" };
-  } else if (pct < 50) {
-    return { bg: "rgba(239,68,68,0.38)", text: "#f87171", barBorder: "", textWeight: "bold" };
-  } else if (pct < 80) {
-    return { bg: "rgba(239,68,68,0.65)", text: "#ffffff", barBorder: "", textWeight: "900" };
-  } else {
-    return { bg: "rgba(239,68,68,0.90)", text: "#ffffff", barBorder: "", textWeight: "900" };
+function findWall(rows: DomRow[], ref: number, side: "call" | "put") {
+  const col = side === "call" ? "call_oi" : "put_oi";
+  const cand = rows.filter((r) => (side === "call" ? r.strike > ref : r.strike < ref));
+  if (cand.length === 0) return null;
+  let best = cand[0];
+  for (const r of cand) {
+    if ((r[col] || 0) > (best[col] || 0)) best = r;
   }
+  const bestOi = best[col] || 0;
+  if (bestOi <= 0) return null;
+  const neighbours = rows
+    .filter(
+      (r) =>
+        r.strike !== best.strike &&
+        ref > 0 &&
+        Math.abs(r.strike - best.strike) / ref <= 0.003 &&
+        (r[col] || 0) >= 0.5 * bestOi
+    )
+    .map((r) => r.strike);
+  return {
+    strike: best.strike,
+    oi: bestOi,
+    stacked: neighbours.length > 0,
+    neighbours,
+  };
 }
 
 export default function BacktestDomWidget({
   ticker,
   selectedDate,
-  sinclair,
   domData,
   spot,
+  isBlindMode = false,
 }: BacktestDomWidgetProps) {
-  const [mode, setMode] = useState<"0dte" | "weekly">("weekly");
   const spotRef = useRef<HTMLDivElement>(null);
 
-  const isWeekly = mode === "weekly";
-  const ladder = domData?.[mode] || [];
+  // Match D:\Truecharts\desktop\tv_automation.py: weekly OI sorted descending by strike
+  const rows = [...(domData?.weekly || [])].sort((a, b) => b.strike - a.strike);
 
-  // Auto-scroll spot strike to center of ladder on data or mode change
+  // Find strike closest to current/spot price
+  let atPxStrike: number | null = null;
+  if (rows.length > 0) {
+    const refPrice = spot > 0 ? spot : rows[Math.floor(rows.length / 2)].strike;
+    let bestDiff = Infinity;
+    for (const r of rows) {
+      const d = Math.abs(r.strike - refPrice);
+      if (d < bestDiff) {
+        bestDiff = d;
+        atPxStrike = r.strike;
+      }
+    }
+  }
+
+  const ref = spot > 0 ? spot : atPxStrike || 0;
+  const cw = ref > 0 ? findWall(rows, ref, "call") : null;
+  const pw = ref > 0 ? findWall(rows, ref, "put") : null;
+  const stacked = new Set<number>([
+    ...(cw && cw.stacked ? cw.neighbours : []),
+    ...(pw && pw.stacked ? pw.neighbours : []),
+  ]);
+
+  const mx = rows.reduce((m, r) => Math.max(m, r.call_oi || 0, r.put_oi || 0), 1);
+
+  // Auto-scroll closest strike to center of ladder
   useEffect(() => {
     if (spotRef.current) {
       spotRef.current.scrollIntoView({ block: "center", behavior: "auto" });
     }
-  }, [ladder, mode, spot]);
+  }, [domData, atPxStrike]);
 
-  // Sinclair metrics extraction
-  let vrpVal = "—";
-  let vrpColor = "#94a3b8";
-  let rangeVal = "±1σ";
-  let ivVal = "—";
-  let rvVal = "—";
-
-  if (sinclair) {
-    const vrpSpread = parseFloat(sinclair.vrp_spread as any) || 0.0;
-    const vrpSign = vrpSpread >= 0 ? "+" : "";
-    vrpVal = `${vrpSign}${vrpSpread.toFixed(1)}`;
-    vrpColor = vrpSpread >= 0 ? "#10b981" : "#38bdf8";
-    ivVal = parseFloat(sinclair.implied_volatility as any) ? `${parseFloat(sinclair.implied_volatility as any).toFixed(1)}%` : "—";
-    rvVal = parseFloat(sinclair.rv_yang_zhang as any) ? `${parseFloat(sinclair.rv_yang_zhang as any).toFixed(1)}%` : "—";
-    rangeVal = sinclair.weekly_expected_move_dollars ? `±$${parseFloat(sinclair.weekly_expected_move_dollars as any).toFixed(2)}` : "±1σ";
-  }
+  const timeLabel = isBlindMode ? "weekly OI 09:40" : `weekly OI ${selectedDate ? "09:40" : ""}`.trim();
 
   return (
     <div
@@ -106,197 +121,101 @@ export default function BacktestDomWidget({
         width: "100%",
         height: "100%",
         background: "transparent",
-        color: "var(--fg)",
-        fontFamily: "Consolas, monospace",
-        fontSize: "10.5px",
-        lineHeight: 1.3,
+        color: "#e2e8f0",
+        fontFamily: "Segoe UI, Arial, sans-serif",
+        fontSize: "12px",
+        lineHeight: 1.35,
         overflow: "hidden",
       }}
     >
-      {/* Title Row with 0DTE / Weekly Pill */}
+      {/* Header matching D:\Truecharts\desktop\tv_automation.py (#tc-options-dom) */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "4px",
-          borderTop: "1px solid #1e293b",
+          marginBottom: "6px",
+          paddingBottom: "4px",
           borderBottom: "1px solid #1e293b",
-          padding: "4px 0",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ fontWeight: 900, color: "#14b8a6", fontSize: "11px", letterSpacing: "0.5px" }}>📊 DOM</span>
-          <div
-            style={{
-              display: "inline-flex",
-              background: "var(--hover)",
-              border: "1px solid #334155",
-              borderRadius: "12px",
-              padding: "2px",
-              fontSize: "9px",
-              fontWeight: "bold",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setMode("0dte")}
-              style={{
-                border: "none",
-                outline: "none",
-                padding: "2px 6px",
-                borderRadius: "10px",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: "inherit",
-                fontWeight: "inherit",
-                transition: "all 0.15s",
-                background: mode === "0dte" ? "#0d9488" : "transparent",
-                color: mode === "0dte" ? "#fff" : "#64748b",
-                boxShadow: mode === "0dte" ? "0 0 6px rgba(13,148,136,0.6)" : "none",
-              }}
-            >
-              0DTE
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("weekly")}
-              style={{
-                border: "none",
-                outline: "none",
-                padding: "2px 6px",
-                borderRadius: "10px",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: "inherit",
-                fontWeight: "inherit",
-                transition: "all 0.15s",
-                background: mode === "weekly" ? "#0d9488" : "transparent",
-                color: mode === "weekly" ? "#fff" : "#64748b",
-                boxShadow: mode === "weekly" ? "0 0 6px rgba(13,148,136,0.6)" : "none",
-              }}
-            >
-              Weekly
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <span style={{ fontWeight: "bold", color: "#fff", background: "var(--line)", padding: "1px 5px", borderRadius: "3px", fontSize: "10px", border: "1px solid #334155" }}>
-            {ticker}
-          </span>
-          <span className="text-[10px] text-[var(--accent)] font-bold">
-            ${spot > 0 ? spot.toFixed(2) : "—"}
-          </span>
-        </div>
+        <b style={{ fontSize: "12px", color: "#e2e8f0" }}>{ticker} · option chain</b>
+        <span style={{ color: "#64748b", fontSize: "10px" }}>{timeLabel}</span>
       </div>
 
-      {/* 4. Column Headers */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 64px 1fr", fontSize: "10px", color: "var(--muted)", marginBottom: "3px", fontWeight: "bold" }}>
-        <span style={{ color: "#10b981", textAlign: "left", paddingLeft: "6px" }}>PUT OI</span>
-        <span style={{ color: "var(--fg)", textAlign: "center" }}>STRIKE</span>
-        <span style={{ color: "#ef4444", textAlign: "right", paddingRight: "6px" }}>CALL OI</span>
+      {/* Column Headers: PUT OI | STRIKE | CALL OI | NET */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 58px 1fr 50px",
+          fontSize: "10px",
+          color: "#94a3b8",
+          fontWeight: 700,
+          marginBottom: "3px",
+        }}
+      >
+        <span style={{ color: "#10b981", paddingLeft: "3px" }}>PUT OI</span>
+        <span style={{ textAlign: "center" }}>STRIKE</span>
+        <span style={{ color: "#ef4444", textAlign: "right", paddingRight: "3px" }}>CALL OI</span>
+        <span style={{ textAlign: "right" }}>NET</span>
       </div>
 
-      {/* 5. Ladder Rows */}
+      {/* Ladder Rows */}
       <div
         className="flex-1 overflow-y-auto flex flex-col pr-0.5"
         style={{ display: "flex", flexDirection: "column", overflowY: "auto", flex: "1 1 0%", minHeight: 0 }}
       >
-        {ladder.length === 0 ? (
-          <div style={{ color: "var(--muted)", fontSize: "10px", textAlign: "center", padding: "12px 0" }}>
-            No options chain data for {ticker}.
+        {rows.length === 0 ? (
+          <div style={{ color: "#64748b", fontSize: "11px", textAlign: "center", padding: "12px 0" }}>
+            No chain yet
           </div>
         ) : (
-          ladder.map((row) => {
-            const isSpot = row.is_spot || Math.abs(row.strike - spot) < 0.5;
-            const spotStyle: React.CSSProperties = isSpot
-              ? {
-                  background: "rgba(56,189,248,0.22)",
-                  border: "1px solid rgba(56,189,248,0.65)",
-                  borderRadius: "3px",
-                }
-              : {};
-            const strikeColor = isSpot ? "#38bdf8" : "#e2e8f0";
-            const strikeWeight = isSpot ? 900 : "bold";
+          rows.map((r) => {
+            const net = (r.call_oi || 0) - (r.put_oi || 0);
+            const atPx = r.strike === atPxStrike;
+            const isCw = Boolean(cw && r.strike === cw.strike);
+            const isPw = Boolean(pw && r.strike === pw.strike);
+            const boxShadow = isCw
+              ? "inset 0 0 0 1px #ef4444"
+              : isPw
+              ? "inset 0 0 0 1px #10b981"
+              : undefined;
+            const mark = stacked.has(r.strike) ? " ◆" : "";
 
-            const putW = row.put_bar_pct || 0;
-            const callW = row.call_bar_pct || 0;
-            const put0dteW = isWeekly && row.put_0dte_pct ? row.put_0dte_pct : 0;
-            const call0dteW = isWeekly && row.call_0dte_pct ? row.call_0dte_pct : 0;
-
-            const putK = row.put_oi ? (row.put_oi >= 1000 ? (row.put_oi / 1000).toFixed(1) + "k" : String(row.put_oi)) : "";
-            const callK = row.call_oi ? (row.call_oi >= 1000 ? (row.call_oi / 1000).toFixed(1) + "k" : String(row.call_oi)) : "";
-
-            const pStyle = getPutStyle(putW);
-            const cStyle = getCallStyle(callW);
-
-            const putIs0DtePredominant = isWeekly && Boolean((row.put_0dte_oi && row.put_oi && row.put_0dte_oi >= row.put_oi * 0.5) || (put0dteW > 0 && put0dteW >= putW * 0.5));
-            const callIs0DtePredominant = isWeekly && Boolean((row.call_0dte_oi && row.call_oi && row.call_0dte_oi >= row.call_oi * 0.5) || (call0dteW > 0 && call0dteW >= callW * 0.5));
-
-            const putTextColor = putIs0DtePredominant ? "#facc15" : pStyle.text;
-            const putTextWeight = putIs0DtePredominant ? 900 : pStyle.textWeight === "900" ? 900 : "bold";
-            const putTextShadow = putIs0DtePredominant ? "0 1px 2px #000, 0 0 5px rgba(250,204,21,0.6)" : "0 1px 2px #000";
-
-            const callTextColor = callIs0DtePredominant ? "#c084fc" : cStyle.text;
-            const callTextWeight = callIs0DtePredominant ? 900 : cStyle.textWeight === "900" ? 900 : "bold";
-            const callTextShadow = callIs0DtePredominant ? "0 1px 2px #000, 0 0 5px rgba(192,132,252,0.6)" : "0 1px 2px #000";
+            const putPct = Math.min(100, (100 * (r.put_oi || 0)) / mx);
+            const callPct = Math.min(100, (100 * (r.call_oi || 0)) / mx);
 
             return (
               <div
-                key={row.strike}
-                ref={isSpot ? spotRef : undefined}
+                key={r.strike}
+                ref={atPx ? spotRef : undefined}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 64px 1fr",
+                  gridTemplateColumns: "1fr 58px 1fr 50px",
                   alignItems: "center",
-                  height: "20px",
+                  height: "18px",
+                  minHeight: "18px",
                   margin: "1px 0",
+                  fontFamily: "Consolas, monospace",
                   fontSize: "11px",
-                  ...spotStyle,
+                  background: atPx ? "rgba(56,189,248,0.2)" : undefined,
+                  boxShadow,
                 }}
               >
-                {/* PUT BID BAR */}
-                <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "flex-start", paddingLeft: "6px" }}>
+                {/* PUT OI */}
+                <div style={{ position: "relative", height: "13px", display: "flex", alignItems: "center" }}>
                   <div
                     style={{
                       position: "absolute",
                       right: 0,
-                      top: "1.5px",
-                      bottom: "1.5px",
-                      width: `${putW}%`,
-                      background: pStyle.bg,
-                      borderRadius: "2px",
-                      zIndex: 1,
+                      top: 0,
+                      bottom: 0,
+                      width: `${putPct}%`,
+                      background: `rgba(16,185,129,${isPw ? 0.9 : 0.5})`,
                     }}
                   />
-                  {put0dteW > 0 && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        right: 0,
-                        top: "1.5px",
-                        bottom: "1.5px",
-                        width: `${put0dteW}%`,
-                        background: "rgba(250,204,21,0.88)",
-                        borderRadius: "2px",
-                        borderLeft: "1.5px solid #fef08a",
-                        boxShadow: "0 0 5px rgba(250,204,21,0.4)",
-                        zIndex: 2,
-                      }}
-                    />
-                  )}
-                  <span
-                    style={{
-                      position: "relative",
-                      color: putTextColor,
-                      fontWeight: putTextWeight as any,
-                      fontSize: "11px",
-                      fontFamily: "Consolas, monospace",
-                      textShadow: putTextShadow,
-                      zIndex: 3,
-                    }}
-                  >
-                    {putK}
+                  <span style={{ position: "relative", paddingLeft: "3px", color: "#e2e8f0" }}>
+                    {fmtK(r.put_oi)}
                   </span>
                 </div>
 
@@ -304,59 +223,39 @@ export default function BacktestDomWidget({
                 <div
                   style={{
                     textAlign: "center",
-                    color: strikeColor,
-                    fontWeight: strikeWeight as any,
-                    fontFamily: "Consolas, monospace",
-                    fontSize: "12px",
-                    textShadow: "0 1px 2px #000",
+                    color: atPx ? "#38bdf8" : "#e2e8f0",
+                    fontWeight: "bold",
                   }}
                 >
-                  ${parseFloat(row.strike as any).toFixed(1)}
+                  {r.strike}
+                  {mark}
                 </div>
 
-                {/* CALL ASK BAR */}
-                <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: "6px" }}>
+                {/* CALL OI */}
+                <div style={{ position: "relative", height: "13px", display: "flex", alignItems: "center" }}>
                   <div
                     style={{
                       position: "absolute",
                       left: 0,
-                      top: "1.5px",
-                      bottom: "1.5px",
-                      width: `${callW}%`,
-                      background: cStyle.bg,
-                      borderRadius: "2px",
-                      zIndex: 1,
+                      top: 0,
+                      bottom: 0,
+                      width: `${callPct}%`,
+                      background: `rgba(239,68,68,${isCw ? 0.9 : 0.5})`,
                     }}
                   />
-                  {call0dteW > 0 && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        top: "1.5px",
-                        bottom: "1.5px",
-                        width: `${call0dteW}%`,
-                        background: "rgba(192,132,252,0.88)",
-                        borderRadius: "2px",
-                        borderRight: "1.5px solid #e9d5ff",
-                        boxShadow: "0 0 5px rgba(192,132,252,0.4)",
-                        zIndex: 2,
-                      }}
-                    />
-                  )}
-                  <span
-                    style={{
-                      position: "relative",
-                      color: callTextColor,
-                      fontWeight: callTextWeight as any,
-                      fontSize: "11px",
-                      fontFamily: "Consolas, monospace",
-                      textShadow: callTextShadow,
-                      zIndex: 3,
-                    }}
-                  >
-                    {callK}
+                  <span style={{ position: "absolute", right: "3px", color: "#e2e8f0" }}>
+                    {fmtK(r.call_oi)}
                   </span>
+                </div>
+
+                {/* NET */}
+                <div
+                  style={{
+                    textAlign: "right",
+                    color: net > 0 ? "#f87171" : "#34d399",
+                  }}
+                >
+                  {net ? (net > 0 ? "+" : "−") + fmtK(Math.abs(net)) : ""}
                 </div>
               </div>
             );
