@@ -92,18 +92,75 @@ export async function GET(req: NextRequest) {
       ? dayData.candles
       : dayData.candles[validTimeframe] || dayData.candles["5m"] || [];
 
-    const candles = rawCandles.map((b: any) => {
-      if (Array.isArray(b)) {
-        return {
-          time: b[0],
-          open: b[1],
-          high: b[2],
-          low: b[3],
-          close: b[4],
-          volume: b[5] || 0,
-        };
+    const slotFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const getSlotKey = (ts: number) => slotFormatter.format(new Date(ts > 1e11 ? ts : ts * 1000));
+    const medianOf = (arr: number[]) => {
+      if (arr.length === 0) return NaN;
+      const sorted = [...arr].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) * 0.5;
+    };
+
+    // Build time-of-day volume baseline across the prior 15 sessions (matching Pine Script sessionsLookback = 15)
+    const dateIdx = availableDates.indexOf(selectedDate);
+    const lookbackStart = Math.max(0, dateIdx - 15);
+    const slotVolMap = new Map<string, number[]>();
+    const recentVols: number[] = [];
+
+    for (let di = lookbackStart; di < dateIdx; di++) {
+      const prevDay = (dataset.days as Record<string, any>)[availableDates[di]];
+      if (!prevDay) continue;
+      const prevRaw = Array.isArray(prevDay.candles)
+        ? prevDay.candles
+        : prevDay.candles?.[validTimeframe] || prevDay.candles?.["5m"] || [];
+      for (const b of prevRaw) {
+        const ts = Array.isArray(b) ? b[0] : b.time;
+        const vol = Number(Array.isArray(b) ? b[5] : b.volume) || 0;
+        if (vol > 0 && ts) {
+          const key = getSlotKey(ts);
+          const list = slotVolMap.get(key);
+          if (list) list.push(vol);
+          else slotVolMap.set(key, [vol]);
+          recentVols.push(vol);
+          if (recentVols.length > 30) recentVols.shift();
+        }
       }
-      return b;
+    }
+
+    const candles = rawCandles.map((b: any) => {
+      const c = Array.isArray(b)
+        ? {
+            time: b[0],
+            open: b[1],
+            high: b[2],
+            low: b[3],
+            close: b[4],
+            volume: b[5] || 0,
+          }
+        : { ...b, volume: b.volume || 0 };
+
+      let volMult: number | null = null;
+      if (c.volume > 0 && c.time) {
+        const key = getSlotKey(c.time);
+        const slotList = slotVolMap.get(key);
+        let baseline = NaN;
+        if (slotList && slotList.length >= 3) {
+          baseline = medianOf(slotList);
+        } else if (recentVols.length >= 3) {
+          baseline = medianOf(recentVols);
+        }
+        if (Number.isFinite(baseline) && baseline > 0) {
+          volMult = c.volume / baseline;
+        }
+        recentVols.push(c.volume);
+        if (recentVols.length > 30) recentVols.shift();
+      }
+      return { ...c, volMult };
     });
 
     const spot = dayData.spot ?? dayData.spot_at_0940 ?? (candles[2] ? candles[2].close : 0);

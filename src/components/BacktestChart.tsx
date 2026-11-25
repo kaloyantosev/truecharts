@@ -10,6 +10,11 @@ import {
   ISeriesApi,
 } from "lightweight-charts";
 import BacktestDomWidget, { DomRow, SinclairStats } from "./BacktestDomWidget";
+import VolBubblesFpOverlay, {
+  BacktestCandle,
+  DEFAULT_VOL_BUBBLES_FP_SETTINGS,
+  VolBubblesFpSettings,
+} from "./VolBubblesFpOverlay";
 
 // Read a design token (CSS custom property) for canvas-drawn chart elements.
 const cssVar = (name: string, fallback: string) =>
@@ -79,6 +84,10 @@ export default function BacktestChart({
   const [ruler, setRuler] = useState<RulerDrawing | null>(null);
   const [position, setPosition] = useState<PositionDrawing | null>(null);
   const [dragPart, setDragPart] = useState<null | "tp" | "sl" | "entry" | "rightEdge">(null);
+
+  // Vol Bubbles & Axia Footprint Indicator State
+  const [fpSettings, setFpSettings] = useState<VolBubblesFpSettings>(DEFAULT_VOL_BUBBLES_FP_SETTINGS);
+  const [showFpMenu, setShowFpMenu] = useState<boolean>(false);
 
   // Lot Size & Contract Multiplier: 0.10 lot for SPY, 0.05 lot for QQQ
   const [lotSize, setLotSize] = useState<number>(ticker === "SPY" ? 0.10 : 0.05);
@@ -963,6 +972,99 @@ export default function BacktestChart({
               ✕ Clear
             </button>
           )}
+
+          {/* Vol Bubbles & Axia Footprint Indicator Toggle & Settings */}
+          <div className="relative">
+            <div className="flex items-center">
+              <button
+                onClick={() => setFpSettings((s) => ({ ...s, enabled: !s.enabled }))}
+                className={`px-2 py-1 rounded-l border text-[10.5px] font-bold transition-all ${
+                  fpSettings.enabled
+                    ? "bg-teal-600/25 text-teal-300 border-teal-500/60"
+                    : "bg-[var(--hover)] text-[var(--muted)] border-[var(--line)]"
+                }`}
+                title="Toggle Volume Bubbles & Axia Footprint indicator"
+              >
+                🫧 Vol Bubbles FP
+              </button>
+              <button
+                onClick={() => setShowFpMenu((v) => !v)}
+                className={`px-1.5 py-1 rounded-r border-y border-r text-[10px] font-bold transition-all ${
+                  fpSettings.enabled
+                    ? "bg-teal-600/20 text-teal-300 border-teal-500/60 hover:bg-teal-600/35"
+                    : "bg-[var(--hover)] text-[var(--muted)] border-[var(--line)]"
+                }`}
+                title="Indicator layers & settings"
+              >
+                ▾
+              </button>
+            </div>
+
+            {showFpMenu && (
+              <div
+                className="absolute right-0 top-8 w-56 bg-[#0b0f17] border border-[#1e293b] rounded-md shadow-2xl p-2.5 z-50 text-[11px] font-mono space-y-1.5"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between text-[10px] text-[#94a3b8] font-bold border-b border-[#1e293b] pb-1">
+                  <span>VOL BUBBLES &amp; AXIA FP</span>
+                  <button onClick={() => setShowFpMenu(false)} className="text-[#64748b] hover:text-white">✕</button>
+                </div>
+                {[
+                  { key: "showBubbles" as const, label: "Volume Bubbles" },
+                  { key: "showRays" as const, label: "Top 3 S/R Rays" },
+                  { key: "showUsOpen" as const, label: "US Open 15m H/L" },
+                  { key: "showPriceLine" as const, label: "Current Price Line" },
+                  { key: "showFootprint" as const, label: "Axia Footprint" },
+                  { key: "showFpbs" as const, label: "Bottom FPBS Strip" },
+                ].map((opt) => (
+                  <label key={opt.key} className="flex items-center justify-between cursor-pointer text-[#e2e8f0] hover:text-white">
+                    <span>{opt.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={fpSettings[opt.key]}
+                      onChange={(e) =>
+                        setFpSettings((s) => ({ ...s, [opt.key]: e.target.checked, enabled: true }))
+                      }
+                      className="accent-teal-500"
+                    />
+                  </label>
+                ))}
+                <div className="pt-1 border-t border-[#1e293b] flex items-center justify-between">
+                  <span className="text-[#94a3b8]">Threshold (×)</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="1.0"
+                    value={fpSettings.thresholdMult}
+                    onChange={(e) =>
+                      setFpSettings((s) => ({
+                        ...s,
+                        thresholdMult: Math.max(1.0, parseFloat(e.target.value) || 1.5),
+                      }))
+                    }
+                    className="w-14 bg-black text-[#e2e8f0] px-1 py-0.5 rounded border border-[#334155] text-center"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[#94a3b8]">Bubble Text</span>
+                  <select
+                    value={fpSettings.bubbleTextMode}
+                    onChange={(e) =>
+                      setFpSettings((s) => ({
+                        ...s,
+                        bubbleTextMode: e.target.value as VolBubblesFpSettings["bubbleTextMode"],
+                      }))
+                    }
+                    className="bg-black text-[#e2e8f0] px-1 py-0.5 rounded border border-[#334155] text-[10px]"
+                  >
+                    <option value="Volume">Volume</option>
+                    <option value="Multiple">Multiple</option>
+                    <option value="Both">Both</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -989,7 +1091,8 @@ export default function BacktestChart({
             selectedDate={selectedDate}
             sinclair={sinclair}
             domData={domData}
-            spot={spotPrice}
+            spot={currentClosePrice || spotPrice}
+            isBlindMode={isBlindMode}
           />
         </div>
 
@@ -1004,6 +1107,16 @@ export default function BacktestChart({
           }`}
         >
           <div ref={containerRef} className="w-full h-full" />
+
+          {/* Volume Bubbles & Axia Footprint Indicator Overlay */}
+          <VolBubblesFpOverlay
+            candles={candlesData.slice(0, Math.max(1, Math.min(visibleCount, candlesData.length))) as BacktestCandle[]}
+            logicalToX={logicalToX}
+            priceToY={priceToY}
+            chartWidth={chartWrapperRef.current?.clientWidth || 0}
+            chartHeight={chartWrapperRef.current?.clientHeight || 0}
+            settings={fpSettings}
+          />
 
           {/* Ruler Overlay */}
           {rulerOverlay}
